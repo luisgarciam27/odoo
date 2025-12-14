@@ -3,45 +3,45 @@ import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, 
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, MapPin, Calendar, ArrowUpRight, RefreshCw, AlertCircle, Building2 } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, MapPin, Calendar, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, AgrupadoProducto, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
 
-// Datos de ejemplo simulando Odoo (Fallback SOLO si no hay sesión)
+// Datos simulados para PUNTO DE VENTA (Cajas, Tiendas físicas)
 const generarDatosVentas = (): Venta[] => {
-  const sedes = ['Sede Central', 'Sede Norte', 'Sede Sur', 'Sede Este'];
-  const companias = ['Mi Empresa S.A.C.', 'Sucursal Arequipa IRL']; // Mock multi-company
+  const sedes = ['Caja Principal', 'Barra 1', 'Tienda Centro', 'Kiosko Norte'];
+  const companias = ['Mi Empresa S.A.C.', 'Sucursal Arequipa IRL'];
   const productos = [
-    { id: 1, nombre: 'Laptop HP 15', costo: 450, precio: 699 },
-    { id: 2, nombre: 'Mouse Logitech', costo: 15, precio: 29 },
-    { id: 3, nombre: 'Teclado Mecánico', costo: 45, precio: 89 },
-    { id: 4, nombre: 'Monitor 24"', costo: 120, precio: 199 },
-    { id: 5, nombre: 'Webcam HD', costo: 30, precio: 59 },
-    { id: 6, nombre: 'Audífonos Bluetooth', costo: 25, precio: 49 },
-    { id: 7, nombre: 'SSD 1TB', costo: 60, precio: 119 },
-    { id: 8, nombre: 'RAM 16GB', costo: 40, precio: 79 }
+    { id: 1, nombre: 'Coca Cola 500ml', costo: 1.5, precio: 3.5 },
+    { id: 2, nombre: 'Menu Ejecutivo', costo: 8, precio: 15 },
+    { id: 3, nombre: 'Agua San Mateo', costo: 1, precio: 2.5 },
+    { id: 4, nombre: 'Sandwich de Pollo', costo: 3, precio: 8 },
+    { id: 5, nombre: 'Cafe Americano', costo: 1.2, precio: 5 },
+    { id: 6, nombre: 'Postre del Dia', costo: 2, precio: 6 },
+    { id: 7, nombre: 'Inka Cola 1L', costo: 2.5, precio: 5.5 },
+    { id: 8, nombre: 'Galletas Varias', costo: 0.8, precio: 2.0 }
   ];
 
   const ventas: Venta[] = [];
   const fechaInicio = new Date('2024-01-01');
   const fechaFin = new Date();
 
-  for (let d = new Date(fechaInicio); d <= fechaFin; d.setDate(d.getDate() + 2)) { // Menos frecuencia para no saturar
-    const ventasPorDia = Math.floor(Math.random() * 5) + 1;
+  for (let d = new Date(fechaInicio); d <= fechaFin; d.setDate(d.getDate() + 1)) {
+    const ventasPorDia = Math.floor(Math.random() * 10) + 5;
     
     for (let i = 0; i < ventasPorDia; i++) {
       const producto = productos[Math.floor(Math.random() * productos.length)];
       const sede = sedes[Math.floor(Math.random() * sedes.length)];
       const compania = companias[Math.floor(Math.random() * companias.length)];
-      const cantidad = Math.floor(Math.random() * 3) + 1;
+      const cantidad = Math.floor(Math.random() * 2) + 1;
       const total = producto.precio * cantidad;
       const costo = producto.costo * cantidad;
       const margen = total - costo;
       
       ventas.push({
         fecha: new Date(d),
-        sede,
+        sede, // En PoS esto es la "Caja" o "Punto de Venta"
         compania,
         producto: producto.nombre,
         cantidad,
@@ -64,49 +64,19 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  
-  // Estado para almacenar las compañías reales obtenidas de Odoo
   const [realCompanies, setRealCompanies] = useState<string[]>([]);
   
-  // POR DEFECTO: Cargamos desde el 1 de Enero del año actual para asegurar datos
+  // Default: Año actual
   const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
   const today = new Date().toISOString().split('T')[0];
 
   const [filtros, setFiltros] = useState<Filtros>({
     sedeSeleccionada: 'Todas',
     companiaSeleccionada: 'Todas',
-    periodoSeleccionado: 'año', // Default a año para ver más datos
+    periodoSeleccionado: 'año',
     fechaInicio: yearStart,
     fechaFin: today
   });
-
-  // Función auxiliar para mapear la respuesta de Odoo a nuestro formato Venta
-  const mapOdooResponse = (lines: any[]): Venta[] => {
-      return lines.map((line: any) => {
-          const cantidad = line.product_uom_qty || 0;
-          const total = line.price_subtotal || 0;
-          // IMPORTANTE: Calculamos costo al 70% si no viene de Odoo para evitar errores de campo inexistente
-          const costoUnitario = line.price_unit * 0.7; 
-          const costo = costoUnitario * cantidad;
-          const margen = total - costo;
-          
-          const sede = Array.isArray(line.order_partner_id) ? line.order_partner_id[1] : 'Cliente General'; 
-          const compania = Array.isArray(line.company_id) ? line.company_id[1] : 'Compañía Principal';
-          const producto = Array.isArray(line.product_id) ? line.product_id[1] : 'Producto Desconocido';
-
-          return {
-              fecha: new Date(line.create_date),
-              sede: sede,
-              compania: compania,
-              producto: producto,
-              cantidad,
-              total,
-              costo,
-              margen,
-              margenPorcentaje: total > 0 ? ((margen / total) * 100).toFixed(1) : '0.0'
-          };
-      });
-  };
 
   const fetchData = async () => {
       if (!session) {
@@ -121,33 +91,32 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       setError(null);
       const client = new OdooClient(session.url, session.db, session.useProxy);
       
-      // Campos solicitados (Simplificados para evitar errores de permisos)
-      const fields = [
-        'create_date', 
-        'order_partner_id', 
-        'company_id', 
-        'product_id', 
-        'product_uom_qty', 
-        'price_unit', 
-        'price_subtotal', 
-        'state'
-        // 'purchase_price' REMOVIDO: Causa muchos errores de acceso si no está instalado sale_margin
-      ];
+      // CONFIGURACIÓN PARA PUNTO DE VENTA (PoS)
+      
+      // Intento 1: Usar 'report.pos.order' (Análisis de PoS). 
+      // Es el mejor porque trae Productos + Configuración (Caja) en una sola vista.
+      const modelReport = 'report.pos.order';
+      const fieldsReport = ['date', 'config_id', 'product_id', 'company_id', 'price_total', 'product_qty', 'state'];
+      
+      // Intento 2 (Fallback): Usar 'pos.order' (Cabeceras de tickets).
+      // Si falla el reporte por permisos, usamos esto. Perdemos el detalle de productos, pero vemos totales por caja.
+      const modelFallback = 'pos.order';
+      const fieldsFallback = ['date_order', 'config_id', 'amount_total', 'company_id', 'state', 'partner_id'];
 
+      // Filtro común
       const domain = [
-        ['state', 'in', ['sale', 'done']],
-        ['create_date', '>=', filtros.fechaInicio],
-        ['create_date', '<=', `${filtros.fechaFin} 23:59:59`]
+        ['state', 'in', ['paid', 'done', 'invoiced']], // Estados válidos de PoS
+        ['date' /* se ajustará según modelo */, '>=', filtros.fechaInicio],
+        ['date' /* se ajustará según modelo */, '<=', `${filtros.fechaFin} 23:59:59`]
       ];
 
       const options: any = {
-        limit: 800, // Aumentado para traer más historial
-        order: 'create_date desc'
+        limit: 1000, 
+        order: 'date desc' // O date_order desc
       };
 
       try {
-          // ESTRATEGIA: Intentar Multi-Compañía primero.
-          // 1. Obtener IDs permitidos del usuario
+          // 1. Obtener Compañías permitidas
           let allowedCompanyIds: number[] = [];
           try {
              const userData: any[] = await client.searchRead(
@@ -156,53 +125,90 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
              );
              if (userData && userData.length > 0) {
                  allowedCompanyIds = userData[0].company_ids || [];
+                 // Cargar nombres
+                 client.searchRead(session.uid, session.apiKey, 'res.company', [['id', 'in', allowedCompanyIds]], ['name'])
+                    .then((comps: any[]) => setRealCompanies(comps.map(c => c.name))).catch(() => {});
              }
           } catch (e) { console.warn("Fallo leve obteniendo users", e); }
 
-          // 2. Si hay IDs, intentar cargar ventas con contexto
           if (allowedCompanyIds.length > 0) {
               options.context = { allowed_company_ids: allowedCompanyIds };
-              
-              // Cargar nombres de compañías para el filtro
-              client.searchRead(session.uid, session.apiKey, 'res.company', [['id', 'in', allowedCompanyIds]], ['name'])
-                .then((comps: any[]) => setRealCompanies(comps.map(c => c.name)))
-                .catch(() => {});
           }
 
-          console.log("Consultando Odoo...", { domain, options });
-          const lines: any[] = await client.searchRead(session.uid, session.apiKey, 'sale.order.line', domain, fields, options);
+          let rawData: any[] = [];
+          let source = 'report';
 
-          const mapped = mapOdooResponse(lines);
-          setVentasData(mapped);
+          try {
+             console.log("Intentando leer Análisis de PoS (report.pos.order)...");
+             // Ajustar dominio para reporte
+             const domainReport = [...domain];
+             domainReport[1] = ['date', '>=', filtros.fechaInicio];
+             domainReport[2] = ['date', '<=', `${filtros.fechaFin} 23:59:59`];
+             options.order = 'date desc';
 
-          if (mapped.length === 0) {
-            setError("Conexión exitosa. No se encontraron ventas en el rango de fechas seleccionado (Desde Enero 1).");
+             rawData = await client.searchRead(session.uid, session.apiKey, modelReport, domainReport, fieldsReport, options);
+          } catch (reportErr) {
+             console.warn("Fallo leyendo reporte PoS, intentando cabeceras (pos.order)", reportErr);
+             source = 'order';
+             
+             // Ajustar dominio para pos.order (usa date_order en vez de date)
+             const domainOrder = [...domain];
+             domainOrder[1] = ['date_order', '>=', filtros.fechaInicio];
+             domainOrder[2] = ['date_order', '<=', `${filtros.fechaFin} 23:59:59`];
+             options.order = 'date_order desc';
+
+             rawData = await client.searchRead(session.uid, session.apiKey, modelFallback, domainOrder, fieldsFallback, options);
+          }
+
+          if (!rawData) throw new Error("Respuesta vacía de Odoo.");
+
+          // Mapeo de datos (Unificando estructura)
+          const mappedVentas: Venta[] = rawData.map((line: any) => {
+              // Campos dinámicos según el origen (Reporte vs Orden directa)
+              const dateRaw = source === 'report' ? line.date : line.date_order;
+              const total = source === 'report' ? (line.price_total || 0) : (line.amount_total || 0);
+              const cantidad = source === 'report' ? (line.product_qty || 1) : 1;
+              
+              // PoS Config (Caja/Sede)
+              const sede = Array.isArray(line.config_id) ? line.config_id[1] : 'Caja Desconocida';
+              const compania = Array.isArray(line.company_id) ? line.company_id[1] : 'Empresa Principal';
+              
+              // Producto
+              let producto = 'Venta PoS General';
+              if (source === 'report') {
+                  producto = Array.isArray(line.product_id) ? line.product_id[1] : 'Sin Nombre';
+              } else {
+                  // Si estamos en modo fallback (solo cabeceras), usamos el cliente o genérico
+                  producto = Array.isArray(line.partner_id) ? `Cliente: ${line.partner_id[1]}` : 'Ticket de Venta';
+              }
+
+              // Estimación de costo (70%)
+              const costo = total * 0.7;
+              const margen = total - costo;
+
+              return {
+                  fecha: new Date(dateRaw),
+                  sede,
+                  compania,
+                  producto,
+                  cantidad,
+                  total,
+                  costo,
+                  margen,
+                  margenPorcentaje: total > 0 ? ((margen / total) * 100).toFixed(1) : '0.0'
+              };
+          });
+
+          setVentasData(mappedVentas);
+
+          if (mappedVentas.length === 0) {
+            setError("Conexión exitosa. No se encontraron tickets de PoS en el rango seleccionado.");
           }
 
       } catch (err: any) {
-          console.error("Error principal:", err);
-          
-          // REINTENTO AUTOMÁTICO (FALLBACK):
-          // Si falla por "Access Error" (error 4) o similar al intentar leer varias compañías,
-          // intentamos una lectura SIMPLE sin contexto (solo la compañía por defecto del usuario).
-          if (err.message && (err.message.includes("Access") || err.message.includes("company"))) {
-              try {
-                  console.log("Reintentando carga en modo simple (Compañía por defecto)...");
-                  delete options.context; // Quitamos el contexto problemático
-                  const retryLines: any[] = await client.searchRead(session.uid, session.apiKey, 'sale.order.line', domain, fields, options);
-                  const mapped = mapOdooResponse(retryLines);
-                  setVentasData(mapped);
-                  setError(null); // Limpiamos el error si el reintento funciona
-                  return; // Salimos éxito
-              } catch (retryErr) {
-                  console.error("Fallo también el reintento", retryErr);
-              }
-          }
-
-          // Mensajes de error amigables
+          console.error("Error crítico:", err);
           let errorMsg = err.message || "Error desconocido";
-          if (errorMsg.includes("XmlRpc")) errorMsg = "Error XML-RPC. Verifique URL.";
-          if (errorMsg.includes("Failed to fetch")) errorMsg = "Error de Conexión/CORS.";
+          if (errorMsg.includes("Access")) errorMsg = "Error de Permisos: Tu usuario no tiene acceso al módulo Punto de Venta (PoS).";
           setError(`Error: ${errorMsg}`);
           setVentasData([]); 
       } finally {
@@ -212,9 +218,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
 
   useEffect(() => {
       fetchData();
-  }, [session, filtros.fechaInicio, filtros.fechaFin]); // Recargar si cambian las fechas
+  }, [session, filtros.fechaInicio, filtros.fechaFin]);
 
-  // --- MEMOS DE FILTROS Y GRÁFICAS (Sin cambios lógicos mayores) ---
+  // --- MEMOS (Sin cambios lógicos, solo visuales) ---
   const sedes = useMemo(() => ['Todas', ...Array.from(new Set(ventasData.map(v => v.sede)))], [ventasData]);
   const companias = useMemo(() => {
       if (realCompanies.length > 0) return ['Todas', ...realCompanies];
@@ -233,7 +239,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     const totalCostos = datosFiltrados.reduce((sum, v) => sum + v.costo, 0);
     const totalMargen = totalVentas - totalCostos;
     const margenPromedio = totalVentas > 0 ? ((totalMargen / totalVentas) * 100) : 0;
-    const unidadesVendidas = datosFiltrados.reduce((sum, v) => sum + v.cantidad, 0);
+    const unidadesVendidas = datosFiltrados.reduce((sum, v) => sum + v.cantidad, 0); // O Tickets si es fallback
     return {
       totalVentas: totalVentas.toFixed(2),
       totalMargen: totalMargen.toFixed(2),
@@ -281,7 +287,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     let inicio = new Date(hoy);
     
     switch(periodo) {
-      case 'hoy': break; // inicio = hoy
+      case 'hoy': break; 
       case 'semana': inicio.setDate(hoy.getDate() - 7); break;
       case 'mes': inicio.setMonth(hoy.getMonth() - 1); break;
       case 'trimestre': inicio.setMonth(hoy.getMonth() - 3); break;
@@ -305,7 +311,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center">
               <div className="bg-white p-4 rounded-xl shadow-xl flex items-center gap-3 border border-slate-100">
                   <RefreshCw className="w-5 h-5 animate-spin text-emerald-600" />
-                  <span className="font-medium text-slate-700">Sincronizando con Odoo...</span>
+                  <span className="font-medium text-slate-700">Cargando datos de PoS...</span>
               </div>
           </div>
       )}
@@ -314,9 +320,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-2">
            <div>
-              <h1 className="text-2xl font-bold text-slate-800">Visión General</h1>
+              <h1 className="text-2xl font-bold text-slate-800">Punto de Venta (PoS)</h1>
               <p className="text-slate-500 text-sm">
-                  {session ? `Base de datos: ${session.db}` : 'Modo Demo'}
+                  {session ? `Base de datos: ${session.db}` : 'Modo Demo (Simulación)'}
               </p>
            </div>
            
@@ -343,7 +349,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex gap-3 items-center shadow-sm animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 <div className="flex-1">
-                    <p className="font-semibold text-sm">Estado de Datos</p>
+                    <p className="font-semibold text-sm">Aviso de Datos</p>
                     <p className="text-xs opacity-90">{error}</p>
                 </div>
             </div>
@@ -371,8 +377,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
 
             <div className="w-full md:w-auto">
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                <MapPin className="inline w-3 h-3 mr-1" />
-                Sede / Cliente
+                <Store className="inline w-3 h-3 mr-1" />
+                Punto de Venta (Caja)
               </label>
               <select 
                 value={filtros.sedeSeleccionada}
@@ -431,30 +437,28 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           </div>
         </div>
 
-        {/* KPIs - REORDERED: Margin First */}
+        {/* KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           
-          {/* KPI 1: Profit Margin (Primary Focus) */}
           <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl shadow-lg shadow-emerald-900/10 p-6 flex flex-col justify-between transform transition-transform hover:scale-[1.01]">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
                 <TrendingUp className="w-6 h-6 text-white" />
               </div>
               <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 bg-white/20 text-white rounded-full">
-                <ArrowUpRight className="w-3 h-3" /> {kpis.margenPromedio}% avg
+                <ArrowUpRight className="w-3 h-3" /> PoS
               </span>
             </div>
             <div>
-              <p className="text-emerald-50 text-sm font-medium tracking-wide opacity-90">Ganancia Estimada</p>
-              <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">${kpis.totalMargen}</h3>
+              <p className="text-emerald-50 text-sm font-medium tracking-wide opacity-90">Ingresos Totales (Cajas)</p>
+              <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">${kpis.totalVentas}</h3>
             </div>
             <div className="mt-4 h-1 w-full bg-black/10 rounded-full overflow-hidden">
-               <div className="h-full bg-white/40" style={{width: `${Math.min(parseFloat(kpis.margenPromedio), 100)}%`}}></div>
+               <div className="h-full bg-white/40" style={{width: '100%'}}></div>
             </div>
-            <p className="text-xs text-emerald-100 mt-2 font-medium">Basado en costo est. 70%</p>
+            <p className="text-xs text-emerald-100 mt-2 font-medium">Facturado en PoS</p>
           </div>
 
-          {/* KPI 2: Total Sales */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-blue-300 transition-colors">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 bg-blue-50 rounded-lg">
@@ -462,13 +466,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               </div>
             </div>
             <div>
-              <p className="text-slate-500 text-sm font-medium">Ventas Totales</p>
-              <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">${kpis.totalVentas}</h3>
+              <p className="text-slate-500 text-sm font-medium">Ganancia Est. (30%)</p>
+              <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">${kpis.totalMargen}</h3>
             </div>
-            <p className="text-xs text-slate-400 mt-auto pt-4">Facturación bruta</p>
+            <p className="text-xs text-slate-400 mt-auto pt-4">Margen operativo estimado</p>
           </div>
 
-          {/* KPI 3: Units */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-purple-300 transition-colors">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 bg-purple-50 rounded-lg">
@@ -476,24 +479,23 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               </div>
             </div>
             <div>
-              <p className="text-slate-500 text-sm font-medium">Unidades Vendidas</p>
+              <p className="text-slate-500 text-sm font-medium">Items / Tickets</p>
               <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3>
             </div>
-            <p className="text-xs text-slate-400 mt-auto pt-4">Volumen de movimiento</p>
+            <p className="text-xs text-slate-400 mt-auto pt-4">Volumen transaccional</p>
           </div>
 
-          {/* KPI 4: Sedes */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-orange-300 transition-colors">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 bg-orange-50 rounded-lg">
-                <MapPin className="w-6 h-6 text-orange-600" />
+                <Store className="w-6 h-6 text-orange-600" />
               </div>
             </div>
             <div>
-              <p className="text-slate-500 text-sm font-medium">Clientes/Sedes</p>
+              <p className="text-slate-500 text-sm font-medium">Cajas Activas</p>
               <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{ventasPorSede.length}</h3>
             </div>
-            <p className="text-xs text-slate-400 mt-auto pt-4">Cartera activa</p>
+            <p className="text-xs text-slate-400 mt-auto pt-4">Puntos de venta con mov.</p>
           </div>
         </div>
 
@@ -502,12 +504,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           {/* Ventas por día */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-800">Tendencia de Ventas</h3>
-              <div className="flex items-center gap-4 text-xs font-medium">
-                 <div className="flex items-center gap-1">
-                   <div className="w-2 h-2 rounded-full bg-blue-500"></div> Ingresos
-                 </div>
-              </div>
+              <h3 className="text-lg font-bold text-slate-800">Flujo de Caja Diario</h3>
             </div>
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -531,10 +528,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     tickFormatter={(value) => `$${value/1000}k`}
                   />
                   <Tooltip 
-                    formatter={(value: number, name: string) => {
-                       const label = name === 'margen' ? 'Ganancia' : 'Ingresos';
-                       return [`$${Number(value).toFixed(2)}`, label];
-                    }}
+                    formatter={(value: number, name: string) => [`$${Number(value).toFixed(2)}`, 'Ventas']}
                     labelFormatter={(label) => new Date(label).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
@@ -544,7 +538,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     stroke="#3b82f6" 
                     strokeWidth={2} 
                     dot={false}
-                    name="ventas"
                     activeDot={{ r: 6, strokeWidth: 0 }}
                   />
                 </LineChart>
@@ -555,7 +548,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           {/* Ventas por sede */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-800">Participación por Cliente/Sede</h3>
+              <h3 className="text-lg font-bold text-slate-800">Ventas por Caja/Sede</h3>
               <button className="text-xs text-blue-600 hover:text-blue-700 font-medium bg-blue-50 px-3 py-1 rounded-full">Top 6</button>
             </div>
             <div className="h-[300px] w-full flex items-center justify-center">
@@ -596,7 +589,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         {/* Top productos */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-slate-800">Top Productos</h3>
+            <h3 className="text-lg font-bold text-slate-800">Top Productos Vendidos (PoS)</h3>
             <div className="flex gap-4 text-xs font-medium">
                <div className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm bg-blue-500"></span> Total Ventas</div>
             </div>
@@ -632,7 +625,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         {/* Tabla de productos */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 overflow-hidden">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-slate-800">Detalle de Rendimiento por Producto</h3>
+            <h3 className="text-lg font-bold text-slate-800">Detalle de Productos</h3>
             <button className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors">
               Descargar CSV
             </button>
@@ -642,9 +635,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               <thead className="text-xs text-slate-500 uppercase bg-slate-50">
                 <tr>
                   <th className="px-6 py-3 font-semibold rounded-l-lg">Producto</th>
-                  <th className="px-6 py-3 font-semibold text-right">Unidades</th>
+                  <th className="px-6 py-3 font-semibold text-right">Cantidad</th>
                   <th className="px-6 py-3 font-semibold text-right">Ventas Totales</th>
-                  <th className="px-6 py-3 font-semibold text-right rounded-r-lg">Compañía</th>
+                  <th className="px-6 py-3 font-semibold text-right rounded-r-lg">Origen</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -653,7 +646,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     <td className="px-6 py-4 font-medium text-slate-800 group-hover:text-blue-600 transition-colors">{prod.producto}</td>
                     <td className="px-6 py-4 text-right text-slate-600">{prod.cantidad}</td>
                     <td className="px-6 py-4 text-right font-medium text-slate-900">${prod.ventas.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-right text-xs text-slate-500">Multisede</td>
+                    <td className="px-6 py-4 text-right text-xs text-slate-500">Punto de Venta</td>
                   </tr>
                 ))}
               </tbody>
