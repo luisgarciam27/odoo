@@ -92,6 +92,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       try {
           const client = new OdooClient(session.url, session.db, session.useProxy);
           
+          let allowedCompanyIds: number[] = [];
+
           // 1. Obtener Compañías (res.company)
           // Esto nos permite llenar el filtro con las compañías REALES de la base de datos
           try {
@@ -100,11 +102,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                  session.apiKey,
                  'res.company',
                  [], // Domain vacío para traer todas (las permitidas)
-                 ['name'],
+                 ['id', 'name'],
                  { limit: 50 }
              );
              if (companies && companies.length > 0) {
                  setRealCompanies(companies.map(c => c.name));
+                 // Guardamos los IDs para pasarlos al contexto de búsqueda de ventas
+                 allowedCompanyIds = companies.map(c => c.id);
              }
           } catch (compError) {
               console.warn("No se pudieron cargar las compañías, usando valores por defecto", compError);
@@ -129,11 +133,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               ['create_date', '<=', `${filtros.fechaFin} 23:59:59`]
           ];
 
-          // Opciones avanzadas: límite aumentado para traer más datos
-          const options = {
+          // Opciones avanzadas: 
+          // Importante: Pasamos allowed_company_ids en el contexto para ver ventas de todas las empresas permitidas
+          const options: any = {
               limit: 500,
               order: 'create_date desc'
           };
+          
+          if (allowedCompanyIds.length > 0) {
+              options.context = { allowed_company_ids: allowedCompanyIds };
+          }
 
           const lines: any[] = await client.searchRead(
               session.uid, 
@@ -205,6 +214,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   // Si tenemos realCompanies (cargadas de res.company), las usamos. Si no, las derivamos de las ventas.
   const companias = useMemo(() => {
       if (realCompanies.length > 0) return ['Todas', ...realCompanies];
+      // Fallback a lo que venga en las ventas si falla la carga de compañías
       return ['Todas', ...Array.from(new Set(ventasData.map(v => v.compania)))];
   }, [ventasData, realCompanies]);
 
