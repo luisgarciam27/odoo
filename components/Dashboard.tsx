@@ -8,7 +8,7 @@ import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, AgrupadoProducto, Odoo
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
 
-// Datos de ejemplo simulando Odoo (Fallback)
+// Datos de ejemplo simulando Odoo (Fallback SOLO si no hay sesión)
 const generarDatosVentas = (): Venta[] => {
   const sedes = ['Sede Central', 'Sede Norte', 'Sede Sur', 'Sede Este'];
   const companias = ['Mi Empresa S.A.C.', 'Sucursal Arequipa IRL']; // Mock multi-company
@@ -66,17 +66,24 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   const [error, setError] = useState<string | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   
+  // Estado para almacenar las compañías reales obtenidas de Odoo
+  const [realCompanies, setRealCompanies] = useState<string[]>([]);
+  
   const [filtros, setFiltros] = useState<Filtros>({
     sedeSeleccionada: 'Todas',
     companiaSeleccionada: 'Todas',
-    periodoSeleccionado: 'mes', // Default to month for better data view
+    periodoSeleccionado: 'mes', 
     fechaInicio: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
     fechaFin: new Date().toISOString().split('T')[0]
   });
 
   const fetchData = async () => {
+      // Si NO hay sesión, usamos datos demo y salimos.
       if (!session) {
-          setVentasData(generarDatosVentas());
+          if (ventasData.length === 0) {
+              setVentasData(generarDatosVentas());
+              setRealCompanies(['Mi Empresa S.A.C.', 'Sucursal Arequipa IRL']);
+          }
           return;
       }
 
@@ -85,15 +92,34 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       try {
           const client = new OdooClient(session.url, session.db, session.useProxy);
           
+          // 1. Obtener Compañías (res.company)
+          // Esto nos permite llenar el filtro con las compañías REALES de la base de datos
+          try {
+             const companies: any[] = await client.searchRead(
+                 session.uid,
+                 session.apiKey,
+                 'res.company',
+                 [], // Domain vacío para traer todas (las permitidas)
+                 ['name'],
+                 { limit: 50 }
+             );
+             if (companies && companies.length > 0) {
+                 setRealCompanies(companies.map(c => c.name));
+             }
+          } catch (compError) {
+              console.warn("No se pudieron cargar las compañías, usando valores por defecto", compError);
+          }
+
+          // 2. Obtener Ventas (sale.order.line)
           const fields = [
               'create_date', 
               'order_partner_id', 
-              'company_id', // Fetch company info
+              'company_id', 
               'product_id', 
               'product_uom_qty', 
               'price_unit', 
               'price_subtotal', 
-              'purchase_price', // Field from sale_margin module
+              // 'purchase_price', // Comentamos purchase_price temporalmente por si falta el módulo sale_margin
               'state'
           ];
           
@@ -103,34 +129,44 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               ['create_date', '<=', `${filtros.fechaFin} 23:59:59`]
           ];
 
+          // Opciones avanzadas: límite aumentado para traer más datos
+          const options = {
+              limit: 500,
+              order: 'create_date desc'
+          };
+
           const lines: any[] = await client.searchRead(
               session.uid, 
               session.apiKey, 
               'sale.order.line', 
               domain, 
               fields, 
-              200 // Limit for demo performance
+              options
           );
+
+          if (!lines) throw new Error("La respuesta de Odoo fue vacía o inválida.");
 
           const mappedVentas: Venta[] = lines.map((line: any) => {
               const cantidad = line.product_uom_qty || 0;
               const total = line.price_subtotal || 0;
-              // If purchase_price (cost) is available, use it. Otherwise assume 70% of price (demo fallback if module missing)
+              // Calculamos costo estimado (70%) si no viene purchase_price para evitar errores
               const costoUnitario = line.purchase_price || (line.price_unit * 0.7); 
               const costo = costoUnitario * cantidad;
               const margen = total - costo;
               
               // Extract partner/sede 
-              const sede = line.order_partner_id ? line.order_partner_id[1] : 'General'; 
+              // Odoo devuelve array [id, "Nombre"] o false
+              const sede = Array.isArray(line.order_partner_id) ? line.order_partner_id[1] : 'Cliente General'; 
               
               // Extract company
-              const compania = line.company_id ? line.company_id[1] : 'Compañía Principal';
+              const compania = Array.isArray(line.company_id) ? line.company_id[1] : 'Compañía Principal';
+              const producto = Array.isArray(line.product_id) ? line.product_id[1] : 'Producto Desconocido';
 
               return {
                   fecha: new Date(line.create_date),
                   sede: sede,
                   compania: compania,
-                  producto: line.product_id ? line.product_id[1] : 'Unknown',
+                  producto: producto,
                   cantidad,
                   total,
                   costo,
@@ -140,10 +176,20 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           });
 
           setVentasData(mappedVentas);
+
+          if (mappedVentas.length === 0) {
+              setError("Conexión exitosa, pero no se encontraron ventas en este rango de fechas.");
+          }
+
       } catch (err: any) {
           console.error(err);
-          setError("Error recuperando datos de Odoo. Verifica permisos o módulos instalados (sale_margin).");
-          setVentasData(generarDatosVentas()); // Fallback to mock so UI doesn't break
+          // IMPORTANTE: Ya no cargamos datos falsos si hay error con sesión activa. Mostramos el error real.
+          let errorMsg = err.message || "Error desconocido";
+          if (errorMsg.includes("XmlRpc")) errorMsg = "Error de protocolo XML-RPC. Verifique URL.";
+          if (errorMsg.includes("Failed to fetch")) errorMsg = "Error de red o Proxy. Verifique si la URL de Odoo es accesible.";
+          
+          setError(`Error conectando a Odoo: ${errorMsg}`);
+          setVentasData([]); // Limpiamos datos para no confundir
       } finally {
           setLoading(false);
       }
@@ -151,12 +197,18 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
 
   useEffect(() => {
       fetchData();
-  }, [session, filtros.periodoSeleccionado, filtros.fechaInicio, filtros.fechaFin]); // Refetch when filters change if connected
+  }, [session, filtros.periodoSeleccionado, filtros.fechaInicio, filtros.fechaFin]); 
 
+  // Listas para filtros (derivadas de los datos o cargadas de Odoo)
   const sedes = useMemo(() => ['Todas', ...Array.from(new Set(ventasData.map(v => v.sede)))], [ventasData]);
-  const companias = useMemo(() => ['Todas', ...Array.from(new Set(ventasData.map(v => v.compania)))], [ventasData]);
+  
+  // Si tenemos realCompanies (cargadas de res.company), las usamos. Si no, las derivamos de las ventas.
+  const companias = useMemo(() => {
+      if (realCompanies.length > 0) return ['Todas', ...realCompanies];
+      return ['Todas', ...Array.from(new Set(ventasData.map(v => v.compania)))];
+  }, [ventasData, realCompanies]);
 
-  // Filtrar datos según selección local (Client side filtering for speed after fetch)
+  // Filtrar datos según selección local
   const datosFiltrados = useMemo(() => {
     let datos = ventasData;
     
@@ -170,7 +222,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       datos = datos.filter(v => v.compania === filtros.companiaSeleccionada);
     }
     
-    // Date filter is handled in fetch for Odoo, but double check locally
+    // Filtro fecha local (seguridad adicional)
     const inicio = new Date(filtros.fechaInicio);
     inicio.setHours(0,0,0,0);
     const fin = new Date(filtros.fechaFin);
@@ -226,7 +278,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       agrupado[v.sede].margen += v.margen;
     });
     
-    return Object.values(agrupado).sort((a, b) => b.ventas - a.ventas).slice(0, 6); // Limit pie chart segments
+    return Object.values(agrupado).sort((a, b) => b.ventas - a.ventas).slice(0, 6); 
   }, [datosFiltrados]);
 
   // Top productos
@@ -278,7 +330,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       fechaInicio: inicio.toISOString().split('T')[0],
       fechaFin: hoy.toISOString().split('T')[0]
     });
-    // Triggers useEffect fetch
   };
 
   return (
@@ -325,9 +376,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         </div>
         
         {error && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex gap-3 items-center">
+            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex gap-3 items-center shadow-sm animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="w-5 h-5 shrink-0" />
-                <p className="text-sm">{error}</p>
+                <div className="flex-1">
+                    <p className="font-semibold text-sm">Error de conexión</p>
+                    <p className="text-xs opacity-90">{error}</p>
+                </div>
             </div>
         )}
 

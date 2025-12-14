@@ -129,8 +129,17 @@ export class OdooClient {
     return uid;
   }
 
-  async searchRead(uid: number, apiKey: string, model: string, domain: any[], fields: string[], limit: number = 100) {
+  /**
+   * searchRead mejorado para soportar opciones avanzadas como context, limit, order, etc.
+   */
+  async searchRead(uid: number, apiKey: string, model: string, domain: any[], fields: string[], options: any = {}) {
     // execute_kw(db, uid, password, model, method, args, kwargs)
+    // kwargs contiene: fields, limit, offset, order, context
+    const kwargs = {
+        fields: fields,
+        ...options
+    };
+
     return await this.rpcCall('object', 'execute_kw', [
         this.db, 
         uid, 
@@ -138,7 +147,7 @@ export class OdooClient {
         model, 
         'search_read', 
         [domain], 
-        { fields, limit }
+        kwargs
     ]);
   }
 }
