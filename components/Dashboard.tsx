@@ -94,27 +94,49 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           
           let allowedCompanyIds: number[] = [];
 
-          // 1. Obtener Compañías (res.company)
-          // Esto nos permite llenar el filtro con las compañías REALES de la base de datos
+          // 1. OBTENER PERMISOS DEL USUARIO (res.users)
+          // Consultamos qué compañías tiene permitidas este usuario específicamente
           try {
-             const companies: any[] = await client.searchRead(
+             const userData: any[] = await client.searchRead(
                  session.uid,
                  session.apiKey,
-                 'res.company',
-                 [], // Domain vacío para traer todas (las permitidas)
-                 ['id', 'name'],
-                 { limit: 50 }
+                 'res.users',
+                 [['id', '=', session.uid]], 
+                 ['company_ids'],
+                 { limit: 1 }
              );
-             if (companies && companies.length > 0) {
-                 setRealCompanies(companies.map(c => c.name));
-                 // Guardamos los IDs para pasarlos al contexto de búsqueda de ventas
-                 allowedCompanyIds = companies.map(c => c.id);
+
+             if (userData && userData.length > 0) {
+                 // company_ids viene como un array de IDs [1, 2, 5]
+                 allowedCompanyIds = userData[0].company_ids || [];
+             } else {
+                 // Fallback si falla res.users, usamos el ID de la sesión actual (no ideal para multicompany)
+                 console.warn("No se pudo leer res.users, usando contexto default");
              }
-          } catch (compError) {
-              console.warn("No se pudieron cargar las compañías, usando valores por defecto", compError);
+          } catch (userError) {
+              console.warn("Error leyendo permisos de usuario", userError);
           }
 
-          // 2. Obtener Ventas (sale.order.line)
+          // 2. OBTENER NOMBRES DE COMPAÑÍAS (res.company)
+          // Solo buscamos las que están en allowedCompanyIds para evitar errores de acceso
+          if (allowedCompanyIds.length > 0) {
+              try {
+                  const companies: any[] = await client.searchRead(
+                      session.uid,
+                      session.apiKey,
+                      'res.company',
+                      [['id', 'in', allowedCompanyIds]], 
+                      ['id', 'name']
+                  );
+                  if (companies && companies.length > 0) {
+                      setRealCompanies(companies.map(c => c.name));
+                  }
+              } catch (compError) {
+                  console.warn("No se pudieron cargar nombres de compañías", compError);
+              }
+          }
+
+          // 3. OBTENER VENTAS (sale.order.line)
           const fields = [
               'create_date', 
               'order_partner_id', 
@@ -123,7 +145,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               'product_uom_qty', 
               'price_unit', 
               'price_subtotal', 
-              // 'purchase_price', // Comentamos purchase_price temporalmente por si falta el módulo sale_margin
+              // 'purchase_price', // Descomentar si tienes sale_margin instalado
               'state'
           ];
           
@@ -134,12 +156,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           ];
 
           // Opciones avanzadas: 
-          // Importante: Pasamos allowed_company_ids en el contexto para ver ventas de todas las empresas permitidas
           const options: any = {
               limit: 500,
               order: 'create_date desc'
           };
           
+          // IMPORTANTE: Solo inyectamos allowed_company_ids si los obtuvimos correctamente del usuario.
+          // Si enviamos IDs que el usuario no tiene en su perfil, Odoo lanza error 4 (Access Error).
           if (allowedCompanyIds.length > 0) {
               options.context = { allowed_company_ids: allowedCompanyIds };
           }
@@ -158,13 +181,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           const mappedVentas: Venta[] = lines.map((line: any) => {
               const cantidad = line.product_uom_qty || 0;
               const total = line.price_subtotal || 0;
-              // Calculamos costo estimado (70%) si no viene purchase_price para evitar errores
+              // Calculamos costo estimado (70%) si no viene purchase_price
               const costoUnitario = line.purchase_price || (line.price_unit * 0.7); 
               const costo = costoUnitario * cantidad;
               const margen = total - costo;
               
               // Extract partner/sede 
-              // Odoo devuelve array [id, "Nombre"] o false
               const sede = Array.isArray(line.order_partner_id) ? line.order_partner_id[1] : 'Cliente General'; 
               
               // Extract company
@@ -192,13 +214,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
 
       } catch (err: any) {
           console.error(err);
-          // IMPORTANTE: Ya no cargamos datos falsos si hay error con sesión activa. Mostramos el error real.
           let errorMsg = err.message || "Error desconocido";
           if (errorMsg.includes("XmlRpc")) errorMsg = "Error de protocolo XML-RPC. Verifique URL.";
           if (errorMsg.includes("Failed to fetch")) errorMsg = "Error de red o Proxy. Verifique si la URL de Odoo es accesible.";
+          if (errorMsg.includes("Access to unauthorized")) errorMsg = "Error de permisos: El usuario no tiene acceso a las compañías solicitadas.";
           
           setError(`Error conectando a Odoo: ${errorMsg}`);
-          setVentasData([]); // Limpiamos datos para no confundir
+          setVentasData([]); 
       } finally {
           setLoading(false);
       }
@@ -211,10 +233,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   // Listas para filtros (derivadas de los datos o cargadas de Odoo)
   const sedes = useMemo(() => ['Todas', ...Array.from(new Set(ventasData.map(v => v.sede)))], [ventasData]);
   
-  // Si tenemos realCompanies (cargadas de res.company), las usamos. Si no, las derivamos de las ventas.
   const companias = useMemo(() => {
       if (realCompanies.length > 0) return ['Todas', ...realCompanies];
-      // Fallback a lo que venga en las ventas si falla la carga de compañías
       return ['Todas', ...Array.from(new Set(ventasData.map(v => v.compania)))];
   }, [ventasData, realCompanies]);
 
@@ -232,7 +252,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       datos = datos.filter(v => v.compania === filtros.companiaSeleccionada);
     }
     
-    // Filtro fecha local (seguridad adicional)
+    // Filtro fecha local
     const inicio = new Date(filtros.fechaInicio);
     inicio.setHours(0,0,0,0);
     const fin = new Date(filtros.fechaFin);
