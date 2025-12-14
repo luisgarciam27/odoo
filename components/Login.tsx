@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Lock, User, ArrowRight, Server, Database, Key, AlertTriangle, Globe, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, User, ArrowRight, Server, Database, Key, AlertTriangle, Globe, ShieldCheck } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { OdooSession } from '../types';
 

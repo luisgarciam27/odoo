@@ -3,7 +3,7 @@ import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, 
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, MapPin, Calendar, ArrowUpRight, Settings, RefreshCw, AlertCircle } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, MapPin, Calendar, ArrowUpRight, RefreshCw, AlertCircle } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, AgrupadoProducto, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
@@ -536,7 +536,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     paddingAngle={5}
                     dataKey="ventas"
                   >
-                    {ventasPorSede.map((entry, index) => (
+                    {ventasPorSede.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
                     ))}
                   </Pie>
@@ -549,7 +549,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     verticalAlign="middle" 
                     align="right"
                     wrapperStyle={{ paddingLeft: '20px' }}
-                    formatter={(value, entry: any) => (
+                    formatter={(_, entry: any) => (
                       <span className="text-slate-600 text-sm font-medium ml-2">{entry.payload.sede}</span>
                     )}
                   />
