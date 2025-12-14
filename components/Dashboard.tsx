@@ -80,9 +80,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       try {
           const client = new OdooClient(session.url, session.db, session.useProxy);
           // Fetch Sale Order Lines to get product details and costs
-          // Note: In real Odoo, 'purchase_price' needs 'sale_margin' module. 
-          // If not available, we might fallback to standard price from product.
-          // We will request 'purchase_price' assuming the user wants margin.
           
           const fields = [
               'create_date', 
@@ -119,7 +116,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               const margen = total - costo;
               
               // Extract partner/sede (Using partner name as 'Sede' proxy for visualization if no warehouse field)
-              // In a real sophisticated setup, we'd fetch warehouse_id from order_id
               const sede = line.order_partner_id ? line.order_partner_id[1] : 'General'; 
 
               return {
