@@ -24,16 +24,15 @@ const generarDatosVentas = (): Venta[] => {
   ];
 
   const ventas: Venta[] = [];
-  const fechaInicio = new Date('2024-10-01');
-  const fechaFin = new Date('2024-12-14');
+  const fechaInicio = new Date('2024-01-01');
+  const fechaFin = new Date();
 
-  for (let d = new Date(fechaInicio); d <= fechaFin; d.setDate(d.getDate() + 1)) {
-    const ventasPorDia = Math.floor(Math.random() * 15) + 5;
+  for (let d = new Date(fechaInicio); d <= fechaFin; d.setDate(d.getDate() + 2)) { // Menos frecuencia para no saturar
+    const ventasPorDia = Math.floor(Math.random() * 5) + 1;
     
     for (let i = 0; i < ventasPorDia; i++) {
       const producto = productos[Math.floor(Math.random() * productos.length)];
       const sede = sedes[Math.floor(Math.random() * sedes.length)];
-      // Asignar compañía aleatoria
       const compania = companias[Math.floor(Math.random() * companias.length)];
       const cantidad = Math.floor(Math.random() * 3) + 1;
       const total = producto.precio * cantidad;
@@ -69,16 +68,47 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   // Estado para almacenar las compañías reales obtenidas de Odoo
   const [realCompanies, setRealCompanies] = useState<string[]>([]);
   
+  // POR DEFECTO: Cargamos desde el 1 de Enero del año actual para asegurar datos
+  const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0];
+
   const [filtros, setFiltros] = useState<Filtros>({
     sedeSeleccionada: 'Todas',
     companiaSeleccionada: 'Todas',
-    periodoSeleccionado: 'mes', 
-    fechaInicio: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
-    fechaFin: new Date().toISOString().split('T')[0]
+    periodoSeleccionado: 'año', // Default a año para ver más datos
+    fechaInicio: yearStart,
+    fechaFin: today
   });
 
+  // Función auxiliar para mapear la respuesta de Odoo a nuestro formato Venta
+  const mapOdooResponse = (lines: any[]): Venta[] => {
+      return lines.map((line: any) => {
+          const cantidad = line.product_uom_qty || 0;
+          const total = line.price_subtotal || 0;
+          // IMPORTANTE: Calculamos costo al 70% si no viene de Odoo para evitar errores de campo inexistente
+          const costoUnitario = line.price_unit * 0.7; 
+          const costo = costoUnitario * cantidad;
+          const margen = total - costo;
+          
+          const sede = Array.isArray(line.order_partner_id) ? line.order_partner_id[1] : 'Cliente General'; 
+          const compania = Array.isArray(line.company_id) ? line.company_id[1] : 'Compañía Principal';
+          const producto = Array.isArray(line.product_id) ? line.product_id[1] : 'Producto Desconocido';
+
+          return {
+              fecha: new Date(line.create_date),
+              sede: sede,
+              compania: compania,
+              producto: producto,
+              cantidad,
+              total,
+              costo,
+              margen,
+              margenPorcentaje: total > 0 ? ((margen / total) * 100).toFixed(1) : '0.0'
+          };
+      });
+  };
+
   const fetchData = async () => {
-      // Si NO hay sesión, usamos datos demo y salimos.
       if (!session) {
           if (ventasData.length === 0) {
               setVentasData(generarDatosVentas());
@@ -89,137 +119,91 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
 
       setLoading(true);
       setError(null);
-      try {
-          const client = new OdooClient(session.url, session.db, session.useProxy);
-          
-          let allowedCompanyIds: number[] = [];
+      const client = new OdooClient(session.url, session.db, session.useProxy);
+      
+      // Campos solicitados (Simplificados para evitar errores de permisos)
+      const fields = [
+        'create_date', 
+        'order_partner_id', 
+        'company_id', 
+        'product_id', 
+        'product_uom_qty', 
+        'price_unit', 
+        'price_subtotal', 
+        'state'
+        // 'purchase_price' REMOVIDO: Causa muchos errores de acceso si no está instalado sale_margin
+      ];
 
-          // 1. OBTENER PERMISOS DEL USUARIO (res.users)
-          // Consultamos qué compañías tiene permitidas este usuario específicamente
+      const domain = [
+        ['state', 'in', ['sale', 'done']],
+        ['create_date', '>=', filtros.fechaInicio],
+        ['create_date', '<=', `${filtros.fechaFin} 23:59:59`]
+      ];
+
+      const options: any = {
+        limit: 800, // Aumentado para traer más historial
+        order: 'create_date desc'
+      };
+
+      try {
+          // ESTRATEGIA: Intentar Multi-Compañía primero.
+          // 1. Obtener IDs permitidos del usuario
+          let allowedCompanyIds: number[] = [];
           try {
              const userData: any[] = await client.searchRead(
-                 session.uid,
-                 session.apiKey,
-                 'res.users',
-                 [['id', '=', session.uid]], 
-                 ['company_ids'],
-                 { limit: 1 }
+                 session.uid, session.apiKey, 'res.users',
+                 [['id', '=', session.uid]], ['company_ids']
              );
-
              if (userData && userData.length > 0) {
-                 // company_ids viene como un array de IDs [1, 2, 5]
                  allowedCompanyIds = userData[0].company_ids || [];
-             } else {
-                 // Fallback si falla res.users, usamos el ID de la sesión actual (no ideal para multicompany)
-                 console.warn("No se pudo leer res.users, usando contexto default");
              }
-          } catch (userError) {
-              console.warn("Error leyendo permisos de usuario", userError);
-          }
+          } catch (e) { console.warn("Fallo leve obteniendo users", e); }
 
-          // 2. OBTENER NOMBRES DE COMPAÑÍAS (res.company)
-          // Solo buscamos las que están en allowedCompanyIds para evitar errores de acceso
-          if (allowedCompanyIds.length > 0) {
-              try {
-                  const companies: any[] = await client.searchRead(
-                      session.uid,
-                      session.apiKey,
-                      'res.company',
-                      [['id', 'in', allowedCompanyIds]], 
-                      ['id', 'name']
-                  );
-                  if (companies && companies.length > 0) {
-                      setRealCompanies(companies.map(c => c.name));
-                  }
-              } catch (compError) {
-                  console.warn("No se pudieron cargar nombres de compañías", compError);
-              }
-          }
-
-          // 3. OBTENER VENTAS (sale.order.line)
-          const fields = [
-              'create_date', 
-              'order_partner_id', 
-              'company_id', 
-              'product_id', 
-              'product_uom_qty', 
-              'price_unit', 
-              'price_subtotal', 
-              // 'purchase_price', // Descomentar si tienes sale_margin instalado
-              'state'
-          ];
-          
-          const domain = [
-              ['state', 'in', ['sale', 'done']],
-              ['create_date', '>=', filtros.fechaInicio],
-              ['create_date', '<=', `${filtros.fechaFin} 23:59:59`]
-          ];
-
-          // Opciones avanzadas: 
-          const options: any = {
-              limit: 500,
-              order: 'create_date desc'
-          };
-          
-          // IMPORTANTE: Solo inyectamos allowed_company_ids si los obtuvimos correctamente del usuario.
-          // Si enviamos IDs que el usuario no tiene en su perfil, Odoo lanza error 4 (Access Error).
+          // 2. Si hay IDs, intentar cargar ventas con contexto
           if (allowedCompanyIds.length > 0) {
               options.context = { allowed_company_ids: allowedCompanyIds };
+              
+              // Cargar nombres de compañías para el filtro
+              client.searchRead(session.uid, session.apiKey, 'res.company', [['id', 'in', allowedCompanyIds]], ['name'])
+                .then((comps: any[]) => setRealCompanies(comps.map(c => c.name)))
+                .catch(() => {});
           }
 
-          const lines: any[] = await client.searchRead(
-              session.uid, 
-              session.apiKey, 
-              'sale.order.line', 
-              domain, 
-              fields, 
-              options
-          );
+          console.log("Consultando Odoo...", { domain, options });
+          const lines: any[] = await client.searchRead(session.uid, session.apiKey, 'sale.order.line', domain, fields, options);
 
-          if (!lines) throw new Error("La respuesta de Odoo fue vacía o inválida.");
+          const mapped = mapOdooResponse(lines);
+          setVentasData(mapped);
 
-          const mappedVentas: Venta[] = lines.map((line: any) => {
-              const cantidad = line.product_uom_qty || 0;
-              const total = line.price_subtotal || 0;
-              // Calculamos costo estimado (70%) si no viene purchase_price
-              const costoUnitario = line.purchase_price || (line.price_unit * 0.7); 
-              const costo = costoUnitario * cantidad;
-              const margen = total - costo;
-              
-              // Extract partner/sede 
-              const sede = Array.isArray(line.order_partner_id) ? line.order_partner_id[1] : 'Cliente General'; 
-              
-              // Extract company
-              const compania = Array.isArray(line.company_id) ? line.company_id[1] : 'Compañía Principal';
-              const producto = Array.isArray(line.product_id) ? line.product_id[1] : 'Producto Desconocido';
-
-              return {
-                  fecha: new Date(line.create_date),
-                  sede: sede,
-                  compania: compania,
-                  producto: producto,
-                  cantidad,
-                  total,
-                  costo,
-                  margen,
-                  margenPorcentaje: total > 0 ? ((margen / total) * 100).toFixed(1) : '0.0'
-              };
-          });
-
-          setVentasData(mappedVentas);
-
-          if (mappedVentas.length === 0) {
-              setError("Conexión exitosa, pero no se encontraron ventas en este rango de fechas.");
+          if (mapped.length === 0) {
+            setError("Conexión exitosa. No se encontraron ventas en el rango de fechas seleccionado (Desde Enero 1).");
           }
 
       } catch (err: any) {
-          console.error(err);
-          let errorMsg = err.message || "Error desconocido";
-          if (errorMsg.includes("XmlRpc")) errorMsg = "Error de protocolo XML-RPC. Verifique URL.";
-          if (errorMsg.includes("Failed to fetch")) errorMsg = "Error de red o Proxy. Verifique si la URL de Odoo es accesible.";
-          if (errorMsg.includes("Access to unauthorized")) errorMsg = "Error de permisos: El usuario no tiene acceso a las compañías solicitadas.";
+          console.error("Error principal:", err);
           
-          setError(`Error conectando a Odoo: ${errorMsg}`);
+          // REINTENTO AUTOMÁTICO (FALLBACK):
+          // Si falla por "Access Error" (error 4) o similar al intentar leer varias compañías,
+          // intentamos una lectura SIMPLE sin contexto (solo la compañía por defecto del usuario).
+          if (err.message && (err.message.includes("Access") || err.message.includes("company"))) {
+              try {
+                  console.log("Reintentando carga en modo simple (Compañía por defecto)...");
+                  delete options.context; // Quitamos el contexto problemático
+                  const retryLines: any[] = await client.searchRead(session.uid, session.apiKey, 'sale.order.line', domain, fields, options);
+                  const mapped = mapOdooResponse(retryLines);
+                  setVentasData(mapped);
+                  setError(null); // Limpiamos el error si el reintento funciona
+                  return; // Salimos éxito
+              } catch (retryErr) {
+                  console.error("Fallo también el reintento", retryErr);
+              }
+          }
+
+          // Mensajes de error amigables
+          let errorMsg = err.message || "Error desconocido";
+          if (errorMsg.includes("XmlRpc")) errorMsg = "Error XML-RPC. Verifique URL.";
+          if (errorMsg.includes("Failed to fetch")) errorMsg = "Error de Conexión/CORS.";
+          setError(`Error: ${errorMsg}`);
           setVentasData([]); 
       } finally {
           setLoading(false);
@@ -228,52 +212,28 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
 
   useEffect(() => {
       fetchData();
-  }, [session, filtros.periodoSeleccionado, filtros.fechaInicio, filtros.fechaFin]); 
+  }, [session, filtros.fechaInicio, filtros.fechaFin]); // Recargar si cambian las fechas
 
-  // Listas para filtros (derivadas de los datos o cargadas de Odoo)
+  // --- MEMOS DE FILTROS Y GRÁFICAS (Sin cambios lógicos mayores) ---
   const sedes = useMemo(() => ['Todas', ...Array.from(new Set(ventasData.map(v => v.sede)))], [ventasData]);
-  
   const companias = useMemo(() => {
       if (realCompanies.length > 0) return ['Todas', ...realCompanies];
       return ['Todas', ...Array.from(new Set(ventasData.map(v => v.compania)))];
   }, [ventasData, realCompanies]);
 
-  // Filtrar datos según selección local
   const datosFiltrados = useMemo(() => {
     let datos = ventasData;
-    
-    // Filtro Sede/Cliente
-    if (filtros.sedeSeleccionada !== 'Todas') {
-      datos = datos.filter(v => v.sede === filtros.sedeSeleccionada);
-    }
-
-    // Filtro Compañía
-    if (filtros.companiaSeleccionada !== 'Todas') {
-      datos = datos.filter(v => v.compania === filtros.companiaSeleccionada);
-    }
-    
-    // Filtro fecha local
-    const inicio = new Date(filtros.fechaInicio);
-    inicio.setHours(0,0,0,0);
-    const fin = new Date(filtros.fechaFin);
-    fin.setHours(23,59,59,999);
-    
-    datos = datos.filter(v => {
-      const fechaVenta = new Date(v.fecha);
-      return fechaVenta >= inicio && fechaVenta <= fin;
-    });
-    
+    if (filtros.sedeSeleccionada !== 'Todas') datos = datos.filter(v => v.sede === filtros.sedeSeleccionada);
+    if (filtros.companiaSeleccionada !== 'Todas') datos = datos.filter(v => v.compania === filtros.companiaSeleccionada);
     return datos;
-  }, [ventasData, filtros.sedeSeleccionada, filtros.companiaSeleccionada, filtros.fechaInicio, filtros.fechaFin]);
+  }, [ventasData, filtros.sedeSeleccionada, filtros.companiaSeleccionada]);
 
-  // KPIs principales
   const kpis = useMemo(() => {
     const totalVentas = datosFiltrados.reduce((sum, v) => sum + v.total, 0);
     const totalCostos = datosFiltrados.reduce((sum, v) => sum + v.costo, 0);
     const totalMargen = totalVentas - totalCostos;
     const margenPromedio = totalVentas > 0 ? ((totalMargen / totalVentas) * 100) : 0;
     const unidadesVendidas = datosFiltrados.reduce((sum, v) => sum + v.cantidad, 0);
-    
     return {
       totalVentas: totalVentas.toFixed(2),
       totalMargen: totalMargen.toFixed(2),
@@ -282,55 +242,36 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     };
   }, [datosFiltrados]);
 
-  // Ventas por día
   const ventasPorDia = useMemo(() => {
     const agrupado: Record<string, AgrupadoPorDia> = {};
     datosFiltrados.forEach(v => {
       const fecha = v.fecha.toISOString().split('T')[0];
-      if (!agrupado[fecha]) {
-        agrupado[fecha] = { fecha, ventas: 0, margen: 0 };
-      }
+      if (!agrupado[fecha]) agrupado[fecha] = { fecha, ventas: 0, margen: 0 };
       agrupado[fecha].ventas += v.total;
       agrupado[fecha].margen += v.margen;
     });
-    
     return Object.values(agrupado).sort((a, b) => a.fecha.localeCompare(b.fecha));
   }, [datosFiltrados]);
 
-  // Ventas por sede
   const ventasPorSede = useMemo(() => {
     const agrupado: Record<string, AgrupadoPorSede> = {};
     datosFiltrados.forEach(v => {
-      if (!agrupado[v.sede]) {
-        agrupado[v.sede] = { sede: v.sede, ventas: 0, margen: 0 };
-      }
+      if (!agrupado[v.sede]) agrupado[v.sede] = { sede: v.sede, ventas: 0, margen: 0 };
       agrupado[v.sede].ventas += v.total;
       agrupado[v.sede].margen += v.margen;
     });
-    
     return Object.values(agrupado).sort((a, b) => b.ventas - a.ventas).slice(0, 6); 
   }, [datosFiltrados]);
 
-  // Top productos
   const topProductos = useMemo(() => {
     const agrupado: Record<string, AgrupadoProducto> = {};
     datosFiltrados.forEach(v => {
-      if (!agrupado[v.producto]) {
-        agrupado[v.producto] = { 
-          producto: v.producto, 
-          cantidad: 0, 
-          ventas: 0,
-          margen: 0
-        };
-      }
+      if (!agrupado[v.producto]) agrupado[v.producto] = { producto: v.producto, cantidad: 0, ventas: 0, margen: 0 };
       agrupado[v.producto].cantidad += v.cantidad;
       agrupado[v.producto].ventas += v.total;
       agrupado[v.producto].margen += v.margen;
     });
-    
-    return Object.values(agrupado)
-      .sort((a, b) => b.ventas - a.ventas)
-      .slice(0, 8);
+    return Object.values(agrupado).sort((a, b) => b.ventas - a.ventas).slice(0, 8);
   }, [datosFiltrados]);
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
@@ -340,18 +281,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     let inicio = new Date(hoy);
     
     switch(periodo) {
-      case 'hoy':
-        inicio = new Date(hoy);
-        break;
-      case 'semana':
-        inicio.setDate(hoy.getDate() - 7);
-        break;
-      case 'mes':
-        inicio.setMonth(hoy.getMonth() - 1);
-        break;
-      case 'trimestre':
-        inicio.setMonth(hoy.getMonth() - 3);
-        break;
+      case 'hoy': break; // inicio = hoy
+      case 'semana': inicio.setDate(hoy.getDate() - 7); break;
+      case 'mes': inicio.setMonth(hoy.getMonth() - 1); break;
+      case 'trimestre': inicio.setMonth(hoy.getMonth() - 3); break;
+      case 'año': inicio = new Date(hoy.getFullYear(), 0, 1); break;
     }
     
     setFiltros({
@@ -382,7 +316,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
            <div>
               <h1 className="text-2xl font-bold text-slate-800">Visión General</h1>
               <p className="text-slate-500 text-sm">
-                  {session ? `Conectado a: ${session.db}` : 'Modo Simulación (Demo)'}
+                  {session ? `Base de datos: ${session.db}` : 'Modo Demo'}
               </p>
            </div>
            
@@ -392,7 +326,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                 className="flex items-center gap-2 bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 font-medium text-sm hover:bg-slate-50 transition-colors shadow-sm"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Actualizar
+                Recargar
               </button>
               
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border font-medium text-sm ${session ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
@@ -400,16 +334,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                   <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${session ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
                   <span className={`relative inline-flex rounded-full h-2 w-2 ${session ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
                 </span>
-                {session ? 'Odoo: Online' : 'Modo Demo'}
+                {session ? 'En línea' : 'Demo'}
               </div>
            </div>
         </div>
         
         {error && (
-            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex gap-3 items-center shadow-sm animate-in fade-in slide-in-from-top-2">
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex gap-3 items-center shadow-sm animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 <div className="flex-1">
-                    <p className="font-semibold text-sm">Error de conexión</p>
+                    <p className="font-semibold text-sm">Estado de Datos</p>
                     <p className="text-xs opacity-90">{error}</p>
                 </div>
             </div>
@@ -419,7 +353,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
           <div className="flex flex-wrap gap-4 items-end">
             
-            {/* Filtro Compañía */}
             <div className="w-full md:w-auto">
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                 <Building2 className="inline w-3 h-3 mr-1" />
@@ -428,7 +361,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               <select 
                 value={filtros.companiaSeleccionada}
                 onChange={(e) => setFiltros({...filtros, companiaSeleccionada: e.target.value})}
-                className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
               >
                 {companias.map(comp => (
                   <option key={comp} value={comp}>{comp}</option>
@@ -439,12 +372,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             <div className="w-full md:w-auto">
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                 <MapPin className="inline w-3 h-3 mr-1" />
-                Cliente / Sede
+                Sede / Cliente
               </label>
               <select 
                 value={filtros.sedeSeleccionada}
                 onChange={(e) => setFiltros({...filtros, sedeSeleccionada: e.target.value})}
-                className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
               >
                 {sedes.map(sede => (
                   <option key={sede} value={sede}>{sede}</option>
@@ -455,10 +388,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             <div className="flex-1 min-w-[300px]">
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                 <Calendar className="inline w-3 h-3 mr-1" />
-                Rango de Tiempo
+                Rango de Fechas
               </label>
               <div className="flex bg-slate-50 p-1 rounded-lg w-full md:w-fit border border-slate-200">
-                {['hoy', 'semana', 'mes', 'trimestre'].map(periodo => (
+                {['mes', 'trimestre', 'año'].map(periodo => (
                   <button
                     key={periodo}
                     onClick={() => aplicarPeriodo(periodo)}
@@ -512,13 +445,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               </span>
             </div>
             <div>
-              <p className="text-emerald-50 text-sm font-medium tracking-wide opacity-90">Ganancia Neta (Margen)</p>
+              <p className="text-emerald-50 text-sm font-medium tracking-wide opacity-90">Ganancia Estimada</p>
               <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">${kpis.totalMargen}</h3>
             </div>
             <div className="mt-4 h-1 w-full bg-black/10 rounded-full overflow-hidden">
                <div className="h-full bg-white/40" style={{width: `${Math.min(parseFloat(kpis.margenPromedio), 100)}%`}}></div>
             </div>
-            <p className="text-xs text-emerald-100 mt-2 font-medium">Rentabilidad sobre ventas</p>
+            <p className="text-xs text-emerald-100 mt-2 font-medium">Basado en costo est. 70%</p>
           </div>
 
           {/* KPI 2: Total Sales */}
@@ -569,11 +502,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           {/* Ventas por día */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-800">Análisis de Rentabilidad</h3>
+              <h3 className="text-lg font-bold text-slate-800">Tendencia de Ventas</h3>
               <div className="flex items-center gap-4 text-xs font-medium">
-                 <div className="flex items-center gap-1">
-                   <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Ganancia
-                 </div>
                  <div className="flex items-center gap-1">
                    <div className="w-2 h-2 rounded-full bg-blue-500"></div> Ingresos
                  </div>
@@ -602,7 +532,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                   />
                   <Tooltip 
                     formatter={(value: number, name: string) => {
-                       const label = name === 'margen' ? 'Ganancia Neta' : 'Ingresos';
+                       const label = name === 'margen' ? 'Ganancia' : 'Ingresos';
                        return [`$${Number(value).toFixed(2)}`, label];
                     }}
                     labelFormatter={(label) => new Date(label).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -615,16 +545,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     strokeWidth={2} 
                     dot={false}
                     name="ventas"
-                    activeDot={{ r: 6, strokeWidth: 0 }}
-                    strokeOpacity={0.5}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="margen" 
-                    stroke="#10b981" 
-                    strokeWidth={3} 
-                    dot={false}
-                    name="margen"
                     activeDot={{ r: 6, strokeWidth: 0 }}
                   />
                 </LineChart>
@@ -676,10 +596,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         {/* Top productos */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-slate-800">Top Productos: Margen vs Ventas</h3>
+            <h3 className="text-lg font-bold text-slate-800">Top Productos</h3>
             <div className="flex gap-4 text-xs font-medium">
                <div className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm bg-blue-500"></span> Total Ventas</div>
-               <div className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm bg-emerald-500"></span> Ganancia Real</div>
             </div>
           </div>
           <div className="h-[400px] w-full">
@@ -699,13 +618,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                 <Tooltip 
                   cursor={{fill: '#f8fafc'}}
                   formatter={(value: number, name: string) => {
-                    const label = name === 'ventas' ? 'Ventas' : 'Margen Neto';
+                    const label = name === 'ventas' ? 'Ventas' : 'Margen';
                     return [`$${Number(value).toFixed(2)}`, label];
                   }}
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
                 <Bar dataKey="ventas" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} name="ventas" />
-                <Bar dataKey="margen" fill="#10b981" radius={[0, 4, 4, 0]} barSize={20} name="margen" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -726,8 +644,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                   <th className="px-6 py-3 font-semibold rounded-l-lg">Producto</th>
                   <th className="px-6 py-3 font-semibold text-right">Unidades</th>
                   <th className="px-6 py-3 font-semibold text-right">Ventas Totales</th>
-                  <th className="px-6 py-3 font-semibold text-right text-emerald-700">Margen Neto</th>
-                  <th className="px-6 py-3 font-semibold text-right rounded-r-lg">% Rentabilidad</th>
+                  <th className="px-6 py-3 font-semibold text-right rounded-r-lg">Compañía</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -736,16 +653,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     <td className="px-6 py-4 font-medium text-slate-800 group-hover:text-blue-600 transition-colors">{prod.producto}</td>
                     <td className="px-6 py-4 text-right text-slate-600">{prod.cantidad}</td>
                     <td className="px-6 py-4 text-right font-medium text-slate-900">${prod.ventas.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-right font-bold text-emerald-600">${prod.margen.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-right">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        (prod.margen / prod.ventas) > 0.3 
-                          ? 'bg-emerald-100 text-emerald-800' 
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {((prod.margen / prod.ventas) * 100).toFixed(1)}%
-                      </span>
-                    </td>
+                    <td className="px-6 py-4 text-right text-xs text-slate-500">Multisede</td>
                   </tr>
                 ))}
               </tbody>

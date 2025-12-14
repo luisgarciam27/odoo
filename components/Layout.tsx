@@ -34,36 +34,36 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
             Principal
           </div>
           
-          <a href="#" className="flex items-center gap-3 px-3 py-2.5 bg-emerald-600/10 text-emerald-400 rounded-lg border border-emerald-600/20">
+          <div className="flex items-center gap-3 px-3 py-2.5 bg-emerald-600/20 text-emerald-400 rounded-lg border border-emerald-600/20 cursor-default">
             <LayoutDashboard className="w-5 h-5" />
             <span className="font-medium">Dashboard General</span>
-          </a>
+          </div>
 
-          <a href="#" className="flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+          <div className="flex items-center gap-3 px-3 py-2.5 text-slate-500 cursor-not-allowed rounded-lg">
             <TrendingUp className="w-5 h-5" />
-            <span className="font-medium">Rentabilidad</span>
-          </a>
+            <span className="font-medium">Rentabilidad (Pronto)</span>
+          </div>
 
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-3 mt-6">
             Gestión
           </div>
 
-          <a href="#" className="flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+          <div className="flex items-center gap-3 px-3 py-2.5 text-slate-500 cursor-not-allowed rounded-lg">
             <ShoppingBag className="w-5 h-5" />
-            <span className="font-medium">Ventas</span>
-          </a>
+            <span className="font-medium">Ventas (En Dashboard)</span>
+          </div>
 
-          <a href="#" className="flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+          <div className="flex items-center gap-3 px-3 py-2.5 text-slate-500 cursor-not-allowed rounded-lg">
             <PieChart className="w-5 h-5" />
-            <span className="font-medium">Reportes</span>
-          </a>
+            <span className="font-medium">Reportes (En Dashboard)</span>
+          </div>
         </nav>
 
         <div className="p-4 border-t border-slate-800">
-          <a href="#" className="flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors mb-2">
+          <div className="flex items-center gap-3 px-3 py-2.5 text-slate-500 cursor-not-allowed rounded-lg mb-2">
             <Settings className="w-5 h-5" />
             <span className="font-medium">Configuración</span>
-          </a>
+          </div>
           
           <button 
             onClick={onLogout}
