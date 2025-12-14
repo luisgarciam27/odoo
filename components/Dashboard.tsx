@@ -3,7 +3,7 @@ import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, 
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, MapPin, Calendar, ArrowUpRight, RefreshCw, AlertCircle } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, MapPin, Calendar, ArrowUpRight, RefreshCw, AlertCircle, Building2 } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, AgrupadoProducto, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
@@ -11,6 +11,7 @@ import { OdooClient } from '../services/odoo';
 // Datos de ejemplo simulando Odoo (Fallback)
 const generarDatosVentas = (): Venta[] => {
   const sedes = ['Sede Central', 'Sede Norte', 'Sede Sur', 'Sede Este'];
+  const companias = ['Mi Empresa S.A.C.', 'Sucursal Arequipa IRL']; // Mock multi-company
   const productos = [
     { id: 1, nombre: 'Laptop HP 15', costo: 450, precio: 699 },
     { id: 2, nombre: 'Mouse Logitech', costo: 15, precio: 29 },
@@ -32,6 +33,8 @@ const generarDatosVentas = (): Venta[] => {
     for (let i = 0; i < ventasPorDia; i++) {
       const producto = productos[Math.floor(Math.random() * productos.length)];
       const sede = sedes[Math.floor(Math.random() * sedes.length)];
+      // Asignar compañía aleatoria
+      const compania = companias[Math.floor(Math.random() * companias.length)];
       const cantidad = Math.floor(Math.random() * 3) + 1;
       const total = producto.precio * cantidad;
       const costo = producto.costo * cantidad;
@@ -40,6 +43,7 @@ const generarDatosVentas = (): Venta[] => {
       ventas.push({
         fecha: new Date(d),
         sede,
+        compania,
         producto: producto.nombre,
         cantidad,
         total,
@@ -64,6 +68,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   
   const [filtros, setFiltros] = useState<Filtros>({
     sedeSeleccionada: 'Todas',
+    companiaSeleccionada: 'Todas',
     periodoSeleccionado: 'mes', // Default to month for better data view
     fechaInicio: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
     fechaFin: new Date().toISOString().split('T')[0]
@@ -79,11 +84,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       setError(null);
       try {
           const client = new OdooClient(session.url, session.db, session.useProxy);
-          // Fetch Sale Order Lines to get product details and costs
           
           const fields = [
               'create_date', 
               'order_partner_id', 
+              'company_id', // Fetch company info
               'product_id', 
               'product_uom_qty', 
               'price_unit', 
@@ -115,12 +120,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               const costo = costoUnitario * cantidad;
               const margen = total - costo;
               
-              // Extract partner/sede (Using partner name as 'Sede' proxy for visualization if no warehouse field)
+              // Extract partner/sede 
               const sede = line.order_partner_id ? line.order_partner_id[1] : 'General'; 
+              
+              // Extract company
+              const compania = line.company_id ? line.company_id[1] : 'Compañía Principal';
 
               return {
                   fecha: new Date(line.create_date),
-                  sede: sede, // Using Client as Sede for this visualization
+                  sede: sede,
+                  compania: compania,
                   producto: line.product_id ? line.product_id[1] : 'Unknown',
                   cantidad,
                   total,
@@ -145,13 +154,20 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   }, [session, filtros.periodoSeleccionado, filtros.fechaInicio, filtros.fechaFin]); // Refetch when filters change if connected
 
   const sedes = useMemo(() => ['Todas', ...Array.from(new Set(ventasData.map(v => v.sede)))], [ventasData]);
+  const companias = useMemo(() => ['Todas', ...Array.from(new Set(ventasData.map(v => v.compania)))], [ventasData]);
 
   // Filtrar datos según selección local (Client side filtering for speed after fetch)
   const datosFiltrados = useMemo(() => {
     let datos = ventasData;
     
+    // Filtro Sede/Cliente
     if (filtros.sedeSeleccionada !== 'Todas') {
       datos = datos.filter(v => v.sede === filtros.sedeSeleccionada);
+    }
+
+    // Filtro Compañía
+    if (filtros.companiaSeleccionada !== 'Todas') {
+      datos = datos.filter(v => v.compania === filtros.companiaSeleccionada);
     }
     
     // Date filter is handled in fetch for Odoo, but double check locally
@@ -166,7 +182,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     });
     
     return datos;
-  }, [ventasData, filtros.sedeSeleccionada, filtros.fechaInicio, filtros.fechaFin]);
+  }, [ventasData, filtros.sedeSeleccionada, filtros.companiaSeleccionada, filtros.fechaInicio, filtros.fechaFin]);
 
   // KPIs principales
   const kpis = useMemo(() => {
@@ -318,6 +334,24 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         {/* Filters Bar */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
           <div className="flex flex-wrap gap-4 items-end">
+            
+            {/* Filtro Compañía */}
+            <div className="w-full md:w-auto">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                <Building2 className="inline w-3 h-3 mr-1" />
+                Compañía
+              </label>
+              <select 
+                value={filtros.companiaSeleccionada}
+                onChange={(e) => setFiltros({...filtros, companiaSeleccionada: e.target.value})}
+                className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              >
+                {companias.map(comp => (
+                  <option key={comp} value={comp}>{comp}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="w-full md:w-auto">
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                 <MapPin className="inline w-3 h-3 mr-1" />

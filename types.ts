@@ -9,6 +9,7 @@ export interface Producto {
 export interface Venta {
   fecha: Date;
   sede: string;
+  compania: string; // Nuevo campo
   producto: string;
   cantidad: number;
   total: number;
@@ -19,6 +20,7 @@ export interface Venta {
 
 export interface Filtros {
   sedeSeleccionada: string;
+  companiaSeleccionada: string; // Nuevo filtro
   periodoSeleccionado: string;
   fechaInicio: string;
   fechaFin: string;
