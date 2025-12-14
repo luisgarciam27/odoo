@@ -35,12 +35,14 @@ export interface AgrupadoPorDia {
   fecha: string;
   ventas: number;
   margen: number;
+  [key: string]: any;
 }
 
 export interface AgrupadoPorSede {
   sede: string;
   ventas: number;
   margen: number;
+  [key: string]: any;
 }
 
 export interface AgrupadoProducto {
@@ -48,6 +50,7 @@ export interface AgrupadoProducto {
   cantidad: number;
   ventas: number;
   margen: number;
+  [key: string]: any;
 }
 
 export interface OdooSession {
