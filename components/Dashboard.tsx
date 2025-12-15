@@ -3,7 +3,7 @@ import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, 
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, MapPin, Calendar, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, Calendar, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, AgrupadoProducto, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
@@ -528,7 +528,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     tickFormatter={(value) => `$${value/1000}k`}
                   />
                   <Tooltip 
-                    formatter={(value: number, name: string) => [`$${Number(value).toFixed(2)}`, 'Ventas']}
+                    formatter={(value: number) => [`$${Number(value).toFixed(2)}`, 'Ventas']}
                     labelFormatter={(label) => new Date(label).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
@@ -610,10 +610,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                 />
                 <Tooltip 
                   cursor={{fill: '#f8fafc'}}
-                  formatter={(value: number, name: string) => {
-                    const label = name === 'ventas' ? 'Ventas' : 'Margen';
-                    return [`$${Number(value).toFixed(2)}`, label];
-                  }}
+                  formatter={(value: number) => [`$${Number(value).toFixed(2)}`, 'Ventas']}
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
                 <Bar dataKey="ventas" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} name="ventas" />
