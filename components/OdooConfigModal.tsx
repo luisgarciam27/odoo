@@ -18,7 +18,6 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Aquí iría la lógica para probar la conexión XML-RPC
     alert("Configuración guardada (Simulación). En producción, esto validaría las credenciales contra el endpoint /xmlrpc/2/common");
     onClose();
   };
@@ -31,7 +30,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
         <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Server className="w-5 h-5 text-emerald-400" />
+              <Server className="w-5 h-5 text-brand-400" />
               Conexión Odoo XML-RPC
             </h2>
             <p className="text-slate-400 text-xs mt-1 font-light">Configura el acceso a tu instancia ERP</p>
@@ -61,7 +60,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
                 <input
                   type="url"
                   placeholder="https://mi-empresa.odoo.com"
-                  className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm"
+                  className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm"
                   value={config.url}
                   onChange={e => setConfig({...config, url: e.target.value})}
                   required
@@ -78,7 +77,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
                 <input
                   type="text"
                   placeholder="nombre_db_produccion"
-                  className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm"
+                  className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm"
                   value={config.db}
                   onChange={e => setConfig({...config, db: e.target.value})}
                   required
@@ -96,7 +95,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
                   <input
                     type="email"
                     placeholder="admin@empresa.com"
-                    className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm"
+                    className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm"
                     value={config.username}
                     onChange={e => setConfig({...config, username: e.target.value})}
                     required
@@ -116,7 +115,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
                   <input
                     type="password"
                     placeholder="••••••••••••••"
-                    className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm"
+                    className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm"
                     value={config.apiKey}
                     onChange={e => setConfig({...config, apiKey: e.target.value})}
                     required
@@ -135,7 +134,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
               </button>
               <button
                 type="submit"
-                className="flex-1 px-4 py-2 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 text-sm"
+                className="flex-1 px-4 py-2 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-colors shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2 text-sm"
               >
                 <Save className="w-4 h-4" />
                 Guardar y Conectar
@@ -145,7 +144,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
         </div>
         
         <div className="bg-slate-50 px-6 py-3 border-t border-slate-200">
-           <a href="#" className="flex items-center gap-1 text-xs text-slate-500 hover:text-emerald-600 font-light">
+           <a href="#" className="flex items-center gap-1 text-xs text-slate-500 hover:text-brand-600 font-light">
              <HelpCircle className="w-3 h-3" />
              ¿Dónde encuentro estos datos en mi Odoo?
            </a>

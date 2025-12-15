@@ -340,19 +340,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
   // KPIs
   const kpis = useMemo(() => {
-    // Calculamos KPIs basados en activeData para que cambien al drilldown? 
-    // MEJOR: KPIs Generales (Top) siempre muestran el global del filtro superior, 
-    // y añadimos un banner de detalle cuando hay drilldown.
-    // Pero si es Dashboard General, mostramos métricas de Volumen.
-    // Si es Rentabilidad, métricas de Dinero.
-    
-    const dataToUse = datosBase; // KPIs top level respetan filtro global
+    const dataToUse = datosBase; 
     const totalVentas = dataToUse.reduce((sum, v) => sum + v.total, 0);
     const totalCostos = dataToUse.reduce((sum, v) => sum + v.costo, 0);
     const totalMargen = totalVentas - totalCostos;
     const margenPromedio = totalVentas > 0 ? ((totalMargen / totalVentas) * 100) : 0;
-    const unidadesVendidas = dataToUse.length; // Aproximación por lineas
-    const ticketPromedio = unidadesVendidas > 0 ? (totalVentas / (unidadesVendidas * 0.6)) : 0; // Estimación simple
+    const unidadesVendidas = dataToUse.length; 
+    const ticketPromedio = unidadesVendidas > 0 ? (totalVentas / (unidadesVendidas * 0.6)) : 0; 
     
     return {
       totalVentas: totalVentas.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -387,7 +381,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         .slice(0, 5);
   }, [activeData]);
 
-  // Tarjetas de Sedes (SIEMPRE usan datosBase para no desaparecer al filtrar)
+  // Tarjetas de Sedes
   const infoSedesDetallada = useMemo(() => {
     const agrupado: Record<string, {
         sede: string;
@@ -421,7 +415,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             topProductos
         };
     }).sort((a, b) => b.ventas - a.ventas);
-  }, [datosBase]); // <-- Importante: Depende de datosBase, no activeData
+  }, [datosBase]);
 
   const reporteProductos = useMemo(() => {
     const agrupado: Record<string, any> = {};
@@ -473,13 +467,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const SortIcon = ({ column }: { column: SortKey }) => {
       if (sortConfig.key !== column) return <ArrowUpDown className="w-3 h-3 text-slate-300 ml-1 inline" />;
       return sortConfig.direction === 'asc' 
-          ? <ArrowUp className="w-3 h-3 text-emerald-600 ml-1 inline" />
-          : <ArrowDown className="w-3 h-3 text-emerald-600 ml-1 inline" />;
+          ? <ArrowUp className="w-3 h-3 text-brand-600 ml-1 inline" />
+          : <ArrowDown className="w-3 h-3 text-brand-600 ml-1 inline" />;
   };
 
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const ANIOS = [2023, 2024, 2025];
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+  const COLORS = ['#3b82f6', '#84cc16', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
   const handleDownloadExcel = () => {
     // Preparar datos para Excel con nombres de columnas amigables
@@ -524,19 +518,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   // --- LÓGICA DE VISTAS ---
   const isRentabilidad = view === 'rentabilidad';
   
-  // En General: Color azul, datos de Venta. En Rentabilidad: Color esmeralda, datos de Margen.
+  // En General: Color azul, datos de Venta. En Rentabilidad: Color lime/brand, datos de Margen.
   const chartDataKey = isRentabilidad ? 'margen' : 'ventas'; 
-  const chartColor = isRentabilidad ? '#10b981' : '#3b82f6'; 
+  const chartColor = isRentabilidad ? '#84cc16' : '#3b82f6'; 
   const chartLabel = isRentabilidad ? 'Ganancia' : 'Venta Neta';
 
   // Control de Secciones
-  const showKPIs = true; // Siempre mostrar
-  const showSedeGrid = isRentabilidad; // Solo en rentabilidad
-  const showGeneralCharts = view === 'general'; // Charts de volumen solo en general
+  const showKPIs = true; 
+  const showSedeGrid = isRentabilidad; 
+  const showGeneralCharts = view === 'general'; 
   
-  // La tabla se muestra siempre, pero en General se prioriza volumen y en Rentabilidad se prioriza margen
-  // (Aunque es la misma tabla, el contexto visual cambia)
-
   return (
     <div className="p-4 md:p-6 lg:p-8 font-sans w-full relative">
       <OdooConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} />
@@ -544,8 +535,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       {loading && (
           <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center">
               <div className="bg-white p-4 rounded-xl shadow-xl flex items-center gap-3 border border-slate-100">
-                  <RefreshCw className="w-5 h-5 animate-spin text-emerald-600" />
-                  <span className="font-medium text-slate-700">Procesando Datos...</span>
+                  <RefreshCw className="w-5 h-5 animate-spin text-brand-600" />
+                  <span className="font-medium text-slate-700">Sincronizando con Odoo...</span>
               </div>
           </div>
       )}
@@ -574,10 +565,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 Recargar
               </button>
               
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border font-medium text-sm ${session ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border font-medium text-sm ${session ? 'bg-brand-50 text-brand-700 border-brand-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
                 <span className="relative flex h-2 w-2">
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${session ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${session ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${session ? 'bg-brand-400' : 'bg-amber-400'}`}></span>
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${session ? 'bg-brand-500' : 'bg-amber-500'}`}></span>
                 </span>
                 {session ? 'En línea' : 'Demo'}
               </div>
@@ -600,7 +591,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                         <Building2 className="inline w-3 h-3 mr-1" />Compañía
                     </label>
                     {session?.companyName ? (
-                        <div className="w-full md:w-48 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800 font-medium flex items-center gap-2">
+                        <div className="w-full md:w-48 px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-800 font-medium flex items-center gap-2">
                             <Building2 className="w-4 h-4" />
                             <span className="truncate">{session.companyName}</span>
                         </div>
@@ -617,7 +608,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                     <select 
                         value={filtros.sedeSeleccionada}
                         onChange={(e) => setFiltros({...filtros, sedeSeleccionada: e.target.value})}
-                        className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                        className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 outline-none"
                     >
                         {sedes.map(sede => <option key={sede} value={sede}>{sede}</option>)}
                     </select>
@@ -630,9 +621,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                         <ListFilter className="inline w-3 h-3 mr-1" />Modo de Filtro
                    </label>
                    <div className="flex bg-slate-100 p-1 rounded-lg">
-                       <button onClick={() => setFilterMode('mes')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'mes' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Por Mes</button>
-                       <button onClick={() => setFilterMode('anio')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'anio' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Por Año</button>
-                       <button onClick={() => setFilterMode('custom')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'custom' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Personalizado</button>
+                       <button onClick={() => setFilterMode('mes')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'mes' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Por Mes</button>
+                       <button onClick={() => setFilterMode('anio')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'anio' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Por Año</button>
+                       <button onClick={() => setFilterMode('custom')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'custom' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Personalizado</button>
                    </div>
                 </div>
 
@@ -669,7 +660,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
         {/* INDICADOR DE FILTRO ACTIVO (DRILL DOWN) */}
         {drillDownSede && (
-            <div className="bg-emerald-600 text-white px-4 py-3 rounded-lg shadow-md flex items-center justify-between animate-in slide-in-from-top-2">
+            <div className="bg-brand-600 text-white px-4 py-3 rounded-lg shadow-md flex items-center justify-between animate-in slide-in-from-top-2">
                 <div className="flex items-center gap-3">
                     <div className="bg-white/20 p-1.5 rounded-md">
                         <Target className="w-5 h-5" />
@@ -708,15 +699,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           </div>
 
           {/* KPI 2: VARIABLE (Ganancia en Rentabilidad vs Ticket en General) */}
-          <div className={`rounded-xl shadow-sm border p-6 flex flex-col justify-between transition-colors ${isRentabilidad ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200'}`}>
+          <div className={`rounded-xl shadow-sm border p-6 flex flex-col justify-between transition-colors ${isRentabilidad ? 'bg-brand-50 border-brand-200' : 'bg-white border-slate-200'}`}>
             <div className="flex items-center justify-between mb-4">
-              <div className={`p-2 rounded-lg ${isRentabilidad ? 'bg-emerald-100' : 'bg-blue-50'}`}>
-                  {isRentabilidad ? <TrendingUp className="w-6 h-6 text-emerald-600" /> : <Receipt className="w-6 h-6 text-blue-600" />}
+              <div className={`p-2 rounded-lg ${isRentabilidad ? 'bg-brand-100' : 'bg-blue-50'}`}>
+                  {isRentabilidad ? <TrendingUp className="w-6 h-6 text-brand-600" /> : <Receipt className="w-6 h-6 text-blue-600" />}
               </div>
             </div>
             <div>
               <p className="text-slate-500 text-sm font-medium">{isRentabilidad ? 'Ganancia Neta' : 'Ticket Promedio Est.'}</p>
-              <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-emerald-700' : 'text-slate-800'}`}>
+              <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-700' : 'text-slate-800'}`}>
                   S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}
               </h3>
             </div>
@@ -789,7 +780,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         {showSedeGrid && (
           <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
             <div className="flex items-center gap-2 mb-4">
-                <LayoutGrid className="w-5 h-5 text-emerald-600" />
+                <LayoutGrid className="w-5 h-5 text-brand-600" />
                 <h3 className="text-lg font-bold text-slate-800">Desempeño por Sede (Click para Filtrar)</h3>
             </div>
             
@@ -803,22 +794,22 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                         onClick={() => setDrillDownSede(isSelected ? null : sede.sede)}
                         className={`bg-white rounded-xl shadow-sm border p-5 transition-all cursor-pointer group relative overflow-hidden ${
                             isSelected 
-                            ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md transform scale-[1.02]' 
-                            : 'border-slate-200 hover:border-emerald-300 hover:shadow-md'
+                            ? 'border-brand-500 ring-2 ring-brand-500/20 shadow-md transform scale-[1.02]' 
+                            : 'border-slate-200 hover:border-brand-300 hover:shadow-md'
                         }`}
                     >
-                        {isSelected && <div className="absolute top-0 right-0 p-1.5 bg-emerald-500 rounded-bl-xl"><Target className="w-3 h-3 text-white" /></div>}
+                        {isSelected && <div className="absolute top-0 right-0 p-1.5 bg-brand-500 rounded-bl-xl"><Target className="w-3 h-3 text-white" /></div>}
                         
                         <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-3">
                             <div className="flex items-center gap-2">
-                                <div className={`p-1.5 rounded-md ${isSelected ? 'bg-emerald-100' : 'bg-slate-100 group-hover:bg-emerald-50'}`}>
-                                    <Store className={`w-4 h-4 ${isSelected ? 'text-emerald-700' : 'text-slate-600 group-hover:text-emerald-600'}`} />
+                                <div className={`p-1.5 rounded-md ${isSelected ? 'bg-brand-100' : 'bg-slate-100 group-hover:bg-brand-50'}`}>
+                                    <Store className={`w-4 h-4 ${isSelected ? 'text-brand-700' : 'text-slate-600 group-hover:text-brand-600'}`} />
                                 </div>
                                 <div>
-                                    <h4 className={`font-bold leading-tight ${isSelected ? 'text-emerald-800' : 'text-slate-700'}`}>{sede.sede}</h4>
+                                    <h4 className={`font-bold leading-tight ${isSelected ? 'text-brand-800' : 'text-slate-700'}`}>{sede.sede}</h4>
                                 </div>
                             </div>
-                            <div className={`px-2 py-1 rounded text-xs font-bold ${Number(sede.margenPorcentaje) > 20 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            <div className={`px-2 py-1 rounded text-xs font-bold ${Number(sede.margenPorcentaje) > 20 ? 'bg-brand-100 text-brand-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {sede.margenPorcentaje}% Rent.
                             </div>
                         </div>
@@ -830,18 +821,18 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                             </div>
                             <div className="text-right">
                                 <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-0.5">Ganancia</p>
-                                <p className="text-lg font-bold text-emerald-600">S/ {sede.margen.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+                                <p className="text-lg font-bold text-brand-600">S/ {sede.margen.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
                             </div>
                         </div>
 
-                        <div className={`rounded-lg p-3 border ${isSelected ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50/80 border-slate-100'}`}>
+                        <div className={`rounded-lg p-3 border ${isSelected ? 'bg-brand-50/50 border-brand-100' : 'bg-slate-50/80 border-slate-100'}`}>
                             <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-2">Top 3 Productos</p>
                             <div className="space-y-2">
                                 {sede.topProductos.map((prod, i) => (
                                     <div key={i} className="flex justify-between items-center text-sm group/item">
                                         <div className="flex items-center gap-2 overflow-hidden">
                                             <span className="text-[10px] font-bold text-slate-300 w-3">{i+1}</span>
-                                            <span className="text-slate-600 truncate text-xs font-medium group-hover/item:text-emerald-700 transition-colors" title={prod.nombre}>
+                                            <span className="text-slate-600 truncate text-xs font-medium group-hover/item:text-brand-700 transition-colors" title={prod.nombre}>
                                                 {prod.nombre}
                                             </span>
                                         </div>
@@ -884,14 +875,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
             <div>
                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                   <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                   <FileSpreadsheet className="w-5 h-5 text-brand-600" />
                    {drillDownSede ? `Productos en ${drillDownSede}` : 'Detalle Global de Productos'}
                </h3>
                <p className="text-xs text-slate-500 font-light">
                    {drillDownSede ? 'Mostrando únicamente items vendidos en la sede seleccionada.' : 'Desglose general por item, costo real y rentabilidad.'}
                </p>
             </div>
-            <button onClick={handleDownloadExcel} className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+            <button onClick={handleDownloadExcel} className="px-4 py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
               <Download className="w-4 h-4" />Descargar Excel
             </button>
           </div>
@@ -899,14 +890,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200 select-none">
                 <tr>
-                  <th className="px-4 py-3 font-semibold cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('producto')}>Producto <SortIcon column="producto" /></th>
-                  <th className="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('cantidad')}>Unds. <SortIcon column="cantidad" /></th>
-                  <th className="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('transacciones')}>#Transac. <SortIcon column="transacciones" /></th>
-                  <th className="px-4 py-3 font-semibold text-right text-slate-400 cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('costo')}>Costo Total <SortIcon column="costo" /></th>
-                  <th className="px-4 py-3 font-semibold text-right text-slate-700 cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('ventaNeta')}>Venta Neta <SortIcon column="ventaNeta" /></th>
-                  <th className="px-4 py-3 font-semibold text-right text-slate-400 cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('ventaBruta')}>Venta Bruta <SortIcon column="ventaBruta" /></th>
-                  <th className="px-4 py-3 font-semibold text-right text-emerald-700 bg-emerald-50/30 cursor-pointer hover:bg-emerald-100 transition-colors" onClick={() => handleSort('ganancia')}>Ganancia <SortIcon column="ganancia" /></th>
-                  <th className="px-4 py-3 font-semibold text-right text-emerald-700 bg-emerald-50/30 cursor-pointer hover:bg-emerald-100 transition-colors" onClick={() => handleSort('margenPorcentaje')}>Margen % <SortIcon column="margenPorcentaje" /></th>
+                  <th className="px-4 py-3 font-semibold cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('producto')}>Producto <SortIcon column="producto" /></th>
+                  <th className="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('cantidad')}>Unds. <SortIcon column="cantidad" /></th>
+                  <th className="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('transacciones')}>#Transac. <SortIcon column="transacciones" /></th>
+                  <th className="px-4 py-3 font-semibold text-right text-slate-400 cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('costo')}>Costo Total <SortIcon column="costo" /></th>
+                  <th className="px-4 py-3 font-semibold text-right text-slate-700 cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('ventaNeta')}>Venta Neta <SortIcon column="ventaNeta" /></th>
+                  <th className="px-4 py-3 font-semibold text-right text-slate-400 cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('ventaBruta')}>Venta Bruta <SortIcon column="ventaBruta" /></th>
+                  <th className="px-4 py-3 font-semibold text-right text-brand-700 bg-brand-50/30 cursor-pointer hover:bg-brand-100 transition-colors" onClick={() => handleSort('ganancia')}>Ganancia <SortIcon column="ganancia" /></th>
+                  <th className="px-4 py-3 font-semibold text-right text-brand-700 bg-brand-50/30 cursor-pointer hover:bg-brand-100 transition-colors" onClick={() => handleSort('margenPorcentaje')}>Margen % <SortIcon column="margenPorcentaje" /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -919,9 +910,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                         <td className="px-4 py-3 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-bold text-slate-800">S/ {prod.ventaNeta.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right text-slate-400">S/ {prod.ventaBruta.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-medium text-emerald-600 bg-emerald-50/10">S/ {prod.ganancia.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-medium text-emerald-700 bg-emerald-50/10">
-                            <span className={`px-2 py-0.5 rounded text-xs ${prod.margenPorcentaje < 20 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'}`}>
+                        <td className="px-4 py-3 text-right font-medium text-brand-600 bg-brand-50/10">S/ {prod.ganancia.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-medium text-brand-700 bg-brand-50/10">
+                            <span className={`px-2 py-0.5 rounded text-xs ${prod.margenPorcentaje < 20 ? 'bg-red-100 text-red-700' : 'bg-brand-100 text-brand-800'}`}>
                                 {prod.margenPorcentaje.toFixed(1)}%
                             </span>
                         </td>
