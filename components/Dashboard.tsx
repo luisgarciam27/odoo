@@ -557,8 +557,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             margenPorcentaje: p.ventaNeta > 0 ? (p.ganancia / p.ventaNeta) * 100 : 0
         }))
         .sort((a: any, b: any) => {
-            const valA = a[sortConfig.key];
-            const valB = b[sortConfig.key];
+            const key = sortConfig.key as string;
+            const valA = a[key];
+            const valB = b[key];
             if (valA === undefined || valB === undefined) return 0;
             if (typeof valA === 'string') {
                 return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
@@ -723,8 +724,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
         const headers = [["PRODUCTO", "CATEGORÍA", "MÉTODO DE PAGO", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "MARGEN %"]];
         
-        // Use generic casting or checking for reporteProductos items
-        const body = (reporteProductos as any[]).map(p => [
+        const productsList = reporteProductos as any[];
+
+        const body = productsList.map(p => [
             p.producto,
             p.categoria,
             p.metodoPago,
@@ -735,10 +737,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             p.margenPorcentaje / 100
         ]);
 
-        const sumCant = (reporteProductos as any[]).reduce((acc, curr) => acc + curr.cantidad, 0);
-        const sumCosto = (reporteProductos as any[]).reduce((acc, curr) => acc + curr.costo, 0);
-        const sumTotal = (reporteProductos as any[]).reduce((acc, curr) => acc + curr.ventaNeta, 0);
-        const sumMargen = (reporteProductos as any[]).reduce((acc, curr) => acc + curr.ganancia, 0);
+        const sumCant = productsList.reduce((acc, curr) => acc + curr.cantidad, 0);
+        const sumCosto = productsList.reduce((acc, curr) => acc + curr.costo, 0);
+        const sumTotal = productsList.reduce((acc, curr) => acc + curr.ventaNeta, 0);
+        const sumMargen = productsList.reduce((acc, curr) => acc + curr.ganancia, 0);
         const sumRentabilidad = sumTotal > 0 ? sumMargen / sumTotal : 0;
 
         const totalRow = [["TOTALES", "", "", sumCant, sumCosto, sumTotal, sumMargen, sumRentabilidad]];
@@ -1400,7 +1402,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                     {paginatedData.length > 0 ? (
-                        (paginatedData as any[]).map((prod, idx) => (
+                        paginatedData.map((item: any, idx: number) => {
+                            const prod = item as any;
+                            return (
                         <tr key={idx} className="hover:bg-slate-50 transition-colors group">
                             <td className="px-4 py-3.5 font-medium text-slate-700 group-hover:text-brand-700 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
                             <td className="px-4 py-3.5 text-slate-500 text-xs">{prod.categoria}</td>
@@ -1419,7 +1423,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                                 </span>
                             </td>
                         </tr>
-                        ))
+                        )})
                     ) : (
                         <tr>
                             <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">
