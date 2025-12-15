@@ -505,8 +505,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const pagosPorDiaStack = useMemo(() => {
       if (view !== 'pagos') return [];
       const agg: Record<string, any> = {};
-      // Get all methods to ensure keys exist
-      const methods = new Set(filteredData.map(v => v.metodoPago));
+      // Get all methods to ensure keys exist. Explicitly type Set<string> to avoid unknown type.
+      const methods = new Set<string>(filteredData.map(v => v.metodoPago));
       
       filteredData.forEach(v => {
           const f = v.fecha.toLocaleDateString('en-CA');
@@ -514,7 +514,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               agg[f] = { fecha: f };
               methods.forEach(m => agg[f][m] = 0);
           }
-          agg[f][v.metodoPago] = (agg[f][v.metodoPago] || 0) + v.total;
+          // Explicit casting to string to avoid index type errors if inference fails
+          const metodo = v.metodoPago as string;
+          agg[f][metodo] = (agg[f][metodo] || 0) + v.total;
       });
       return Object.values(agg).sort((a: any, b: any) => a.fecha.localeCompare(b.fecha));
   }, [filteredData, view]);
@@ -724,6 +726,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
         const headers = [["PRODUCTO", "CATEGORÍA", "MÉTODO DE PAGO", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "MARGEN %"]];
         
+        // Extract array from union type for map operation
         const productsList = reporteProductos as any[];
 
         const body = productsList.map(p => [
