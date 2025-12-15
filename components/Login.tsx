@@ -181,8 +181,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, onAdminLogin }) => {
             </div>
         </div>
 
-        <div className="mt-12 text-[10px] text-slate-400 font-mono relative z-10">
+        <div className="mt-12 text-[10px] text-slate-400 font-mono relative z-10 flex flex-col gap-1">
             <p>&copy; 2025 LEMON BI Analytics v2.2</p>
+            <p className="opacity-70">Desarrollado por <span className="font-bold text-slate-500">GAORSYSTEM PERU</span></p>
         </div>
       </div>
 

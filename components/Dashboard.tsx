@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ScatterChart, Scatter, ZAxis, Area, AreaChart 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin, CreditCard, Wallet, CalendarRange } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin, CreditCard, Wallet, CalendarRange, Clock, LayoutGrid } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal, { ConnectionConfig } from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
@@ -521,6 +521,35 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       return Object.values(agg).sort((a: any, b: any) => a.fecha.localeCompare(b.fecha));
   }, [filteredData, view]);
 
+  // --- LOGICA PARA VISTA DETALLE DE SEDE (Drilldown) ---
+  const sessionsInSede = useMemo(() => {
+      if (!drillDownSede) return [];
+      const agg: Record<string, { sesion: string; responsable: string; total: number; transacciones: number; inicio: Date; fin: Date }> = {};
+      
+      filteredData.forEach(v => {
+          // Filtrar solo los datos de la sede seleccionada (aunque filteredData ya debería tenerlo por el efecto de drillDownSede, aseguramos)
+          if(v.sede !== drillDownSede) return;
+
+          if (!agg[v.sesion]) {
+              agg[v.sesion] = { 
+                  sesion: v.sesion, 
+                  responsable: v.vendedor, 
+                  total: 0, 
+                  transacciones: 0,
+                  inicio: v.fecha,
+                  fin: v.fecha
+              };
+          }
+          agg[v.sesion].total += v.total;
+          agg[v.sesion].transacciones += 1; // Contamos líneas de producto como transacciones aproximadas o items
+          if (v.fecha < agg[v.sesion].inicio) agg[v.sesion].inicio = v.fecha;
+          if (v.fecha > agg[v.sesion].fin) agg[v.sesion].fin = v.fecha;
+      });
+      
+      return Object.values(agg).sort((a, b) => b.inicio.getTime() - a.inicio.getTime());
+  }, [filteredData, drillDownSede]);
+
+
   // --- REPORTES Y TABLAS ---
 
   const reporteProductos = useMemo(() => {
@@ -1017,7 +1046,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               <h1 className="text-3xl font-bold text-slate-800 tracking-tight drop-shadow-sm flex items-center gap-2">
                 {view === 'rentabilidad' ? 'Rentabilidad y Ganancias' : 
                  view === 'ventas' ? 'Gestión de Ventas' :
-                 view === 'comparativa' ? 'Comparativa de Sedes' :
+                 view === 'comparativa' ? 'Gestión de Sedes y Cajas' :
                  view === 'pagos' ? 'Tesorería y Métodos de Pago' :
                  view === 'reportes' ? 'Reportes Gráficos' : 'Dashboard General'}
                  {view === 'general' && <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-700 border border-brand-200">LIVE</span>}
@@ -1289,7 +1318,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                         <p className="font-bold text-xl leading-tight text-slate-800">{drillDownSede}</p>
                     </div>
                 </div>
-                <button onClick={() => setDrillDownSede(null)} className="flex items-center gap-2 bg-white hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200 shadow-sm text-slate-600"><X className="w-4 h-4" /> Ver Todo</button>
+                <button onClick={() => setDrillDownSede(null)} className="flex items-center gap-2 bg-white hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200 shadow-sm text-slate-600"><X className="w-4 h-4" /> Cerrar Detalle</button>
             </div>
         )}
 
@@ -1307,8 +1336,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                             <div className="p-2.5 bg-brand-50 rounded-xl border border-brand-100 group-hover:bg-brand-100 transition-colors">
                                 <Store className="w-6 h-6 text-brand-600" />
                             </div>
-                            <button onClick={() => setDrillDownSede(sede.name)} className="text-[10px] font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 uppercase tracking-wider">
-                                Detalle <ArrowUpRight className="w-3 h-3" />
+                            <button onClick={() => setDrillDownSede(sede.name)} className="text-[10px] font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 uppercase tracking-wider shadow-sm hover:shadow">
+                                Ver Cajas <ArrowUpRight className="w-3 h-3" />
                             </button>
                         </div>
 
@@ -1415,76 +1444,126 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
         {/* TABLA DE DETALLE - Visible en General y en Comparativa (solo si hay DrillDown) */}
         {(view !== 'pagos' && view !== 'comparativa') || (view === 'comparativa' && drillDownSede) ? (
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 overflow-hidden animate-in fade-in slide-in-from-bottom-12 duration-1000">
-            <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-                <div>
-                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <FileSpreadsheet className="w-5 h-5 text-brand-600" />
-                    {drillDownSede ? `Productos en ${drillDownSede}` : 'Detalle Global de Productos'}
-                </h3>
-                <p className="text-xs text-slate-500 font-light mt-1">
-                    {drillDownSede ? 'Mostrando únicamente items vendidos en la sede seleccionada.' : 'Desglose general por item, costo real y rentabilidad.'}
-                </p>
-                </div>
-                <button onClick={handleDownloadExcel} className="px-4 py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
-                <Download className="w-4 h-4" />Descargar Excel
-                </button>
-            </div>
-            <div className="overflow-x-auto border border-slate-100 rounded-xl">
-                <table className="w-full text-sm text-left text-slate-600">
-                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100 select-none">
-                    <tr>
-                    <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('producto')}>Producto <SortIcon column="producto" /></th>
-                    <th className="px-4 py-4 font-bold cursor-pointer">Categoría</th>
-                    <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('metodoPago')}>Pago <SortIcon column="metodoPago" /></th>
-                    <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('cantidad')}>Unds. <SortIcon column="cantidad" /></th>
-                    <th className="px-4 py-4 font-bold text-right text-slate-400 cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('costo')}>Costo Total <SortIcon column="costo" /></th>
-                    <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('ventaNeta')}>Venta Neta <SortIcon column="ventaNeta" /></th>
-                    <th className="px-4 py-4 font-bold text-right text-brand-600 cursor-pointer hover:text-brand-800 transition-colors" onClick={() => handleSort('ganancia')}>Ganancia <SortIcon column="ganancia" /></th>
-                    <th className="px-4 py-4 font-bold text-right text-brand-600 cursor-pointer hover:text-brand-800 transition-colors" onClick={() => handleSort('margenPorcentaje')}>Margen % <SortIcon column="margenPorcentaje" /></th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                    {renderTableRows()}
-                </tbody>
-                </table>
-            </div>
-
-            {/* Pagination Controls */}
-            {tableSource.length > 0 && (
-                <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-6 mt-4">
-                    <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                        <div>
-                            <p className="text-sm text-slate-500">
-                                Mostrando <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-slate-800">{Math.min(currentPage * itemsPerPage, tableSource.length)}</span> de <span className="font-bold text-slate-800">{tableSource.length}</span> resultados
-                            </p>
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-12 duration-1000">
+            
+            {/* NUEVA SECCIÓN: DESGLOSE DE CAJAS POR SEDE (Solo si DrillDown está activo) */}
+            {view === 'comparativa' && drillDownSede && (
+                <div className="bg-amber-50 rounded-2xl shadow-md border border-amber-100 p-6 overflow-hidden relative">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-amber-100 rounded-bl-[100px] opacity-50"></div>
+                    
+                    <h3 className="text-lg font-bold text-amber-800 flex items-center gap-2 mb-4 relative z-10">
+                        <Receipt className="w-5 h-5 text-amber-600" />
+                        Resumen de Cajas (Sesiones) en {drillDownSede}
+                    </h3>
+                    
+                    {sessionsInSede.length > 0 ? (
+                        <div className="overflow-x-auto border border-amber-100 rounded-xl bg-white relative z-10">
+                            <table className="w-full text-sm text-left text-slate-600">
+                                <thead className="text-xs text-amber-800 uppercase bg-amber-50 border-b border-amber-100 select-none">
+                                    <tr>
+                                        <th className="px-4 py-3 font-bold">Sesión ID</th>
+                                        <th className="px-4 py-3 font-bold">Responsable / Caja</th>
+                                        <th className="px-4 py-3 font-bold text-center">Apertura</th>
+                                        <th className="px-4 py-3 font-bold text-center">Transacciones</th>
+                                        <th className="px-4 py-3 font-bold text-right">Total Recaudado</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-amber-50/50">
+                                    {sessionsInSede.map((s, i) => (
+                                        <tr key={i} className="hover:bg-amber-50/30 transition-colors">
+                                            <td className="px-4 py-3 font-mono text-xs font-bold text-amber-700">{s.sesion}</td>
+                                            <td className="px-4 py-3 text-slate-700 font-medium">{s.responsable || 'Cajero General'}</td>
+                                            <td className="px-4 py-3 text-center text-xs text-slate-500 flex items-center justify-center gap-1">
+                                                <Clock className="w-3 h-3"/> {s.inicio.toLocaleDateString()} {s.inicio.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">{s.transacciones}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-right font-bold text-slate-800">S/ {s.total.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
-                        <div>
-                            <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                                <button
-                                    onClick={() => handlePageChange(currentPage - 1)}
-                                    disabled={currentPage === 1}
-                                    className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <span className="sr-only">Anterior</span>
-                                    <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                                </button>
-                                <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200 focus:outline-offset-0">
-                                    Página {currentPage} de {totalPages}
-                                </span>
-                                <button
-                                    onClick={() => handlePageChange(currentPage + 1)}
-                                    disabled={currentPage === totalPages}
-                                    className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <span className="sr-only">Siguiente</span>
-                                    <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                                </button>
-                            </nav>
+                    ) : (
+                        <div className="bg-white p-4 rounded-xl text-center text-amber-700/60 text-sm">
+                            No se encontró información detallada de sesiones para esta sede en el periodo seleccionado.
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
+
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 overflow-hidden">
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                    <div>
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <FileSpreadsheet className="w-5 h-5 text-brand-600" />
+                        {drillDownSede ? `Productos Vendidos en ${drillDownSede}` : 'Detalle Global de Productos'}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-light mt-1">
+                        {drillDownSede ? 'Mostrando únicamente items vendidos en la sede seleccionada.' : 'Desglose general por item, costo real y rentabilidad.'}
+                    </p>
+                    </div>
+                    <button onClick={handleDownloadExcel} className="px-4 py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+                    <Download className="w-4 h-4" />Descargar Excel
+                    </button>
+                </div>
+                <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                    <table className="w-full text-sm text-left text-slate-600">
+                    <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100 select-none">
+                        <tr>
+                        <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('producto')}>Producto <SortIcon column="producto" /></th>
+                        <th className="px-4 py-4 font-bold cursor-pointer">Categoría</th>
+                        <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('metodoPago')}>Pago <SortIcon column="metodoPago" /></th>
+                        <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('cantidad')}>Unds. <SortIcon column="cantidad" /></th>
+                        <th className="px-4 py-4 font-bold text-right text-slate-400 cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('costo')}>Costo Total <SortIcon column="costo" /></th>
+                        <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('ventaNeta')}>Venta Neta <SortIcon column="ventaNeta" /></th>
+                        <th className="px-4 py-4 font-bold text-right text-brand-600 cursor-pointer hover:text-brand-800 transition-colors" onClick={() => handleSort('ganancia')}>Ganancia <SortIcon column="ganancia" /></th>
+                        <th className="px-4 py-4 font-bold text-right text-brand-600 cursor-pointer hover:text-brand-800 transition-colors" onClick={() => handleSort('margenPorcentaje')}>Margen % <SortIcon column="margenPorcentaje" /></th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                        {renderTableRows()}
+                    </tbody>
+                    </table>
+                </div>
+
+                {/* Pagination Controls */}
+                {tableSource.length > 0 && (
+                    <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-6 mt-4">
+                        <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                            <div>
+                                <p className="text-sm text-slate-500">
+                                    Mostrando <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-slate-800">{Math.min(currentPage * itemsPerPage, tableSource.length)}</span> de <span className="font-bold text-slate-800">{tableSource.length}</span> resultados
+                                </p>
+                            </div>
+                            <div>
+                                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                    <button
+                                        onClick={() => handlePageChange(currentPage - 1)}
+                                        disabled={currentPage === 1}
+                                        className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <span className="sr-only">Anterior</span>
+                                        <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                                    </button>
+                                    <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200 focus:outline-offset-0">
+                                        Página {currentPage} de {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={() => handlePageChange(currentPage + 1)}
+                                        disabled={currentPage === totalPages}
+                                        className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <span className="sr-only">Siguiente</span>
+                                        <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                                    </button>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
             </div>
         ) : null}
 

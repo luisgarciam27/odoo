@@ -9,7 +9,8 @@ import {
   Menu,
   Citrus,
   X,
-  CreditCard
+  CreditCard,
+  Store
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -93,6 +94,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
             Gestión
           </div>
 
+          <NavItem view="comparativa" icon={Store} label="Sedes y Cajas" />
           <NavItem view="ventas" icon={ShoppingBag} label="Ventas y Pedidos" />
           <NavItem view="pagos" icon={CreditCard} label="Métodos de Pago" />
           <NavItem view="reportes" icon={PieChart} label="Reportes Gráficos" />
