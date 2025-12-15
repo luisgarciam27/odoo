@@ -3,7 +3,7 @@ import {
   LineChart, Line, PieChart, Pie, Cell, 
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, Calendar, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, Calendar, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, CalendarRange } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
@@ -51,15 +51,12 @@ const generarDatosVentas = (): Venta[] => {
                  if (Math.random() > 0.6) prodFinal = productos.find(p => p.nombre.includes('Consulta') || p.nombre.includes('[LAB]') || p.nombre.includes('[ECO]')) || producto;
             }
 
-            // Simular variabilidad en el costo real vs precio para que no sea siempre 35%
-            const variacion = 0.9 + (Math.random() * 0.2); // +/- 10%
+            const variacion = 0.9 + (Math.random() * 0.2); 
             const precioVenta = prodFinal.precio * variacion;
-            
-            // Costo fijo base + pequeña variación aleatoria
             const costoReal = prodFinal.costo * (0.95 + Math.random() * 0.1);
 
-            const total = precioVenta; // Bruto simulado
-            const margen = total - costoReal; // Margen sobre Bruto en Demo simplificado
+            const total = precioVenta; 
+            const margen = total - costoReal;
 
             ventas.push({
                 fecha: new Date(d),
@@ -67,7 +64,7 @@ const generarDatosVentas = (): Venta[] => {
                 compania: emp.compania,
                 producto: prodFinal.nombre,
                 cantidad: 1,
-                total, // Venta Bruta en Demo
+                total, 
                 costo: costoReal,
                 margen,
                 margenPorcentaje: total > 0 ? ((margen / total) * 100).toFixed(1) : '0.0'
@@ -90,24 +87,64 @@ interface SortConfig {
   direction: 'asc' | 'desc';
 }
 
+// Tipos de Filtro de Fecha
+type FilterMode = 'mes' | 'anio' | 'custom';
+
 const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
-  const [ventasData, setVentasData] = useState<Venta[]>([]); // "total" en Venta será Venta Neta para KPIs
+  const [ventasData, setVentasData] = useState<Venta[]>([]); 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ventaNeta', direction: 'desc' });
   
-  // Default: Año actual
-  const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
-  const today = new Date().toISOString().split('T')[0];
+  // --- ESTADO DE FILTROS ---
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth(); // 0-11
+
+  const [filterMode, setFilterMode] = useState<FilterMode>('mes');
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  
+  // Fechas calculadas (strings YYYY-MM-DD)
+  const [dateRange, setDateRange] = useState({
+      start: new Date(currentYear, currentMonth, 1).toISOString().split('T')[0],
+      end: new Date(currentYear, currentMonth + 1, 0).toISOString().split('T')[0]
+  });
 
   const [filtros, setFiltros] = useState<Filtros>({
     sedeSeleccionada: 'Todas',
     companiaSeleccionada: session?.companyName || 'Todas',
-    periodoSeleccionado: 'año',
-    fechaInicio: yearStart,
-    fechaFin: today
+    periodoSeleccionado: 'mes',
+    fechaInicio: '', // Se gestionará vía dateRange
+    fechaFin: ''
   });
+
+  // Efecto para recalcular fechas cuando cambian los selectores (Mes/Año/Modo)
+  useEffect(() => {
+      let start = '';
+      let end = '';
+
+      if (filterMode === 'mes') {
+          // Primer día del mes
+          const firstDay = new Date(selectedYear, selectedMonth, 1);
+          // Último día del mes (día 0 del siguiente mes)
+          const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
+          
+          // Ajuste zona horaria local para string YYYY-MM-DD
+          start = firstDay.toLocaleDateString('en-CA'); // formatea YYYY-MM-DD local
+          end = lastDay.toLocaleDateString('en-CA');
+      } 
+      else if (filterMode === 'anio') {
+          start = `${selectedYear}-01-01`;
+          end = `${selectedYear}-12-31`;
+      }
+      // Para 'custom', no sobrescribimos aquí, dejamos que los inputs controlen dateRange
+      
+      if (filterMode !== 'custom') {
+          setDateRange({ start, end });
+      }
+  }, [filterMode, selectedYear, selectedMonth]);
+
 
   const fetchData = async () => {
       if (!session) {
@@ -122,7 +159,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       const modelOrder = 'pos.order';
       const fieldsOrder = ['date_order', 'config_id', 'lines', 'company_id', 'partner_id', 'pos_reference', 'name'];
 
-      const queryStart = '2024-01-01'; 
+      // Traer datos desde 2023 para cubrir selectores de año anterior
+      const queryStart = '2023-01-01'; 
       const queryEnd = new Date().toISOString().split('T')[0];
 
       const domain: any[] = [
@@ -136,7 +174,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           domain.push(['company_id', '=', session.companyId]);
       }
 
-      const options: any = { limit: 1500, order: 'date_order desc' };
+      // Aumentamos límite para soportar más histórico
+      const options: any = { limit: 2000, order: 'date_order desc' };
 
       try {
           if (session.companyId) options.context = { allowed_company_ids: [session.companyId] };
@@ -165,10 +204,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               return result;
           };
 
+          // Optimización: Solo consultar detalles de pedidos que probablemente estén en el rango visualizado
+          // Pero para simplificar y garantizar filtros correctos, traemos todo lo del limit.
           const lineChunks = chunkArray(allLineIds, 1000);
           let allLinesData: any[] = [];
           
-          // Solicitamos price_subtotal (Neto) y price_subtotal_incl (Bruto)
           const fieldsLine = ['product_id', 'qty', 'price_subtotal', 'price_subtotal_incl']; 
 
           for (const chunk of lineChunks) {
@@ -176,15 +216,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               if (linesData) allLinesData = allLinesData.concat(linesData);
           }
 
-          // --- NUEVO: Obtener Costos Reales de los Productos ---
+          // Obtener Costos Reales
           const productIds = new Set(allLinesData.map((l: any) => Array.isArray(l.product_id) ? l.product_id[0] : null).filter(id => id));
           let productCostMap = new Map<number, number>();
 
           if (productIds.size > 0) {
-              console.log(`Consultando costos para ${productIds.size} productos únicos...`);
               const productChunks = chunkArray(Array.from(productIds), 1000);
               for (const pChunk of productChunks) {
-                  // Consultamos 'standard_price' que es el campo de Costo en Odoo
                   const productsData = await client.searchRead(session.uid, session.apiKey, 'product.product', [['id', 'in', pChunk]], ['standard_price']);
                   if (productsData) {
                       productsData.forEach((p: any) => productCostMap.set(p.id, p.standard_price || 0));
@@ -207,40 +245,21 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                           const productId = Array.isArray(line.product_id) ? line.product_id[0] : 0;
                           const productName = Array.isArray(line.product_id) ? line.product_id[1] : 'Producto Desconocido';
                           
-                          const ventaNeta = line.price_subtotal || 0; // Sin Impuestos
-                          // En la interfaz Venta se usa 'total' a menudo como valor principal. 
-                          // Para consistencia contable usaremos Venta Neta como 'total' en gráficas de ventas, 
-                          // pero guardaremos Bruta en propiedad extendida si fuera necesario (aquí simplificado)
-                          
-                          // Venta Bruta (Con Impuestos)
+                          const ventaNeta = line.price_subtotal || 0; 
                           const ventaBruta = line.price_subtotal_incl || 0; 
                           
-                          // Cálculo de Costo Real
                           let unitCost = productCostMap.get(productId) || 0;
                           
-                          // Fallback inteligente si el costo es 0 (común en BDs mal configuradas)
                           if (unitCost === 0) {
                              if (productName.toUpperCase().includes('CONSULTA') || productName.toUpperCase().includes('SERVICIO')) {
-                                 unitCost = (ventaNeta / (line.qty || 1)) * 0.10; // 10% costo estimado servicios
+                                 unitCost = (ventaNeta / (line.qty || 1)) * 0.10; 
                              } else {
-                                 unitCost = (ventaNeta / (line.qty || 1)) * 0.65; // 65% costo estimado bienes
+                                 unitCost = (ventaNeta / (line.qty || 1)) * 0.65; 
                              }
                           }
 
                           const costoTotal = unitCost * (line.qty || 1);
-                          const margen = ventaNeta - costoTotal; // Margen siempre sobre venta neta
-
-                          // Hack: Guardamos ventaBruta en una propiedad oculta del objeto o lo inferimos
-                          // Para tipos.ts estricto, usaremos 'total' como Venta Neta.
-                          // En el componente de tabla recalcularemos la Bruta si no la guardamos, 
-                          // pero mejor aprovechamos que JS es flexible o modificamos tipos. 
-                          // Para este ejemplo, 'total' = Venta Neta.
-                          
-                          // *IMPORTANTE*: Pasamos la venta bruta "disfrazada" o calculada, 
-                          // pero para la tabla necesitamos el dato real.
-                          // Voy a inyectar la venta bruta como propiedad extra en el objeto Venta aunque Typescript se queje internamente,
-                          // o mejor, asumimos que 'total' es Venta Neta y la Bruta la aproximamos o la añadimos al tipo.
-                          // (Voy a añadir propiedad extendida en el uso local del componente).
+                          const margen = ventaNeta - costoTotal; 
 
                           mappedVentas.push({
                               fecha: orderDate,
@@ -248,7 +267,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                               compania,
                               producto: productName,
                               cantidad: line.qty || 1,
-                              total: ventaNeta, // GRÁFICOS USARÁN VENTA NETA
+                              total: ventaNeta, 
                               costo: costoTotal,
                               margen,
                               margenPorcentaje: ventaNeta > 0 ? ((margen / ventaNeta) * 100).toFixed(1) : '0.0',
@@ -258,9 +277,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                       }
                   });
               } else {
-                  // Fallback headers
-                  const total = order.amount_total || 0; // Esto suele ser Bruto en cabecera
-                  const net = total / 1.18; // Estimado
+                  const total = order.amount_total || 0; 
+                  const net = total / 1.18; 
                   const costo = net * 0.65;
                   mappedVentas.push({
                       fecha: orderDate,
@@ -296,11 +314,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
   const datosFiltrados = useMemo(() => {
     let datos = ventasData;
-    const startStr = filtros.fechaInicio;
-    const endStr = filtros.fechaFin;
+    const startStr = dateRange.start;
+    const endStr = dateRange.end;
     
+    // Filtro ESTRICTO por string YYYY-MM-DD
     datos = datos.filter(v => {
-        const vDate = v.fecha.toISOString().split('T')[0];
+        // Convertimos la fecha de venta a string local YYYY-MM-DD para comparar
+        const vDate = v.fecha.toLocaleDateString('en-CA'); 
         return vDate >= startStr && vDate <= endStr;
     });
 
@@ -311,7 +331,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
          datos = datos.filter(v => v.compania.includes(filtros.companiaSeleccionada));
     }
     return datos;
-  }, [ventasData, filtros.sedeSeleccionada, filtros.companiaSeleccionada, filtros.fechaInicio, filtros.fechaFin, session]);
+  }, [ventasData, filtros.sedeSeleccionada, filtros.companiaSeleccionada, dateRange, session]);
 
   const sedes = useMemo(() => {
       let base = ventasData;
@@ -339,6 +359,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const ventasPorDia = useMemo(() => {
     const agrupado: Record<string, AgrupadoPorDia> = {};
     datosFiltrados.forEach(v => {
+      // Usar en-CA para asegurar YYYY-MM-DD y ordenamiento correcto
       const fecha = v.fecha.toLocaleDateString('en-CA');
       if (!agrupado[fecha]) agrupado[fecha] = { fecha, ventas: 0, margen: 0 };
       agrupado[fecha].ventas += v.total;
@@ -374,9 +395,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       agrupado[v.producto].cantidad += v.cantidad;
       agrupado[v.producto].transacciones += 1;
       agrupado[v.producto].costo += v.costo;
-      agrupado[v.producto].ventaNeta += v.total; // Total es Venta Neta
+      agrupado[v.producto].ventaNeta += v.total; 
       // @ts-ignore
-      agrupado[v.producto].ventaBruta += (v.ventaBrutaReal || v.total); // Usar bruta real si existe
+      agrupado[v.producto].ventaBruta += (v.ventaBrutaReal || v.total); 
       agrupado[v.producto].ganancia += v.margen;
     });
 
@@ -388,14 +409,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         .sort((a, b) => {
             const valA = a[sortConfig.key];
             const valB = b[sortConfig.key];
-            
-            // Manejo especial para strings
             if (typeof valA === 'string') {
                 return sortConfig.direction === 'asc' 
                     ? valA.localeCompare(valB) 
                     : valB.localeCompare(valA);
             }
-            
             return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
         });
   }, [datosFiltrados, sortConfig]);
@@ -415,24 +433,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   };
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
-
-  const aplicarPeriodo = (periodo: string) => {
-    const hoy = new Date();
-    let inicio = new Date(hoy);
-    switch(periodo) {
-      case 'hoy': break; 
-      case 'semana': inicio.setDate(hoy.getDate() - 7); break;
-      case 'mes': inicio.setMonth(hoy.getMonth() - 1); break;
-      case 'trimestre': inicio.setMonth(hoy.getMonth() - 3); break;
-      case 'año': inicio = new Date(hoy.getFullYear(), 0, 1); break;
-    }
-    setFiltros({
-      ...filtros,
-      periodoSeleccionado: periodo,
-      fechaInicio: inicio.toISOString().split('T')[0],
-      fechaFin: hoy.toISOString().split('T')[0]
-    });
-  };
+  const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const ANIOS = [2023, 2024, 2025];
 
   const handleDownloadCSV = () => {
       const headers = ['Producto', 'Unidades', '#Transac.', 'Costo Total', 'Venta Neta', 'Venta Bruta', 'Ganancia', 'Margen %'];
@@ -452,7 +454,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `reporte_ventas_${filtros.fechaInicio}_${filtros.fechaFin}.csv`);
+      link.setAttribute('download', `reporte_ventas_${dateRange.start}_${dateRange.end}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -489,7 +491,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                  view === 'reportes' ? 'Reportes Gráficos' : 'Dashboard General'}
               </h1>
               <p className="text-slate-500 text-sm">
-                  {session ? `Compañía: ${session.companyName || 'Todas'}` : 'Modo Demo'} | {filtros.fechaInicio} al {filtros.fechaFin}
+                  {session ? `Compañía: ${session.companyName || 'Todas'}` : 'Modo Demo'} | {dateRange.start} al {dateRange.end}
               </p>
            </div>
            
@@ -522,53 +524,131 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             </div>
         )}
 
+        {/* BARRA DE FILTROS REDISEÑADA */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="w-full md:w-auto">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                <Building2 className="inline w-3 h-3 mr-1" />
-                Compañía
-              </label>
-              {session?.companyName ? (
-                   <div className="w-full md:w-48 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800 font-medium flex items-center gap-2">
-                       <Building2 className="w-4 h-4" />
-                       <span className="truncate">{session.companyName}</span>
+          <div className="flex flex-col gap-4">
+            
+            {/* Fila 1: Filtros de Negocio (Sede/Compañía) */}
+            <div className="flex flex-wrap gap-4 items-end border-b border-slate-100 pb-4">
+                <div className="w-full md:w-auto">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                        <Building2 className="inline w-3 h-3 mr-1" />Compañía
+                    </label>
+                    {session?.companyName ? (
+                        <div className="w-full md:w-48 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800 font-medium flex items-center gap-2">
+                            <Building2 className="w-4 h-4" />
+                            <span className="truncate">{session.companyName}</span>
+                        </div>
+                    ) : (
+                        <select disabled className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 cursor-not-allowed">
+                            <option>Demo / Todas</option>
+                        </select>
+                    )}
+                </div>
+                <div className="w-full md:w-auto">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                        <Store className="inline w-3 h-3 mr-1" />Punto de Venta
+                    </label>
+                    <select 
+                        value={filtros.sedeSeleccionada}
+                        onChange={(e) => setFiltros({...filtros, sedeSeleccionada: e.target.value})}
+                        className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                    >
+                        {sedes.map(sede => <option key={sede} value={sede}>{sede}</option>)}
+                    </select>
+                </div>
+            </div>
+
+            {/* Fila 2: Filtros de Tiempo (Tabs + Inputs) */}
+            <div className="flex flex-wrap gap-6 items-center">
+                
+                {/* Selector de Modo */}
+                <div>
+                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                        <ListFilter className="inline w-3 h-3 mr-1" />Modo de Filtro
+                   </label>
+                   <div className="flex bg-slate-100 p-1 rounded-lg">
+                       <button 
+                         onClick={() => setFilterMode('mes')}
+                         className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'mes' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                       >Por Mes</button>
+                       <button 
+                         onClick={() => setFilterMode('anio')}
+                         className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'anio' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                       >Por Año</button>
+                       <button 
+                         onClick={() => setFilterMode('custom')}
+                         className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'custom' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                       >Personalizado</button>
                    </div>
-              ) : (
-                <select disabled className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 cursor-not-allowed">
-                    <option>Demo / Todas</option>
-                </select>
-              )}
-            </div>
-            <div className="w-full md:w-auto">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5"><Store className="inline w-3 h-3 mr-1" />Punto de Venta</label>
-              <select 
-                value={filtros.sedeSeleccionada}
-                onChange={(e) => setFiltros({...filtros, sedeSeleccionada: e.target.value})}
-                className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
-              >
-                {sedes.map(sede => <option key={sede} value={sede}>{sede}</option>)}
-              </select>
-            </div>
-            <div className="flex-1 min-w-[300px]">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5"><Calendar className="inline w-3 h-3 mr-1" />Periodo</label>
-              <div className="flex bg-slate-50 p-1 rounded-lg w-full md:w-fit border border-slate-200">
-                {['mes', 'trimestre', 'año'].map(periodo => (
-                  <button key={periodo} onClick={() => aplicarPeriodo(periodo)} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filtros.periodoSeleccionado === periodo ? 'bg-white text-emerald-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
-                    {periodo.charAt(0).toUpperCase() + periodo.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex gap-2 w-full md:w-auto">
-              <div className="w-1/2 md:w-auto">
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Desde</label>
-                <input type="date" value={filtros.fechaInicio} onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value, periodoSeleccionado: 'custom'})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" />
-              </div>
-              <div className="w-1/2 md:w-auto">
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Hasta</label>
-                <input type="date" value={filtros.fechaFin} onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value, periodoSeleccionado: 'custom'})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" />
-              </div>
+                </div>
+
+                {/* Controles Dinámicos según Modo */}
+                <div className="flex-1 flex items-center gap-4 animate-in fade-in slide-in-from-left-2 duration-300">
+                    
+                    {filterMode === 'mes' && (
+                        <>
+                            <div className="w-32">
+                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Año</label>
+                                <select 
+                                    value={selectedYear}
+                                    onChange={(e) => setSelectedYear(Number(e.target.value))}
+                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                                >
+                                    {ANIOS.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                            </div>
+                            <div className="w-40">
+                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Mes</label>
+                                <select 
+                                    value={selectedMonth}
+                                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                                >
+                                    {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                </select>
+                            </div>
+                        </>
+                    )}
+
+                    {filterMode === 'anio' && (
+                         <div className="w-32">
+                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Año Fiscal</label>
+                            <select 
+                                value={selectedYear}
+                                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                            >
+                                {ANIOS.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                        </div>
+                    )}
+
+                    {filterMode === 'custom' && (
+                        <div className="flex gap-2 items-center">
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Desde</label>
+                                <input 
+                                    type="date" 
+                                    value={dateRange.start} 
+                                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} 
+                                    className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" 
+                                />
+                            </div>
+                            <div className="h-px w-4 bg-slate-300 mt-6"></div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Hasta</label>
+                                <input 
+                                    type="date" 
+                                    value={dateRange.end} 
+                                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} 
+                                    className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" 
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
             </div>
           </div>
         </div>
