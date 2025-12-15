@@ -805,6 +805,180 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       });
   };
 
+  // Helper for rendering General View to clean up main JSX
+  const renderGeneralView = () => (
+      <>
+        {/* KPIs SUPERIORES CON COMPARATIVOS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        
+        <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-brand-500 to-brand-600'} rounded-2xl shadow-lg shadow-brand-500/20 p-6 flex flex-col justify-between hover:scale-[1.02] transition-transform duration-300 relative overflow-hidden group`}>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-white/30 transition-colors"></div>
+            <div className="flex items-center justify-between mb-4 relative z-10">
+            <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
+                {isRentabilidad ? <DollarSign className="w-6 h-6 text-white" /> : <TrendingUp className="w-6 h-6 text-white" />}
+            </div>
+            <VariacionBadge val={kpis.variacionVentas} />
+            </div>
+            <div className="relative z-10">
+            <p className="text-white/80 text-sm font-medium tracking-wide">{isRentabilidad ? 'Venta Total Acumulada' : 'Volumen de Ventas'}</p>
+            <h3 className="text-3xl font-bold text-white mt-1 tracking-tight drop-shadow-sm">S/ {kpis.totalVentas}</h3>
+            </div>
+        </div>
+
+        <div className={`rounded-2xl shadow-md border p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 bg-white ${isRentabilidad ? 'border-brand-200' : 'border-slate-100'}`}>
+            <div className="flex items-center justify-between mb-4">
+            <div className={`p-2.5 rounded-xl ${isRentabilidad ? 'bg-brand-100 text-brand-600' : 'bg-blue-50 text-blue-600'}`}>
+                {isRentabilidad ? <TrendingUp className="w-6 h-6" /> : <Receipt className="w-6 h-6" />}
+            </div>
+            {isRentabilidad && <VariacionBadge val={kpis.variacionMargen} />}
+            </div>
+            <div>
+            <p className="text-slate-500 text-sm font-medium">{isRentabilidad ? 'Ganancia Neta' : 'Ticket Promedio Est.'}</p>
+            <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-600' : 'text-slate-800'}`}>
+                S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}
+            </h3>
+            </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-violet-200 transition-all hover:scale-[1.02] duration-300">
+            <div className="flex items-center justify-between mb-4">
+            <div className="p-2.5 bg-violet-50 rounded-xl text-violet-600"><Package className="w-6 h-6" /></div>
+            <VariacionBadge val={kpis.variacionUnidades} />
+            </div>
+            <div>
+            <p className="text-slate-500 text-sm font-medium">Items Procesados</p>
+            <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3>
+            </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-orange-200 transition-all hover:scale-[1.02] duration-300">
+            <div className="flex items-center justify-between mb-4">
+            <div className="p-2.5 bg-orange-50 rounded-xl text-orange-600"><Store className="w-6 h-6" /></div>
+            </div>
+            <div>
+            <p className="text-slate-500 text-sm font-medium">Margen Promedio %</p>
+            <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.margenPromedio}%</h3>
+            </div>
+        </div>
+        </div>
+
+        {/* GRAFICOS PRINCIPALES */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            {/* TENDENCIA */}
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
+                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ArrowUpRight className="w-5 h-5 text-brand-500"/> Tendencia de Ventas (Diario)</h3>
+                <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <defs>
+                            <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor={chartColor} stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor={chartColor} stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
+                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
+                        <Tooltip 
+                            formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} 
+                            contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                        />
+                        <Area type="monotone" dataKey={chartDataKey} stroke={chartColor} fillOpacity={1} fill="url(#colorVentas)" strokeWidth={2} />
+                    </AreaChart>
+                </ResponsiveContainer>
+                </div>
+            </div>
+
+            {/* VENTAS POR CATEGORIA (O METODO DE PAGO SI ESTAMOS EN VENTAS) */}
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
+                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        {view === 'ventas' ? <CreditCard className="w-5 h-5 text-emerald-500"/> : <PieChartIcon className="w-5 h-5 text-violet-500"/>}
+                        {view === 'ventas' ? 'Distribución por Método de Pago' : 'Participación por Categoría'}
+                </h3>
+                <div className="h-[300px] w-full flex">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie
+                                data={view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={70}
+                                outerRadius={90}
+                                fill="#8884d8"
+                                paddingAngle={3}
+                                dataKey="value"
+                                stroke="#fff"
+                                strokeWidth={3}
+                            >
+                                {(view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria).map((_, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => `S/ ${value.toFixed(2)}`} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                            <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '11px', color: '#64748b'}} />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+        </div>
+
+        {/* COMPARATIVA POR PUNTO DE VENTA (SEDES) */}
+        <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700 hover:shadow-lg transition-shadow">
+            <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-brand-500"/> Comparativa por Punto de Venta
+            </h3>
+            <div className="h-[350px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={comparativaSedes} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="name" stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
+                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value/1000}k`} />
+                        <Tooltip 
+                            formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, '']}
+                            contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                            cursor={{fill: '#f8fafc'}} 
+                        />
+                        <Legend wrapperStyle={{paddingTop: '20px'}} />
+                        <Bar dataKey="ventas" name="Venta Total" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="margen" name="Ganancia" fill="#84cc16" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+
+        {/* RANKING Y ALERTA */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><Users className="w-5 h-5 text-blue-500"/> Ranking Vendedores</h3>
+                <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={rankingVendedores} layout="vertical" margin={{ left: 20, right: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                            <XAxis type="number" hide />
+                            <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10, fill: '#64748b'}} />
+                            <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']} cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                            <Bar dataKey="ventas" radius={[0, 4, 4, 0]} barSize={20} fill="#0ea5e9" />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-red-500"/> Menor Rotación (Bottom 5)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {bottomProductosVolumen.map((p, idx) => (
+                        <div key={idx} className="bg-red-50 border border-red-100 rounded-xl p-3 flex flex-col hover:bg-red-100 transition-colors">
+                            <p className="text-[10px] font-bold text-red-400 uppercase mb-1">Puesto #{idx+1}</p>
+                            <p className="text-sm font-medium text-slate-800 truncate flex-1" title={p.name}>{p.name}</p>
+                            <p className="text-lg font-bold text-red-500 mt-1">S/ {p.val.toFixed(2)}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+      </>
+  );
+
   // --- RENDER ---
   return (
     <div className="p-4 md:p-6 lg:p-8 font-sans w-full relative pb-20 text-slate-700">
@@ -1236,178 +1410,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           </div>
         ) : view !== 'pagos' ? (
           /* --- VISTAS ANTERIORES (General, Rentabilidad, Ventas, Reportes) --- */
-          <>
-            {/* KPIs SUPERIORES CON COMPARATIVOS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            
-            <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-brand-500 to-brand-600'} rounded-2xl shadow-lg shadow-brand-500/20 p-6 flex flex-col justify-between hover:scale-[1.02] transition-transform duration-300 relative overflow-hidden group`}>
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-white/30 transition-colors"></div>
-                <div className="flex items-center justify-between mb-4 relative z-10">
-                <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
-                    {isRentabilidad ? <DollarSign className="w-6 h-6 text-white" /> : <TrendingUp className="w-6 h-6 text-white" />}
-                </div>
-                <VariacionBadge val={kpis.variacionVentas} />
-                </div>
-                <div className="relative z-10">
-                <p className="text-white/80 text-sm font-medium tracking-wide">{isRentabilidad ? 'Venta Total Acumulada' : 'Volumen de Ventas'}</p>
-                <h3 className="text-3xl font-bold text-white mt-1 tracking-tight drop-shadow-sm">S/ {kpis.totalVentas}</h3>
-                </div>
-            </div>
-
-            <div className={`rounded-2xl shadow-md border p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 bg-white ${isRentabilidad ? 'border-brand-200' : 'border-slate-100'}`}>
-                <div className="flex items-center justify-between mb-4">
-                <div className={`p-2.5 rounded-xl ${isRentabilidad ? 'bg-brand-100 text-brand-600' : 'bg-blue-50 text-blue-600'}`}>
-                    {isRentabilidad ? <TrendingUp className="w-6 h-6" /> : <Receipt className="w-6 h-6" />}
-                </div>
-                {isRentabilidad && <VariacionBadge val={kpis.variacionMargen} />}
-                </div>
-                <div>
-                <p className="text-slate-500 text-sm font-medium">{isRentabilidad ? 'Ganancia Neta' : 'Ticket Promedio Est.'}</p>
-                <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-600' : 'text-slate-800'}`}>
-                    S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}
-                </h3>
-                </div>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-violet-200 transition-all hover:scale-[1.02] duration-300">
-                <div className="flex items-center justify-between mb-4">
-                <div className="p-2.5 bg-violet-50 rounded-xl text-violet-600"><Package className="w-6 h-6" /></div>
-                <VariacionBadge val={kpis.variacionUnidades} />
-                </div>
-                <div>
-                <p className="text-slate-500 text-sm font-medium">Items Procesados</p>
-                <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3>
-                </div>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-orange-200 transition-all hover:scale-[1.02] duration-300">
-                <div className="flex items-center justify-between mb-4">
-                <div className="p-2.5 bg-orange-50 rounded-xl text-orange-600"><Store className="w-6 h-6" /></div>
-                </div>
-                <div>
-                <p className="text-slate-500 text-sm font-medium">Margen Promedio %</p>
-                <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.margenPromedio}%</h3>
-                </div>
-            </div>
-            </div>
-
-            {/* GRAFICOS PRINCIPALES */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                {/* TENDENCIA */}
-                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ArrowUpRight className="w-5 h-5 text-brand-500"/> Tendencia de Ventas (Diario)</h3>
-                    <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                            <defs>
-                                <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={chartColor} stopOpacity={0.3}/>
-                                    <stop offset="95%" stopColor={chartColor} stopOpacity={0}/>
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
-                            <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
-                            <Tooltip 
-                                formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} 
-                                contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                            />
-                            <Area type="monotone" dataKey={chartDataKey} stroke={chartColor} fillOpacity={1} fill="url(#colorVentas)" strokeWidth={2} />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* VENTAS POR CATEGORIA (O METODO DE PAGO SI ESTAMOS EN VENTAS) */}
-                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                         {view === 'ventas' ? <CreditCard className="w-5 h-5 text-emerald-500"/> : <PieChartIcon className="w-5 h-5 text-violet-500"/>}
-                         {view === 'ventas' ? 'Distribución por Método de Pago' : 'Participación por Categoría'}
-                    </h3>
-                    <div className="h-[300px] w-full flex">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={70}
-                                    outerRadius={90}
-                                    fill="#8884d8"
-                                    paddingAngle={3}
-                                    dataKey="value"
-                                    stroke="#fff"
-                                    strokeWidth={3}
-                                >
-                                    {(view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria).map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip formatter={(value: number) => `S/ ${value.toFixed(2)}`} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                                <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '11px', color: '#64748b'}} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-            </div>
-
-            {/* COMPARATIVA POR PUNTO DE VENTA (SEDES) */}
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700 hover:shadow-lg transition-shadow">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-brand-500"/> Comparativa por Punto de Venta
-                </h3>
-                <div className="h-[350px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={comparativaSedes} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis dataKey="name" stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
-                            <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value/1000}k`} />
-                            <Tooltip 
-                                formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, '']}
-                                contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                                cursor={{fill: '#f8fafc'}} 
-                            />
-                            <Legend wrapperStyle={{paddingTop: '20px'}} />
-                            <Bar dataKey="ventas" name="Venta Total" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="margen" name="Ganancia" fill="#84cc16" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-
-            {/* RANKING Y ALERTA */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><Users className="w-5 h-5 text-blue-500"/> Ranking Vendedores</h3>
-                    <div className="h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={rankingVendedores} layout="vertical" margin={{ left: 20, right: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                                <XAxis type="number" hide />
-                                <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10, fill: '#64748b'}} />
-                                <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']} cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                                <Bar dataKey="ventas" radius={[0, 4, 4, 0]} barSize={20} fill="#0ea5e9" />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-red-500"/> Menor Rotación (Bottom 5)</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {bottomProductosVolumen.map((p, idx) => (
-                            <div key={idx} className="bg-red-50 border border-red-100 rounded-xl p-3 flex flex-col hover:bg-red-100 transition-colors">
-                                <p className="text-[10px] font-bold text-red-400 uppercase mb-1">Puesto #{idx+1}</p>
-                                <p className="text-sm font-medium text-slate-800 truncate flex-1" title={p.name}>{p.name}</p>
-                                <p className="text-lg font-bold text-red-500 mt-1">S/ {p.val.toFixed(2)}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-          </>
-          : null
-        }
+          renderGeneralView()
+        ) : null}
 
         {/* TABLA DE DETALLE - Visible en General y en Comparativa (solo si hay DrillDown) */}
         {(view !== 'pagos' && view !== 'comparativa') || (view === 'comparativa' && drillDownSede) ? (
