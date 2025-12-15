@@ -3,7 +3,7 @@ import {
   LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell 
 } from 'recharts';
 import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, LayoutGrid, Receipt, X, Target } from 'lucide-react';
-import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, OdooSession } from '../types';
+import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
 
@@ -515,7 +515,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const showKPIs = true; // Siempre mostrar
   const showSedeGrid = isRentabilidad; // Solo en rentabilidad
   const showGeneralCharts = view === 'general'; // Charts de volumen solo en general
-  const showProfitCharts = isRentabilidad; // Charts de margen en rentabilidad
   
   // La tabla se muestra siempre, pero en General se prioriza volumen y en Rentabilidad se prioriza margen
   // (Aunque es la misma tabla, el contexto visual cambia)
@@ -757,7 +756,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                                 <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10}} />
                                 <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Venta Total']} cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                                 <Bar dataKey="val" radius={[0, 4, 4, 0]} barSize={20}>
-                                    {topProductosVolumen.map((entry, index) => (
+                                    {topProductosVolumen.map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Bar>
