@@ -7,6 +7,7 @@ import { OdooSession } from './types';
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [odooSession, setOdooSession] = useState<OdooSession | null>(null);
+  const [currentView, setCurrentView] = useState('general');
 
   const handleLogin = (session: OdooSession | null) => {
     setOdooSession(session);
@@ -16,6 +17,7 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setOdooSession(null);
     setIsAuthenticated(false);
+    setCurrentView('general');
   };
 
   if (!isAuthenticated) {
@@ -24,8 +26,8 @@ const App: React.FC = () => {
 
   return (
     <div className="antialiased text-slate-900 bg-slate-50 min-h-screen">
-      <Layout onLogout={handleLogout}>
-        <Dashboard session={odooSession} />
+      <Layout onLogout={handleLogout} currentView={currentView} onNavigate={setCurrentView}>
+        <Dashboard session={odooSession} view={currentView} />
       </Layout>
     </div>
   );

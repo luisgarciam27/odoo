@@ -53,9 +53,10 @@ const generarDatosVentas = (): Venta[] => {
 
 interface DashboardProps {
     session: OdooSession | null;
+    view?: string;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ session }) => {
+const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const [ventasData, setVentasData] = useState<Venta[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,17 +92,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       const fields = ['date_order', 'config_id', 'amount_total', 'company_id', 'state', 'partner_id', 'pos_reference', 'name'];
 
       // --- CORRECCIÓN DE ZONA HORARIA ---
-      // Odoo guarda en UTC. Si filtramos estrictamente por la fecha local en el servidor, 
-      // perdemos las ventas de la noche (que en UTC ya son el día siguiente).
-      // Solución: Pedimos a Odoo un rango más amplio (-1 día inicio, +1 día fin)
-      // y luego filtramos con precisión en Javascript usando la hora local.
-      
       const queryStart = new Date(filtros.fechaInicio);
-      queryStart.setDate(queryStart.getDate() - 1); // Un día antes para asegurar
+      queryStart.setDate(queryStart.getDate() - 1); 
       const queryStartStr = queryStart.toISOString().split('T')[0];
 
       const queryEnd = new Date(filtros.fechaFin);
-      queryEnd.setDate(queryEnd.getDate() + 1); // Un día después para capturar la noche (UTC+5/UTC+X)
+      queryEnd.setDate(queryEnd.getDate() + 1); 
       const queryEndStr = queryEnd.toISOString().split('T')[0];
 
       const domain = [
@@ -112,7 +108,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       ];
 
       const options: any = {
-        limit: 5000, // Aumentamos límite para asegurar que traemos todo el historial necesario
+        limit: 5000, 
         order: 'date_order desc'
       };
 
@@ -162,8 +158,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               const costo = total * 0.7;
               const margen = total - costo;
 
-              // Parsear fecha UTC de Odoo a Objeto JS (Local Time)
-              // Odoo devuelve "YYYY-MM-DD HH:mm:ss". Reemplazamos espacio por T y agregamos Z para indicar UTC.
               const utcString = (line.date_order || "").replace(" ", "T") + "Z";
               const fechaLocal = new Date(utcString);
 
@@ -180,7 +174,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               };
           })
           .filter((v: Venta) => {
-              // Filtrado exacto en memoria (Local Time vs Rango Local seleccionado)
               return v.fecha >= filterStartDate && v.fecha <= filterEndDate;
           });
 
@@ -236,8 +229,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   const ventasPorDia = useMemo(() => {
     const agrupado: Record<string, AgrupadoPorDia> = {};
     datosFiltrados.forEach(v => {
-      // Usar fecha local para agrupar
-      const fecha = v.fecha.toLocaleDateString('en-CA'); // YYYY-MM-DD local
+      const fecha = v.fecha.toLocaleDateString('en-CA');
       if (!agrupado[fecha]) agrupado[fecha] = { fecha, ventas: 0, margen: 0 };
       agrupado[fecha].ventas += v.total;
       agrupado[fecha].margen += v.margen;
@@ -288,6 +280,17 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     });
   };
 
+  // --- CONFIGURACIÓN DE VISTAS ---
+  const isRentabilidad = view === 'rentabilidad';
+  // Si es rentabilidad usamos 'margen', si no 'ventas' (para reportes y general)
+  const chartDataKey = isRentabilidad ? 'margen' : 'ventas'; 
+  const chartColor = isRentabilidad ? '#10b981' : '#3b82f6'; // Verde para margen, Azul para ventas
+  const chartLabel = isRentabilidad ? 'Margen (Ganancia)' : 'Ventas Totales';
+
+  const showKPIs = view === 'general' || view === 'rentabilidad';
+  const showCharts = view === 'general' || view === 'reportes' || view === 'rentabilidad';
+  const showTable = view === 'general' || view === 'ventas';
+
   return (
     <div className="p-4 md:p-6 lg:p-8 font-sans w-full relative">
       <OdooConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} />
@@ -306,7 +309,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-2">
            <div>
-              <h1 className="text-2xl font-bold text-slate-800">Punto de Venta (PoS)</h1>
+              <h1 className="text-2xl font-bold text-slate-800">
+                {view === 'rentabilidad' ? 'Análisis de Rentabilidad' : 
+                 view === 'ventas' ? 'Gestión de Ventas' :
+                 view === 'reportes' ? 'Reportes Gráficos' : 'Dashboard General'}
+              </h1>
               <p className="text-slate-500 text-sm">
                   {session ? `Base de datos: ${session.db}` : 'Modo Demo (Simulación)'}
               </p>
@@ -424,9 +431,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {showKPIs && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
           
-          <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl shadow-lg shadow-emerald-900/10 p-6 flex flex-col justify-between transform transition-transform hover:scale-[1.01]">
+          <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-emerald-600 to-emerald-700'} rounded-xl shadow-lg p-6 flex flex-col justify-between`}>
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
                 <TrendingUp className="w-6 h-6 text-white" />
@@ -436,24 +444,23 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               </span>
             </div>
             <div>
-              <p className="text-emerald-50 text-sm font-medium tracking-wide opacity-90">Ingresos Totales (Cajas)</p>
+              <p className="text-white/80 text-sm font-medium tracking-wide opacity-90">Ingresos Totales</p>
               <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">S/ {kpis.totalVentas}</h3>
             </div>
             <div className="mt-4 h-1 w-full bg-black/10 rounded-full overflow-hidden">
                <div className="h-full bg-white/40" style={{width: '100%'}}></div>
             </div>
-            <p className="text-xs text-emerald-100 mt-2 font-medium">Facturado en PoS</p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-blue-300 transition-colors">
+          <div className={`rounded-xl shadow-sm border p-6 flex flex-col justify-between transition-colors ${isRentabilidad ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200 hover:border-blue-300'}`}>
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <DollarSign className="w-6 h-6 text-blue-600" />
+              <div className={`p-2 rounded-lg ${isRentabilidad ? 'bg-emerald-100' : 'bg-blue-50'}`}>
+                <DollarSign className={`w-6 h-6 ${isRentabilidad ? 'text-emerald-600' : 'text-blue-600'}`} />
               </div>
             </div>
             <div>
               <p className="text-slate-500 text-sm font-medium">Ganancia Est. (30%)</p>
-              <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">S/ {kpis.totalMargen}</h3>
+              <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-emerald-700' : 'text-slate-800'}`}>S/ {kpis.totalMargen}</h3>
             </div>
             <p className="text-xs text-slate-400 mt-auto pt-4">Margen operativo estimado</p>
           </div>
@@ -484,13 +491,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             <p className="text-xs text-slate-400 mt-auto pt-4">Puntos de venta con mov.</p>
           </div>
         </div>
+        )}
 
         {/* Gráficos principales */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Ventas por día */}
+        {showCharts && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+          {/* Gráfico 1: Tiempo */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-800">Flujo de Caja Diario</h3>
+              <h3 className="text-lg font-bold text-slate-800">{isRentabilidad ? 'Evolución del Margen' : 'Flujo de Caja Diario'}</h3>
             </div>
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -514,27 +523,28 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     tickFormatter={(value) => `S/ ${value/1000}k`}
                   />
                   <Tooltip 
-                    formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']}
+                    formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]}
                     labelFormatter={(label) => new Date(label + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
                   <Line 
                     type="monotone" 
-                    dataKey="ventas" 
-                    stroke="#3b82f6" 
+                    dataKey={chartDataKey} 
+                    stroke={chartColor} 
                     strokeWidth={2} 
                     dot={false}
                     activeDot={{ r: 6, strokeWidth: 0 }}
+                    name={chartLabel}
                   />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Ventas por sede */}
+          {/* Gráfico 2: Sede */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-800">Ventas por Caja/Sede</h3>
+              <h3 className="text-lg font-bold text-slate-800">{isRentabilidad ? 'Rentabilidad por Caja' : 'Ventas por Caja/Sede'}</h3>
               <button className="text-xs text-blue-600 hover:text-blue-700 font-medium bg-blue-50 px-3 py-1 rounded-full">Top 6</button>
             </div>
             <div className="h-[300px] w-full flex items-center justify-center">
@@ -547,14 +557,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     innerRadius={60}
                     outerRadius={100}
                     paddingAngle={5}
-                    dataKey="ventas"
+                    dataKey={chartDataKey}
+                    nameKey="sede"
                   >
                     {ventasPorSede.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
                     ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value: number) => `S/ ${Number(value).toFixed(2)}`} 
+                    formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} 
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
                   <Legend 
@@ -562,8 +573,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     verticalAlign="middle" 
                     align="right"
                     wrapperStyle={{ paddingLeft: '20px' }}
-                    formatter={(_, entry: any) => (
-                      <span className="text-slate-600 text-sm font-medium ml-2">{entry.payload.sede}</span>
+                    formatter={(value) => (
+                      <span className="text-slate-600 text-sm font-medium ml-2">{value}</span>
                     )}
                   />
                 </PieChart>
@@ -571,13 +582,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             </div>
           </div>
         </div>
+        )}
 
         {/* Top productos */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        {showCharts && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-in fade-in slide-in-from-bottom-10 duration-700">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-slate-800">Top Tickets / Clientes</h3>
+            <h3 className="text-lg font-bold text-slate-800">{isRentabilidad ? 'Top Productos (Por Margen)' : 'Top Tickets / Clientes'}</h3>
             <div className="flex gap-4 text-xs font-medium">
-               <div className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm bg-blue-500"></span> Total Ventas</div>
+               <div className="flex items-center gap-1"><span className={`h-3 w-3 rounded-sm ${isRentabilidad ? 'bg-emerald-500' : 'bg-blue-500'}`}></span> {chartLabel}</div>
             </div>
           </div>
           <div className="h-[400px] w-full">
@@ -596,17 +609,19 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                 />
                 <Tooltip 
                   cursor={{fill: '#f8fafc'}}
-                  formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']}
+                  formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]}
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="ventas" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} name="ventas" />
+                <Bar dataKey={chartDataKey} fill={chartColor} radius={[0, 4, 4, 0]} barSize={20} name={chartLabel} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
+        )}
 
         {/* Tabla de productos */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 overflow-hidden">
+        {showTable && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 overflow-hidden animate-in fade-in slide-in-from-bottom-12 duration-1000">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-bold text-slate-800">Detalle de Transacciones</h3>
             <button className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors">
@@ -636,6 +651,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             </table>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
