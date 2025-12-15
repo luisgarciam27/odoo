@@ -111,6 +111,13 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
             <LogOut className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
             <span className="font-sans text-sm font-medium">Cerrar Sesión</span>
           </button>
+
+          <div className="mt-4 pt-4 border-t border-slate-200 text-center">
+             <p className="text-[10px] text-slate-400 font-mono">
+               Desarrollado por <br/>
+               <a href="https://gaorsystem.vercel.app/" target="_blank" rel="noreferrer" className="font-bold hover:text-brand-600 transition-colors">GAORSYSTEM PERU</a>
+             </p>
+          </div>
         </div>
       </aside>
 
