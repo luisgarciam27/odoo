@@ -8,7 +8,8 @@ import {
   ShoppingBag,
   Menu,
   Citrus,
-  X
+  X,
+  Building2 // Importamos el icono para la nueva vista
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -88,6 +89,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
           </div>
 
           <NavItem view="ventas" icon={ShoppingBag} label="Ventas y Pedidos" />
+          <NavItem view="comparativa" icon={Building2} label="Comparativa Sedes" />
           <NavItem view="reportes" icon={PieChart} label="Reportes Gráficos" />
         </nav>
 

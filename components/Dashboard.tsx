@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
-  LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend 
+  LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ScatterChart, Scatter, ZAxis 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin, Search } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
@@ -402,6 +402,33 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     };
   }, [filteredData, previousPeriodData]);
 
+  // --- KPIs POR SEDE (Para Vista Comparativa) ---
+  const kpisPorSede = useMemo(() => {
+    const agrupado: Record<string, { name: string; ventas: number; costo: number; margen: number; transacciones: number; margenPct: number }> = {};
+    
+    // Si estamos en modo comparativa, ignoramos el filtro de sedeSeleccionada si está en 'Todas'
+    // Para que se muestren todas las tarjetas. Si el usuario filtra una sede, solo sale una tarjeta.
+    // Usamos filteredData que ya respeta el filtro global, pero si se quiere comparar SIEMPRE todas,
+    // deberíamos usar 'ventasData' filtrado solo por fecha. 
+    // Mantenemos filteredData para respetar la consistencia del filtro global.
+    
+    filteredData.forEach(v => {
+        if (!agrupado[v.sede]) {
+            agrupado[v.sede] = { name: v.sede, ventas: 0, costo: 0, margen: 0, transacciones: 0, margenPct: 0 };
+        }
+        agrupado[v.sede].ventas += v.total;
+        agrupado[v.sede].costo += v.costo;
+        agrupado[v.sede].margen += v.margen;
+        agrupado[v.sede].transacciones += 1;
+    });
+
+    return Object.values(agrupado).map(item => ({
+        ...item,
+        margenPct: item.ventas > 0 ? (item.margen / item.ventas) * 100 : 0
+    })).sort((a, b) => b.ventas - a.ventas);
+  }, [filteredData]);
+
+
   // Gráfico Evolutivo
   const ventasPorDia = useMemo(() => {
     const agrupado: Record<string, AgrupadoPorDia> = {};
@@ -414,7 +441,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     return Object.values(agrupado).sort((a, b) => a.fecha.localeCompare(b.fecha));
   }, [filteredData]);
 
-  // Comparativa por Sedes
+  // Comparativa por Sedes (Gráfico General)
   const comparativaSedes = useMemo(() => {
       const agg: Record<string, { name: string; ventas: number; margen: number }> = {};
       filteredData.forEach(v => {
@@ -617,7 +644,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
         // 9. Aplicar Formatos Numéricos (Currency & Percent)
         // El rango de datos empieza en la fila 9 (índice 8) -> headers en fila 8 (índice 7)
-        // Indices de columnas: C(2)=Cant, D(3)=Costo, E(4)=Venta, F(5)=Ganancia, G(6)=Margen
         const range = XLSX.utils.decode_range(ws['!ref'] || "A1:A1");
         
         for (let R = range.s.r; R <= range.e.r; ++R) {
@@ -625,8 +651,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
                 if (!ws[cellRef]) continue;
 
-                // Aplicar formatos a partir de la fila de datos (fila 9 en adelante)
-                // Indices de fila aumentados en 1 por la inclusión de fechaReporte
                 if (R >= 8) { 
                     if (C === 3 || C === 4 || C === 5) { // Costo, Venta, Ganancia
                         ws[cellRef].z = '"S/" #,##0.00'; 
@@ -638,17 +662,163 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             }
         }
 
-        // 10. Generar Archivo
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Reporte Ventas");
-        
-        // Nombre del archivo dinámico
         const fileName = `Reporte_Ventas_${filtros.sedeSeleccionada.replace(/\s+/g, '_')}_${dateRange.start}.xlsx`;
         XLSX.writeFile(wb, fileName);
 
     } catch (error) {
         console.error("Error exportando Excel:", error);
         alert("Hubo un error al generar el archivo Excel.");
+    }
+  };
+
+  const handleDownloadComparativa = () => {
+    try {
+        const wb = XLSX.utils.book_new();
+
+        // --- HOJA 1: RESUMEN EJECUTIVO POR SEDE ---
+        const titulo = [["REPORTE COMPARATIVO DE SEDES"]];
+        const fechaReporte = [["Fecha de Emisión:", new Date().toLocaleDateString()]];
+        const empresaInfo = [["Empresa:", session?.companyName || 'Todas']];
+        const rangoInfo = [["Periodo:", `${dateRange.start} al ${dateRange.end}`]];
+        const espacio = [[""]];
+
+        const headersResumen = [["SEDE / PUNTO DE VENTA", "TRANSACCIONES", "VENTA NETA (S/)", "COSTO TOTAL (S/)", "GANANCIA NETA (S/)", "MARGEN %"]];
+
+        const bodyResumen = kpisPorSede.map(s => [
+            s.name,
+            s.transacciones,
+            s.ventas,
+            s.costo,
+            s.margen,
+            s.margenPct / 100
+        ]);
+
+        const totalVentas = kpisPorSede.reduce((sum, s) => sum + s.ventas, 0);
+        const totalCosto = kpisPorSede.reduce((sum, s) => sum + s.costo, 0);
+        const totalMargen = kpisPorSede.reduce((sum, s) => sum + s.margen, 0);
+        const totalTransacciones = kpisPorSede.reduce((sum, s) => sum + s.transacciones, 0);
+        const margenPromedio = totalVentas > 0 ? (totalMargen / totalVentas) : 0;
+
+        const totalRowResumen = [["TOTALES GLOBALES", totalTransacciones, totalVentas, totalCosto, totalMargen, margenPromedio]];
+
+        const dataResumen = [
+            ...titulo, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio,
+            ...headersResumen, ...bodyResumen, ...totalRowResumen
+        ];
+
+        const wsResumen = XLSX.utils.aoa_to_sheet(dataResumen);
+        wsResumen['!cols'] = [{ wch: 35 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }];
+        wsResumen['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+
+        // Formato Hoja 1
+        const rangeResumen = XLSX.utils.decode_range(wsResumen['!ref'] || "A1:A1");
+        for (let R = rangeResumen.s.r; R <= rangeResumen.e.r; ++R) {
+            for (let C = rangeResumen.s.c; C <= rangeResumen.e.c; ++C) {
+                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                if (!wsResumen[cellRef]) continue;
+                if (R >= 7) { 
+                    if (C === 2 || C === 3 || C === 4) wsResumen[cellRef].z = '"S/" #,##0.00'; 
+                    if (C === 5) wsResumen[cellRef].z = '0.00%';
+                }
+            }
+        }
+        XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen Sedes");
+
+
+        // --- HOJA 2: DETALLE PRODUCTOS POR SEDE ---
+        // 1. Agrupar datos por Sede y Producto
+        const detalleAgrupado: Record<string, any> = {};
+        filteredData.forEach(v => {
+            const key = `${v.sede}|${v.producto}`;
+            if (!detalleAgrupado[key]) {
+                detalleAgrupado[key] = {
+                    sede: v.sede,
+                    producto: v.producto,
+                    categoria: v.categoria,
+                    cantidad: 0,
+                    costo: 0,
+                    total: 0,
+                    margen: 0
+                };
+            }
+            detalleAgrupado[key].cantidad += v.cantidad;
+            detalleAgrupado[key].costo += v.costo;
+            detalleAgrupado[key].total += v.total;
+            detalleAgrupado[key].margen += v.margen;
+        });
+        
+        // Convertir a array y ordenar por Sede (A-Z) y luego por Venta Total (Desc)
+        const listaDetalle = Object.values(detalleAgrupado).sort((a, b) => {
+            if (a.sede === b.sede) {
+                return b.total - a.total;
+            }
+            return a.sede.localeCompare(b.sede);
+        });
+
+        const tituloDetalle = [["DETALLE DE PRODUCTOS POR SEDE"]];
+        const headersDetalle = [["SEDE", "PRODUCTO", "CATEGORÍA", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "RENTABILIDAD %"]];
+        
+        const bodyDetalle = listaDetalle.map(d => [
+            d.sede,
+            d.producto,
+            d.categoria,
+            d.cantidad,
+            d.costo,
+            d.total,
+            d.margen,
+            d.total > 0 ? (d.margen / d.total) : 0
+        ]);
+
+        // Totales Hoja 2
+        const sumCant = listaDetalle.reduce((acc, curr) => acc + curr.cantidad, 0);
+        const sumCosto = listaDetalle.reduce((acc, curr) => acc + curr.costo, 0);
+        const sumTotal = listaDetalle.reduce((acc, curr) => acc + curr.total, 0);
+        const sumMargen = listaDetalle.reduce((acc, curr) => acc + curr.margen, 0);
+        const sumRentabilidad = sumTotal > 0 ? sumMargen / sumTotal : 0;
+
+        const totalRowDetalle = [["TOTAL GENERAL", "", "", sumCant, sumCosto, sumTotal, sumMargen, sumRentabilidad]];
+
+        const dataDetalle = [
+             ...tituloDetalle, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio,
+             ...headersDetalle, ...bodyDetalle, ...totalRowDetalle
+        ];
+
+        const wsDetalle = XLSX.utils.aoa_to_sheet(dataDetalle);
+        wsDetalle['!cols'] = [
+            { wch: 25 }, // Sede
+            { wch: 40 }, // Producto
+            { wch: 20 }, // Categoria
+            { wch: 10 }, // Unidades
+            { wch: 15 }, // Costo
+            { wch: 15 }, // Venta
+            { wch: 15 }, // Ganancia
+            { wch: 12 }  // Rentabilidad
+        ];
+        wsDetalle['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+
+        // Formato Hoja 2
+        const rangeDetalle = XLSX.utils.decode_range(wsDetalle['!ref'] || "A1:A1");
+        for (let R = rangeDetalle.s.r; R <= rangeDetalle.e.r; ++R) {
+            for (let C = rangeDetalle.s.c; C <= rangeDetalle.e.c; ++C) {
+                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                if (!wsDetalle[cellRef]) continue;
+                // Headers están en fila index 7 (row 8)
+                if (R >= 8) { 
+                    if (C === 4 || C === 5 || C === 6) wsDetalle[cellRef].z = '"S/" #,##0.00'; 
+                    if (C === 7) wsDetalle[cellRef].z = '0.00%';
+                }
+            }
+        }
+        XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle Productos");
+
+
+        XLSX.writeFile(wb, `Comparativa_Completa_${dateRange.start}.xlsx`);
+
+    } catch (error) {
+        console.error("Error exportando Excel Comparativa:", error);
+        alert("Error al generar el reporte comparativo.");
     }
   };
 
@@ -679,6 +849,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               <h1 className="text-2xl font-bold text-slate-800">
                 {view === 'rentabilidad' ? 'Rentabilidad y Ganancias' : 
                  view === 'ventas' ? 'Gestión de Ventas' :
+                 view === 'comparativa' ? 'Comparativa de Sedes' :
                  view === 'reportes' ? 'Reportes Gráficos' : 'Dashboard General'}
               </h1>
               <p className="text-slate-500 text-sm font-light">
@@ -687,6 +858,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
            </div>
            
            <div className="mt-4 md:mt-0 flex gap-3">
+              {view === 'comparativa' && (
+                <button onClick={handleDownloadComparativa} className="flex items-center gap-2 bg-brand-600 text-white px-3 py-1.5 rounded-lg font-medium text-sm hover:bg-brand-700 transition-colors shadow-sm shadow-brand-200">
+                  <Download className="w-4 h-4" /> Reporte Completo (Excel)
+                </button>
+              )}
               <button onClick={() => fetchData()} className="flex items-center gap-2 bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 font-medium text-sm hover:bg-slate-50 transition-colors shadow-sm">
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Recargar
               </button>
@@ -775,291 +951,404 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             </div>
         )}
 
-        {/* KPIs SUPERIORES CON COMPARATIVOS */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          
-          <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-blue-600 to-blue-700'} rounded-xl shadow-lg p-6 flex flex-col justify-between`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-                  {isRentabilidad ? <DollarSign className="w-6 h-6 text-white" /> : <TrendingUp className="w-6 h-6 text-white" />}
-              </div>
-              <VariacionBadge val={kpis.variacionVentas} />
-            </div>
-            <div>
-              <p className="text-white/80 text-sm font-medium tracking-wide opacity-90">{isRentabilidad ? 'Venta Total Acumulada' : 'Volumen de Ventas'}</p>
-              <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">S/ {kpis.totalVentas}</h3>
-            </div>
-          </div>
+        {/* --- VISTA COMPARATIVA DE SEDES (TIPO CAJONES) --- */}
+        {view === 'comparativa' ? (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             
+             {/* CAJONES: Tarjetas Interactivas por Sede */}
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                 {kpisPorSede.map((sede, idx) => (
+                    <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-md hover:border-brand-300 transition-all p-5 flex flex-col justify-between group relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-slate-100 to-transparent rounded-bl-3xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                        
+                        <div className="flex justify-between items-start mb-4 relative z-10">
+                            <div className="p-2 bg-brand-50 text-brand-700 rounded-lg">
+                                <Store className="w-6 h-6" />
+                            </div>
+                            <button onClick={() => setDrillDownSede(sede.name)} className="text-xs font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                Ver Detalle <ArrowUpRight className="w-3 h-3" />
+                            </button>
+                        </div>
 
-          <div className={`rounded-xl shadow-sm border p-6 flex flex-col justify-between transition-colors ${isRentabilidad ? 'bg-brand-50 border-brand-200' : 'bg-white border-slate-200'}`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className={`p-2 rounded-lg ${isRentabilidad ? 'bg-brand-100' : 'bg-blue-50'}`}>
-                  {isRentabilidad ? <TrendingUp className="w-6 h-6 text-brand-600" /> : <Receipt className="w-6 h-6 text-blue-600" />}
-              </div>
-              {isRentabilidad && <VariacionBadge val={kpis.variacionMargen} />}
-            </div>
-            <div>
-              <p className="text-slate-500 text-sm font-medium">{isRentabilidad ? 'Ganancia Neta' : 'Ticket Promedio Est.'}</p>
-              <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-700' : 'text-slate-800'}`}>
-                  S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}
-              </h3>
-            </div>
-          </div>
+                        <h3 className="text-lg font-bold text-slate-800 mb-1 truncate" title={sede.name}>{sede.name}</h3>
+                        <p className="text-xs text-slate-500 mb-4">{sede.transacciones} transacciones</p>
 
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-purple-300 transition-colors">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2 bg-purple-50 rounded-lg"><Package className="w-6 h-6 text-purple-600" /></div>
-              <VariacionBadge val={kpis.variacionUnidades} />
-            </div>
-            <div>
-              <p className="text-slate-500 text-sm font-medium">Items Procesados</p>
-              <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3>
-            </div>
-          </div>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-end border-b border-slate-100 pb-2">
+                                <span className="text-xs font-semibold text-slate-500 uppercase">Venta Neta</span>
+                                <span className="text-base font-bold text-slate-800">S/ {sede.ventas.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-end border-b border-slate-100 pb-2">
+                                <span className="text-xs font-semibold text-red-400 uppercase">Costo/Pérdida</span>
+                                <span className="text-base font-medium text-red-600">- S/ {sede.costo.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-end pt-1">
+                                <span className="text-xs font-bold text-brand-600 uppercase">Ganancia</span>
+                                <span className="text-xl font-extrabold text-brand-700">S/ {sede.margen.toLocaleString()}</span>
+                            </div>
+                        </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-orange-300 transition-colors">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2 bg-orange-50 rounded-lg"><Store className="w-6 h-6 text-orange-600" /></div>
-            </div>
-            <div>
-              <p className="text-slate-500 text-sm font-medium">Margen Promedio %</p>
-              <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.margenPromedio}%</h3>
-            </div>
-          </div>
-        </div>
-
-        {/* GRAFICOS PRINCIPALES Y RANKING */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            {/* TENDENCIA */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ArrowUpRight className="w-5 h-5 text-brand-600"/> Tendencia de Ventas (Diario)</h3>
-                <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
-                    <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
-                    <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                    <Line type="monotone" dataKey={chartDataKey} stroke={chartColor} strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                    </LineChart>
-                </ResponsiveContainer>
-                </div>
-            </div>
-
-            {/* VENTAS POR CATEGORIA (PIE CHART) */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><PieChartIcon className="w-5 h-5 text-purple-600"/> Participación por Categoría</h3>
-                <div className="h-[300px] w-full flex">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={ventasPorCategoria}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
-                                fill="#8884d8"
-                                paddingAngle={5}
-                                dataKey="value"
-                            >
-                                {ventasPorCategoria.map((_, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip formatter={(value: number) => `S/ ${value.toFixed(2)}`} />
-                            <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '11px', color: '#64748b'}} />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-        </div>
-
-        {/* COMPARATIVA POR PUNTO DE VENTA (SEDES) */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-brand-600"/> Comparativa por Punto de Venta (Venta vs Ganancia)
-            </h3>
-            <div className="h-[350px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={comparativaSedes} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
-                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value/1000}k`} />
-                        <Tooltip 
-                            formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, '']}
-                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                            cursor={{fill: '#f8fafc'}} 
-                        />
-                        <Legend wrapperStyle={{paddingTop: '20px'}} />
-                        <Bar dataKey="ventas" name="Venta Total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="margen" name="Ganancia" fill="#84cc16" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-
-        {/* RANKING VENDEDORES Y TOP PRODUCTOS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-             {/* RANKING VENDEDORES */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><Users className="w-5 h-5 text-blue-600"/> Desempeño por Vendedor/Caja</h3>
-                <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={rankingVendedores} layout="vertical" margin={{ left: 20, right: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                            <XAxis type="number" hide />
-                            <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10}} />
-                            <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']} cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                            <Bar dataKey="ventas" radius={[0, 4, 4, 0]} barSize={20} fill="#3b82f6" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-
-            {/* TOP 5 PRODUCTOS */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><Package className="w-5 h-5 text-brand-600"/> Top 5 Productos (Más Vendidos)</h3>
-                <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={topProductosVolumen} layout="vertical" margin={{ left: 40, right: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                            <XAxis type="number" hide />
-                            <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10}} />
-                            <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Venta Total']} cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                            <Bar dataKey="val" radius={[0, 4, 4, 0]} barSize={20}>
-                                {topProductosVolumen.map((_, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-        </div>
-
-        {/* BOTTOM PRODUCTOS (ALERTA) */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-             <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-red-500"/> Productos con Menor Rotación (Bottom 5)</h3>
-             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                 {bottomProductosVolumen.map((p, idx) => (
-                     <div key={idx} className="bg-red-50 border border-red-100 rounded-lg p-3">
-                         <p className="text-xs font-bold text-red-400 uppercase mb-1">Puesto #{idx+1}</p>
-                         <p className="text-sm font-medium text-slate-800 truncate" title={p.name}>{p.name}</p>
-                         <p className="text-lg font-bold text-red-700 mt-1">S/ {p.val.toFixed(2)}</p>
-                     </div>
+                        {/* Visualizador de Margen (Barra) */}
+                        <div className="mt-4">
+                            <div className="flex justify-between text-xs mb-1">
+                                <span className="text-slate-500">Rentabilidad</span>
+                                <span className={`font-bold ${sede.margenPct < 15 ? 'text-red-500' : 'text-brand-600'}`}>{sede.margenPct.toFixed(1)}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2">
+                                <div 
+                                    className={`h-2 rounded-full transition-all duration-1000 ${sede.margenPct < 15 ? 'bg-red-500' : 'bg-brand-500'}`} 
+                                    style={{ width: `${Math.min(sede.margenPct, 100)}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    </div>
                  ))}
              </div>
-        </div>
 
-        {/* TABLA DE DETALLE CON PAGINACIÓN */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 overflow-hidden animate-in fade-in slide-in-from-bottom-12 duration-1000">
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-            <div>
-               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                   <FileSpreadsheet className="w-5 h-5 text-brand-600" />
-                   {drillDownSede ? `Productos en ${drillDownSede}` : 'Detalle Global de Productos'}
-               </h3>
-               <p className="text-xs text-slate-500 font-light">
-                   {drillDownSede ? 'Mostrando únicamente items vendidos en la sede seleccionada.' : 'Desglose general por item, costo real y rentabilidad.'}
-               </p>
-            </div>
-            <button onClick={handleDownloadExcel} className="px-4 py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-              <Download className="w-4 h-4" />Descargar Excel
-            </button>
-          </div>
-          <div className="overflow-x-auto border rounded-lg border-slate-100">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200 select-none">
-                <tr>
-                  <th className="px-4 py-3 font-semibold cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('producto')}>Producto <SortIcon column="producto" /></th>
-                  <th className="px-4 py-3 font-semibold cursor-pointer text-slate-500">Categoría</th>
-                  <th className="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('cantidad')}>Unds. <SortIcon column="cantidad" /></th>
-                  <th className="px-4 py-3 font-semibold text-right text-slate-400 cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('costo')}>Costo Total <SortIcon column="costo" /></th>
-                  <th className="px-4 py-3 font-semibold text-right text-slate-700 cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('ventaNeta')}>Venta Neta <SortIcon column="ventaNeta" /></th>
-                  <th className="px-4 py-3 font-semibold text-right text-brand-700 bg-brand-50/30 cursor-pointer hover:bg-brand-100 transition-colors" onClick={() => handleSort('ganancia')}>Ganancia <SortIcon column="ganancia" /></th>
-                  <th className="px-4 py-3 font-semibold text-right text-brand-700 bg-brand-50/30 cursor-pointer hover:bg-brand-100 transition-colors" onClick={() => handleSort('margenPorcentaje')}>Margen % <SortIcon column="margenPorcentaje" /></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {paginatedProductos.length > 0 ? (
-                    paginatedProductos.map((prod, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
-                        <td className="px-4 py-3 font-medium text-slate-800 group-hover:text-blue-600 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
-                        <td className="px-4 py-3 text-slate-500 text-xs">{prod.categoria}</td>
-                        <td className="px-4 py-3 text-right text-slate-600">{prod.cantidad}</td>
-                        <td className="px-4 py-3 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-bold text-slate-800">S/ {prod.ventaNeta.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-medium text-brand-600 bg-brand-50/10">S/ {prod.ganancia.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-medium text-brand-700 bg-brand-50/10">
-                            <span className={`px-2 py-0.5 rounded text-xs ${prod.margenPorcentaje < 20 ? 'bg-red-100 text-red-700' : 'bg-brand-100 text-brand-800'}`}>
-                                {prod.margenPorcentaje.toFixed(1)}%
-                            </span>
-                        </td>
-                    </tr>
-                    ))
-                ) : (
-                    <tr>
-                        <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">
-                            No se encontraron productos para los filtros seleccionados.
-                        </td>
-                    </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination Controls */}
-          {reporteProductos.length > 0 && (
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-6 mt-2">
-                <div className="flex flex-1 justify-between sm:hidden">
-                    <button 
-                        onClick={() => handlePageChange(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className="relative inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Anterior
-                    </button>
-                    <button 
-                        onClick={() => handlePageChange(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className="relative ml-3 inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Siguiente
-                    </button>
+             {/* GRÁFICOS DE ANÁLISIS COMPARATIVO */}
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* 1. Stacked Bar: Ventas vs Costos (Visualizar el Margen) */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <ArrowUpDown className="w-5 h-5 text-brand-600"/> Composición Venta vs Costo
+                    </h3>
+                    <div className="h-[350px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={kpisPorSede} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11}} />
+                                <Tooltip formatter={(value: number) => `S/ ${value.toLocaleString()}`} cursor={{fill: 'transparent'}} />
+                                <Legend />
+                                <Bar dataKey="margen" name="Ganancia Neta" stackId="a" fill="#84cc16" radius={[0, 4, 4, 0]} />
+                                <Bar dataKey="costo" name="Costo Mercadería" stackId="a" fill="#ef4444" radius={[4, 0, 0, 4]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
-                <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                    <div>
-                        <p className="text-sm text-slate-700">
-                            Mostrando <span className="font-bold text-slate-900">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-slate-900">{Math.min(currentPage * itemsPerPage, reporteProductos.length)}</span> de <span className="font-bold text-slate-900">{reporteProductos.length}</span> resultados
+
+                {/* 2. Scatter Plot: Volumen vs Rentabilidad */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <Target className="w-5 h-5 text-brand-600"/> Matriz de Rendimiento (Volumen vs Margen %)
+                    </h3>
+                    <div className="h-[350px] w-full">
+                         <ResponsiveContainer width="100%" height="100%">
+                            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <XAxis type="number" dataKey="ventas" name="Volumen Venta" unit=" S/" tick={{fontSize: 12}} stroke="#94a3b8" />
+                                <YAxis type="number" dataKey="margenPct" name="Margen" unit="%" tick={{fontSize: 12}} stroke="#94a3b8" />
+                                <ZAxis type="number" dataKey="transacciones" range={[60, 400]} name="Transacciones" />
+                                <Tooltip cursor={{ strokeDasharray: '3 3' }} formatter={(value: any, name: string) => [name === 'Margen' ? `${Number(value).toFixed(1)}%` : `S/ ${Number(value).toLocaleString()}`, name]} />
+                                <Legend />
+                                <Scatter name="Sedes" data={kpisPorSede} fill="#3b82f6">
+                                    {kpisPorSede.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.margenPct > 20 ? '#84cc16' : entry.margenPct < 10 ? '#ef4444' : '#eab308'} />
+                                    ))}
+                                </Scatter>
+                            </ScatterChart>
+                        </ResponsiveContainer>
+                        <p className="text-xs text-center text-slate-400 mt-2">
+                            * Eje X: Volumen Venta | Eje Y: % Margen | Tamaño: Nro. Transacciones
                         </p>
                     </div>
-                    <div>
-                        <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                            <button
-                                onClick={() => handlePageChange(currentPage - 1)}
-                                disabled={currentPage === 1}
-                                className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <span className="sr-only">Anterior</span>
-                                <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                            </button>
-                            <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 focus:outline-offset-0">
-                                Página {currentPage} de {totalPages}
-                            </span>
-                            <button
-                                onClick={() => handlePageChange(currentPage + 1)}
-                                disabled={currentPage === totalPages}
-                                className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <span className="sr-only">Siguiente</span>
-                                <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                            </button>
-                        </nav>
+                </div>
+
+             </div>
+
+          </div>
+        ) : (
+          /* --- VISTAS ANTERIORES (General, Rentabilidad, Ventas, Reportes) --- */
+          <>
+            {/* KPIs SUPERIORES CON COMPARATIVOS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            
+            <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-blue-600 to-blue-700'} rounded-xl shadow-lg p-6 flex flex-col justify-between`}>
+                <div className="flex items-center justify-between mb-4">
+                <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
+                    {isRentabilidad ? <DollarSign className="w-6 h-6 text-white" /> : <TrendingUp className="w-6 h-6 text-white" />}
+                </div>
+                <VariacionBadge val={kpis.variacionVentas} />
+                </div>
+                <div>
+                <p className="text-white/80 text-sm font-medium tracking-wide opacity-90">{isRentabilidad ? 'Venta Total Acumulada' : 'Volumen de Ventas'}</p>
+                <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">S/ {kpis.totalVentas}</h3>
+                </div>
+            </div>
+
+            <div className={`rounded-xl shadow-sm border p-6 flex flex-col justify-between transition-colors ${isRentabilidad ? 'bg-brand-50 border-brand-200' : 'bg-white border-slate-200'}`}>
+                <div className="flex items-center justify-between mb-4">
+                <div className={`p-2 rounded-lg ${isRentabilidad ? 'bg-brand-100' : 'bg-blue-50'}`}>
+                    {isRentabilidad ? <TrendingUp className="w-6 h-6 text-brand-600" /> : <Receipt className="w-6 h-6 text-blue-600" />}
+                </div>
+                {isRentabilidad && <VariacionBadge val={kpis.variacionMargen} />}
+                </div>
+                <div>
+                <p className="text-slate-500 text-sm font-medium">{isRentabilidad ? 'Ganancia Neta' : 'Ticket Promedio Est.'}</p>
+                <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-700' : 'text-slate-800'}`}>
+                    S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}
+                </h3>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-purple-300 transition-colors">
+                <div className="flex items-center justify-between mb-4">
+                <div className="p-2 bg-purple-50 rounded-lg"><Package className="w-6 h-6 text-purple-600" /></div>
+                <VariacionBadge val={kpis.variacionUnidades} />
+                </div>
+                <div>
+                <p className="text-slate-500 text-sm font-medium">Items Procesados</p>
+                <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-orange-300 transition-colors">
+                <div className="flex items-center justify-between mb-4">
+                <div className="p-2 bg-orange-50 rounded-lg"><Store className="w-6 h-6 text-orange-600" /></div>
+                </div>
+                <div>
+                <p className="text-slate-500 text-sm font-medium">Margen Promedio %</p>
+                <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.margenPromedio}%</h3>
+                </div>
+            </div>
+            </div>
+
+            {/* GRAFICOS PRINCIPALES Y RANKING */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                {/* TENDENCIA */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ArrowUpRight className="w-5 h-5 text-brand-600"/> Tendencia de Ventas (Diario)</h3>
+                    <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
+                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
+                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                        <Line type="monotone" dataKey={chartDataKey} stroke={chartColor} strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                        </LineChart>
+                    </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* VENTAS POR CATEGORIA (PIE CHART) */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><PieChartIcon className="w-5 h-5 text-purple-600"/> Participación por Categoría</h3>
+                    <div className="h-[300px] w-full flex">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={ventasPorCategoria}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    fill="#8884d8"
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    {ventasPorCategoria.map((_, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip formatter={(value: number) => `S/ ${value.toFixed(2)}`} />
+                                <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '11px', color: '#64748b'}} />
+                            </PieChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             </div>
-          )}
-        </div>
+
+            {/* COMPARATIVA POR PUNTO DE VENTA (SEDES) - Visible solo si no es view comparativa (que tiene su propia vista) */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-brand-600"/> Comparativa por Punto de Venta (Venta vs Ganancia)
+                </h3>
+                <div className="h-[350px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={comparativaSedes} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
+                            <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value/1000}k`} />
+                            <Tooltip 
+                                formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, '']}
+                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                cursor={{fill: '#f8fafc'}} 
+                            />
+                            <Legend wrapperStyle={{paddingTop: '20px'}} />
+                            <Bar dataKey="ventas" name="Venta Total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="margen" name="Ganancia" fill="#84cc16" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
+            {/* RANKING VENDEDORES Y TOP PRODUCTOS */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                {/* RANKING VENDEDORES */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><Users className="w-5 h-5 text-blue-600"/> Desempeño por Vendedor/Caja</h3>
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={rankingVendedores} layout="vertical" margin={{ left: 20, right: 20 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                <XAxis type="number" hide />
+                                <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10}} />
+                                <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']} cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                <Bar dataKey="ventas" radius={[0, 4, 4, 0]} barSize={20} fill="#3b82f6" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* TOP 5 PRODUCTOS */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><Package className="w-5 h-5 text-brand-600"/> Top 5 Productos (Más Vendidos)</h3>
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={topProductosVolumen} layout="vertical" margin={{ left: 40, right: 20 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                <XAxis type="number" hide />
+                                <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10}} />
+                                <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Venta Total']} cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                <Bar dataKey="val" radius={[0, 4, 4, 0]} barSize={20}>
+                                    {topProductosVolumen.map((_, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            </div>
+
+            {/* BOTTOM PRODUCTOS (ALERTA) */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-red-500"/> Productos con Menor Rotación (Bottom 5)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    {bottomProductosVolumen.map((p, idx) => (
+                        <div key={idx} className="bg-red-50 border border-red-100 rounded-lg p-3">
+                            <p className="text-xs font-bold text-red-400 uppercase mb-1">Puesto #{idx+1}</p>
+                            <p className="text-sm font-medium text-slate-800 truncate" title={p.name}>{p.name}</p>
+                            <p className="text-lg font-bold text-red-700 mt-1">S/ {p.val.toFixed(2)}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* TABLA DE DETALLE CON PAGINACIÓN */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 overflow-hidden animate-in fade-in slide-in-from-bottom-12 duration-1000">
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                <div>
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <FileSpreadsheet className="w-5 h-5 text-brand-600" />
+                    {drillDownSede ? `Productos en ${drillDownSede}` : 'Detalle Global de Productos'}
+                </h3>
+                <p className="text-xs text-slate-500 font-light">
+                    {drillDownSede ? 'Mostrando únicamente items vendidos en la sede seleccionada.' : 'Desglose general por item, costo real y rentabilidad.'}
+                </p>
+                </div>
+                <button onClick={handleDownloadExcel} className="px-4 py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                <Download className="w-4 h-4" />Descargar Excel
+                </button>
+            </div>
+            <div className="overflow-x-auto border rounded-lg border-slate-100">
+                <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200 select-none">
+                    <tr>
+                    <th className="px-4 py-3 font-semibold cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('producto')}>Producto <SortIcon column="producto" /></th>
+                    <th className="px-4 py-3 font-semibold cursor-pointer text-slate-500">Categoría</th>
+                    <th className="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('cantidad')}>Unds. <SortIcon column="cantidad" /></th>
+                    <th className="px-4 py-3 font-semibold text-right text-slate-400 cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('costo')}>Costo Total <SortIcon column="costo" /></th>
+                    <th className="px-4 py-3 font-semibold text-right text-slate-700 cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('ventaNeta')}>Venta Neta <SortIcon column="ventaNeta" /></th>
+                    <th className="px-4 py-3 font-semibold text-right text-brand-700 bg-brand-50/30 cursor-pointer hover:bg-brand-100 transition-colors" onClick={() => handleSort('ganancia')}>Ganancia <SortIcon column="ganancia" /></th>
+                    <th className="px-4 py-3 font-semibold text-right text-brand-700 bg-brand-50/30 cursor-pointer hover:bg-brand-100 transition-colors" onClick={() => handleSort('margenPorcentaje')}>Margen % <SortIcon column="margenPorcentaje" /></th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {paginatedProductos.length > 0 ? (
+                        paginatedProductos.map((prod, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
+                            <td className="px-4 py-3 font-medium text-slate-800 group-hover:text-blue-600 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
+                            <td className="px-4 py-3 text-slate-500 text-xs">{prod.categoria}</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{prod.cantidad}</td>
+                            <td className="px-4 py-3 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right font-bold text-slate-800">S/ {prod.ventaNeta.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right font-medium text-brand-600 bg-brand-50/10">S/ {prod.ganancia.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right font-medium text-brand-700 bg-brand-50/10">
+                                <span className={`px-2 py-0.5 rounded text-xs ${prod.margenPorcentaje < 20 ? 'bg-red-100 text-red-700' : 'bg-brand-100 text-brand-800'}`}>
+                                    {prod.margenPorcentaje.toFixed(1)}%
+                                </span>
+                            </td>
+                        </tr>
+                        ))
+                    ) : (
+                        <tr>
+                            <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">
+                                No se encontraron productos para los filtros seleccionados.
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+                </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {reporteProductos.length > 0 && (
+                <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-6 mt-2">
+                    <div className="flex flex-1 justify-between sm:hidden">
+                        <button 
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className="relative inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Anterior
+                        </button>
+                        <button 
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className="relative ml-3 inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Siguiente
+                        </button>
+                    </div>
+                    <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-sm text-slate-700">
+                                Mostrando <span className="font-bold text-slate-900">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-slate-900">{Math.min(currentPage * itemsPerPage, reporteProductos.length)}</span> de <span className="font-bold text-slate-900">{reporteProductos.length}</span> resultados
+                            </p>
+                        </div>
+                        <div>
+                            <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                <button
+                                    onClick={() => handlePageChange(currentPage - 1)}
+                                    disabled={currentPage === 1}
+                                    className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <span className="sr-only">Anterior</span>
+                                    <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                                </button>
+                                <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 focus:outline-offset-0">
+                                    Página {currentPage} de {totalPages}
+                                </span>
+                                <button
+                                    onClick={() => handlePageChange(currentPage + 1)}
+                                    disabled={currentPage === totalPages}
+                                    className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <span className="sr-only">Siguiente</span>
+                                    <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            )}
+            </div>
+          </>
+        )}
+
       </div>
     </div>
   );
