@@ -1,10 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
-  LineChart, Line, PieChart, Pie, Cell, 
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+  LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter } from 'lucide-react';
-import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, OdooSession } from '../types';
+import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, LayoutGrid } from 'lucide-react';
+import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
 
@@ -149,7 +148,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       setError(null);
       
       // Buffer de fechas para evitar problemas de Timezone (UTC vs Local)
-      // Pedimos 1 día antes y 1 día después a la API, y luego filtramos exacto en memoria.
       const bufferStart = new Date(dateRange.start);
       bufferStart.setDate(bufferStart.getDate() - 1);
       
@@ -160,8 +158,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       const queryEnd = bufferEnd.toISOString().split('T')[0];
 
       if (!session) {
-          // Modo Demo: Generamos datos EXACTAMENTE para el rango seleccionado
-          // Usamos un pequeño timeout para simular carga
           setTimeout(() => {
             const demoData = generarDatosVentas(dateRange.start, dateRange.end);
             setVentasData(demoData);
@@ -185,7 +181,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           domain.push(['company_id', '=', session.companyId]);
       }
 
-      const options: any = { limit: 5000, order: 'date_order desc' }; // Límite amplio para el mes
+      const options: any = { limit: 5000, order: 'date_order desc' }; 
 
       try {
           if (session.companyId) options.context = { allowed_company_ids: [session.companyId] };
@@ -194,7 +190,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           const ordersRaw: any[] = await client.searchRead(session.uid, session.apiKey, modelOrder, domain, fieldsOrder, options);
 
           if (!ordersRaw || ordersRaw.length === 0) {
-             // No es error, es simplemente que no hay datos. Limpiamos.
              setVentasData([]);
              setLoading(false);
              return;
@@ -311,7 +306,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       } finally {
           setLoading(false);
       }
-  }, [session, dateRange]); // Re-crear función solo si cambia sesión o fechas
+  }, [session, dateRange]); 
 
   // Disparador principal: Recargar datos cuando cambian las fechas
   useEffect(() => {
@@ -374,14 +369,41 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     return Object.values(agrupado).sort((a, b) => a.fecha.localeCompare(b.fecha));
   }, [datosFiltrados]);
 
-  const ventasPorSede = useMemo(() => {
-    const agrupado: Record<string, AgrupadoPorSede> = {};
+  // Nueva estructura para Tarjetas de Sedes
+  const infoSedesDetallada = useMemo(() => {
+    const agrupado: Record<string, {
+        sede: string;
+        ventas: number;
+        margen: number;
+        productos: Record<string, number>; // nombre -> totalVenta
+    }> = {};
+
     datosFiltrados.forEach(v => {
-      if (!agrupado[v.sede]) agrupado[v.sede] = { sede: v.sede, ventas: 0, margen: 0 };
-      agrupado[v.sede].ventas += v.total;
-      agrupado[v.sede].margen += v.margen;
+        if (!agrupado[v.sede]) {
+            agrupado[v.sede] = { sede: v.sede, ventas: 0, margen: 0, productos: {} };
+        }
+        agrupado[v.sede].ventas += v.total;
+        agrupado[v.sede].margen += v.margen;
+        
+        // Agrupar productos por venta total para sacar los top
+        if (!agrupado[v.sede].productos[v.producto]) {
+            agrupado[v.sede].productos[v.producto] = 0;
+        }
+        agrupado[v.sede].productos[v.producto] += v.total;
     });
-    return Object.values(agrupado).sort((a, b) => b.ventas - a.ventas);
+
+    return Object.values(agrupado).map(s => {
+        const topProductos = Object.entries(s.productos)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 3) // Top 3
+            .map(([nombre, total]) => ({ nombre, total }));
+
+        return {
+            ...s,
+            margenPorcentaje: s.ventas > 0 ? ((s.margen / s.ventas) * 100).toFixed(1) : '0.0',
+            topProductos
+        };
+    }).sort((a, b) => b.ventas - a.ventas);
   }, [datosFiltrados]);
 
   const reporteProductos = useMemo(() => {
@@ -438,7 +460,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           : <ArrowDown className="w-3 h-3 text-emerald-600 ml-1 inline" />;
   };
 
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const ANIOS = [2023, 2024, 2025];
 
@@ -702,7 +723,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         )}
 
         {showCharts && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-slate-800">{isRentabilidad ? 'Evolución de la Ganancia' : 'Evolución de Ventas Neta'}</h3>
@@ -719,20 +740,62 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               </ResponsiveContainer>
             </div>
           </div>
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-800">{isRentabilidad ? 'Ganancia por Sede' : 'Ventas por Sede'}</h3>
+          
+          {/* SECCIÓN DE TARJETAS POR SEDE (Nuevo Grid) */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+                <LayoutGrid className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-lg font-bold text-slate-800">Desempeño por Sede</h3>
             </div>
-            <div className="h-[300px] w-full flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={ventasPorSede} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey={chartDataKey} nameKey="sede">
-                    {ventasPorSede.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />)}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                  <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ paddingLeft: '20px' }} formatter={(value) => <span className="text-slate-600 text-sm font-medium ml-2">{value}</span>} />
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {infoSedesDetallada.map((sede, idx) => (
+                    <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-3">
+                            <div className="flex items-center gap-2">
+                                <div className="p-1.5 bg-slate-100 rounded-md">
+                                    <Store className="w-4 h-4 text-slate-600" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-slate-700 leading-tight">{sede.sede}</h4>
+                                </div>
+                            </div>
+                            <div className={`px-2 py-1 rounded text-xs font-bold ${Number(sede.margenPorcentaje) > 20 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {sede.margenPorcentaje}% Rent.
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mb-5">
+                            <div>
+                                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-0.5">Ventas</p>
+                                <p className="text-lg font-bold text-slate-800">S/ {sede.ventas.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-0.5">Ganancia</p>
+                                <p className="text-lg font-bold text-emerald-600">S/ {sede.margen.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50/80 rounded-lg p-3 border border-slate-100">
+                            <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-2">Top 3 Productos</p>
+                            <div className="space-y-2">
+                                {sede.topProductos.map((prod, i) => (
+                                    <div key={i} className="flex justify-between items-center text-sm group">
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <span className="text-[10px] font-bold text-slate-300 w-3">{i+1}</span>
+                                            <span className="text-slate-600 truncate text-xs font-medium group-hover:text-emerald-700 transition-colors" title={prod.nombre}>
+                                                {prod.nombre}
+                                            </span>
+                                        </div>
+                                        <span className="font-bold text-slate-700 text-xs shrink-0">S/ {prod.total.toFixed(0)}</span>
+                                    </div>
+                                ))}
+                                {sede.topProductos.length === 0 && (
+                                    <p className="text-xs text-slate-400 italic">Sin ventas registradas</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ))}
             </div>
           </div>
         </div>
