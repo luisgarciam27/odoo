@@ -1199,7 +1199,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                                         paddingAngle={5}
                                         dataKey="value"
                                     >
-                                        {ventasPorMetodoPago.map((entry, index) => (
+                                        {ventasPorMetodoPago.map((_, index) => (
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
