@@ -1,65 +1,18 @@
 import React, { useState } from 'react';
-import { ArrowRight, Loader2, AlertTriangle, ShieldCheck, Citrus, Building2 } from 'lucide-react';
+import { ArrowRight, Loader2, AlertTriangle, ShieldCheck, Citrus, Building2, Lock, UserCog } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { OdooSession } from '../types';
+import { getClientByCode, verifyAdminPassword } from '../services/clientManager';
 
 interface LoginProps {
   onLogin: (session: OdooSession | null) => void;
+  onAdminLogin: () => void;
 }
 
-// --- DIRECTORIO DE CLIENTES (Invisible para el usuario) ---
-// Aquí registras las bases de datos y accesos de tus clientes.
-const CLIENT_DIRECTORY: Record<string, {
-    url: string;
-    db: string;
-    username: string;
-    apiKey: string;
-    companyFilter: string; // Nombre aproximado de la compañía en Odoo para filtrar
-}> = {
-    // Cliente 1
-    'REQUESALUD': {
-        url: 'https://igp.facturaclic.pe/',
-        db: 'igp_master',
-        username: 'soporte@facturaclic.pe',
-        apiKey: '6761eabe769db8795b3817000bd649cad0970d0f',
-        companyFilter: 'REQUESALUD'
-    },
-    // Cliente 2
-    'MULTIFARMA': {
-        url: 'https://igp.facturaclic.pe/',
-        db: 'igp_master',
-        username: 'soporte@facturaclic.pe',
-        apiKey: '6761eabe769db8795b3817000bd649cad0970d0f',
-        companyFilter: 'MULTIFARMA'
-    },
-    // Cliente 3: FEET CARE
-    'FEETCARE': {
-        url: 'https://vida.facturaclic.pe/',
-        db: 'vida_master',
-        username: 'soporte@facturaclic.pe',
-        apiKey: 'ad5d72efa974bd60712bbb24542717ffbce9e75d',
-        companyFilter: 'FEET CARE'
-    },
-    // Cliente 4: MARIPEYA
-    'MARIPEYA': {
-        url: 'https://vida.facturaclic.pe/',
-        db: 'vida_master',
-        username: 'soporte@facturaclic.pe',
-        apiKey: 'ad5d72efa974bd60712bbb24542717ffbce9e75d',
-        companyFilter: 'MARIPEYA'
-    },
-    // Cliente Demo
-    'DEMO': {
-        url: 'https://igp.facturaclic.pe/',
-        db: 'igp_master',
-        username: 'soporte@facturaclic.pe',
-        apiKey: '6761eabe769db8795b3817000bd649cad0970d0f',
-        companyFilter: 'ALL'
-    }
-};
-
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, onAdminLogin }) => {
   const [accessCode, setAccessCode] = useState('');
+  const [password, setPassword] = useState(''); // Only for admin
+  const [isAdminMode, setIsAdminMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
@@ -69,32 +22,43 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError(null);
     setIsLoading(true);
 
-    const code = accessCode.trim().toUpperCase();
-    const clientConfig = CLIENT_DIRECTORY[code];
+    // --- MODO ADMIN ---
+    if (isAdminMode) {
+        if (verifyAdminPassword(password)) {
+            setStatusMessage("Acceso Autorizado");
+            setTimeout(() => {
+                onAdminLogin();
+            }, 600);
+        } else {
+             setError("Contraseña incorrecta.");
+             setIsLoading(false);
+        }
+        return;
+    }
 
-    // 1. Validar si el código existe en nuestro directorio interno
+    // --- MODO CLIENTE NORMAL ---
+    const code = accessCode.trim().toUpperCase();
+    const clientConfig = getClientByCode(code);
+
     if (!clientConfig) {
         setTimeout(() => {
-            setError("Código de sucursal no encontrado. Verifica tus credenciales.");
+            setError("Código de sucursal no encontrado.");
             setIsLoading(false);
-        }, 1000);
+        }, 800);
         return;
     }
 
     try {
         setStatusMessage(`Conectando con servidor...`);
         
-        // 2. Iniciar Cliente Odoo con los datos "ocultos"
         const client = new OdooClient(clientConfig.url, clientConfig.db, true); 
         
-        // 3. Autenticar
         const uid = await client.authenticate(clientConfig.username, clientConfig.apiKey);
         
-        if (!uid) throw new Error("Credenciales técnicas inválidas.");
+        if (!uid) throw new Error("Credenciales técnicas inválidas en el servidor.");
 
         setStatusMessage("Sincronizando datos...");
 
-        // 4. Buscar la compañía específica del cliente
         const userData: any[] = await client.searchRead(
             uid, clientConfig.apiKey, 'res.users',
             [['id', '=', uid]], ['company_ids']
@@ -105,6 +69,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         if (userData && userData.length > 0) {
             const companyIds = userData[0].company_ids || [];
+            
+            if (companyIds.length === 0) {
+                 throw new Error("El usuario no tiene compañías asignadas en Odoo.");
+            }
+
             const companiesData: any[] = await client.searchRead(
                 uid, clientConfig.apiKey, 'res.company',
                 [['id', 'in', companyIds]], ['name']
@@ -115,7 +84,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                  foundCompany = companiesData[0]; 
             } else {
                  foundCompany = companiesData.find((c: any) => 
-                    c.name.toUpperCase().includes(clientConfig.companyFilter.toUpperCase())
+                    c.name && c.name.toUpperCase().includes(clientConfig.companyFilter.toUpperCase())
                 );
             }
 
@@ -123,13 +92,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 targetCompanyId = foundCompany.id;
                 targetCompanyName = foundCompany.name;
             } else {
-                throw new Error(`El sistema no encontró la empresa asignada a '${code}'.`);
+                const availableNames = companiesData.map(c => c.name).join(', ');
+                throw new Error(`El sistema no encontró la empresa asignada a '${code}'. Disponibles: ${availableNames}`);
             }
         } else {
-            throw new Error("El usuario sistema no tiene compañías asignadas.");
+            throw new Error("No se pudo recuperar la información del usuario.");
         }
 
-        // 5. Éxito
         setStatusMessage("¡Acceso Correcto!");
         setTimeout(() => {
             onLogin({
@@ -152,10 +121,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
   };
 
-  const handleDemoMode = () => {
-      if(confirm("¿Entrar en modo demostración con datos simulados?")) {
-          onLogin(null);
-      }
+  const toggleAdminMode = () => {
+      setIsAdminMode(!isAdminMode);
+      setError(null);
+      setAccessCode('');
+      setPassword('');
   };
 
   return (
@@ -212,72 +182,101 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </div>
 
         <div className="mt-12 text-[10px] text-slate-400 font-mono relative z-10">
-            <p>&copy; 2025 LEMON BI Analytics v2.1</p>
-            <p className="mt-1">
-              Desarrollado por <a href="https://gaorsystem.vercel.app/" target="_blank" rel="noreferrer" className="font-bold hover:text-brand-600 transition-colors">GAORSYSTEM PERU</a>
-            </p>
+            <p>&copy; 2025 LEMON BI Analytics v2.2</p>
         </div>
       </div>
 
       {/* SECCIÓN DERECHA: FORMULARIO */}
-      <div className="w-full md:w-1/2 lg:w-7/12 flex items-center justify-center p-6 md:p-12 relative bg-slate-50">
+      <div className={`w-full md:w-1/2 lg:w-7/12 flex items-center justify-center p-6 md:p-12 relative transition-colors duration-500 ${isAdminMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
         
-        <div className="max-w-md w-full relative z-10 bg-white/80 backdrop-blur-xl p-8 rounded-3xl shadow-xl border border-white">
+        <div className={`max-w-md w-full relative z-10 backdrop-blur-xl p-8 rounded-3xl shadow-xl border transition-all duration-500 ${isAdminMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white/80 border-white'}`}>
             
-            <div className="text-center mb-8 md:hidden">
-                <div className="inline-flex items-center gap-2 mb-2">
-                    <Citrus className="w-6 h-6 text-brand-600" />
-                    <span className="font-bold text-xl text-slate-900">LEMON BI</span>
+            <div className="mb-8 flex justify-between items-start">
+                <div>
+                    <h3 className={`text-3xl font-bold mb-2 tracking-tight ${isAdminMode ? 'text-white' : 'text-slate-900'}`}>
+                        {isAdminMode ? 'Superadmin' : 'Bienvenido'}
+                    </h3>
+                    <p className={`font-light text-sm ${isAdminMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {isAdminMode ? 'Ingresa la contraseña maestra.' : 'Ingresa tu código de cliente para acceder.'}
+                    </p>
                 </div>
-            </div>
-
-            <div className="mb-8">
-                <h3 className="text-3xl font-bold text-slate-900 mb-2 tracking-tight">Bienvenido</h3>
-                <p className="text-slate-500 font-light text-sm">Ingresa tu código de cliente para acceder.</p>
+                {isAdminMode && <div className="p-2 bg-brand-500 rounded-lg"><UserCog className="w-6 h-6 text-white"/></div>}
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">
-                <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-                        Código de Sucursal / Empresa
-                    </label>
-                    <div className="relative group">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <Building2 className={`h-5 w-5 transition-colors ${error ? 'text-red-400' : 'text-slate-400 group-focus-within:text-brand-500'}`} />
+                {!isAdminMode ? (
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                            Código de Sucursal
+                        </label>
+                        <div className="relative group">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <Building2 className={`h-5 w-5 transition-colors ${error ? 'text-red-400' : 'text-slate-400 group-focus-within:text-brand-500'}`} />
+                            </div>
+                            <input
+                                type="text" 
+                                className={`w-full pl-11 pr-4 py-4 bg-slate-50 border rounded-xl outline-none transition-all duration-300 tracking-wider font-bold text-slate-800 placeholder-slate-300 uppercase ${
+                                    error 
+                                    ? 'border-red-300 focus:ring-2 focus:ring-red-100 bg-red-50' 
+                                    : 'border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 hover:border-brand-300'
+                                }`}
+                                placeholder="EJ: REQUESALUD"
+                                value={accessCode}
+                                onChange={(e) => {
+                                    setAccessCode(e.target.value);
+                                    if(error) setError(null);
+                                }}
+                                autoFocus
+                                disabled={isLoading}
+                            />
                         </div>
-                        <input
-                            type="text" 
-                            className={`w-full pl-11 pr-4 py-4 bg-slate-50 border rounded-xl outline-none transition-all duration-300 tracking-wider font-bold text-slate-800 placeholder-slate-300 uppercase ${
-                                error 
-                                ? 'border-red-300 focus:ring-2 focus:ring-red-100 bg-red-50' 
-                                : 'border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 hover:border-brand-300'
-                            }`}
-                            placeholder="EJ: REQUESALUD"
-                            value={accessCode}
-                            onChange={(e) => {
-                                setAccessCode(e.target.value);
-                                if(error) setError(null);
-                            }}
-                            autoFocus
-                            disabled={isLoading}
-                        />
                     </div>
-                    {error && (
-                        <div className="mt-3 flex items-start gap-2 animate-in slide-in-from-top-1">
-                            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                            <p className="text-red-500 text-xs font-medium">{error}</p>
+                ) : (
+                    <div className="animate-in fade-in slide-in-from-bottom-2">
+                         <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+                            Contraseña Maestra
+                        </label>
+                        <div className="relative group">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <Lock className={`h-5 w-5 transition-colors ${error ? 'text-red-400' : 'text-slate-500 group-focus-within:text-brand-400'}`} />
+                            </div>
+                            <input
+                                type="password" 
+                                className={`w-full pl-11 pr-4 py-4 bg-slate-900 border rounded-xl outline-none transition-all duration-300 tracking-widest font-bold text-white placeholder-slate-600 ${
+                                    error 
+                                    ? 'border-red-500 focus:ring-2 focus:ring-red-900' 
+                                    : 'border-slate-700 focus:border-brand-500 focus:ring-4 focus:ring-brand-900/20'
+                                }`}
+                                placeholder="••••••••"
+                                value={password}
+                                onChange={(e) => {
+                                    setPassword(e.target.value);
+                                    if(error) setError(null);
+                                }}
+                                autoFocus
+                                disabled={isLoading}
+                            />
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
+
+                {error && (
+                    <div className="mt-3 flex items-start gap-2 animate-in slide-in-from-top-1">
+                        <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                        <p className="text-red-500 text-xs font-medium">{error}</p>
+                    </div>
+                )}
 
                 <button
                     type="submit"
-                    disabled={accessCode.length < 3 || isLoading}
+                    disabled={(!isAdminMode && accessCode.length < 3) || (isAdminMode && password.length < 1) || isLoading}
                     className={`w-full py-4 rounded-xl font-bold text-base shadow-lg flex items-center justify-center gap-2 transition-all duration-300 transform active:scale-[0.98] ${
-                        accessCode.length < 3 || isLoading
-                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none border border-slate-200'
-                        : 'bg-brand-500 text-white hover:bg-brand-600 hover:shadow-brand-200 shadow-brand-100'
+                        isLoading
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                        : isAdminMode 
+                            ? 'bg-white text-slate-900 hover:bg-slate-200'
+                            : 'bg-brand-500 text-white hover:bg-brand-600 hover:shadow-brand-200 shadow-brand-100'
                     }`}
                 >
                     {isLoading ? (
@@ -287,7 +286,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         </>
                     ) : (
                         <>
-                            INGRESAR
+                            {isAdminMode ? 'ACCEDER' : 'INGRESAR'}
                             <ArrowRight className="w-5 h-5" />
                         </>
                     )}
@@ -296,17 +295,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <div className="text-center pt-4">
                      <button 
                         type="button" 
-                        onClick={handleDemoMode}
-                        className="text-xs text-slate-400 hover:text-brand-600 transition-colors font-medium underline decoration-dashed underline-offset-4"
+                        onClick={toggleAdminMode}
+                        className={`text-xs font-bold transition-colors uppercase tracking-wider ${isAdminMode ? 'text-slate-500 hover:text-white' : 'text-slate-300 hover:text-brand-600'}`}
                      >
-                        ¿No tienes código? Probar Demo
+                        {isAdminMode ? 'Volver al Login de Cliente' : 'Acceso Administrativo'}
                      </button>
                 </div>
 
-                <div className="flex items-center justify-center gap-2 pt-2 opacity-40 hover:opacity-80 transition-opacity">
-                    <ShieldCheck className="w-3 h-3 text-slate-500" />
-                    <p className="text-[10px] text-slate-500 font-light uppercase tracking-wider">Conexión Segura Garantizada</p>
-                </div>
+                {!isAdminMode && (
+                    <div className="flex items-center justify-center gap-2 pt-2 opacity-40 hover:opacity-80 transition-opacity">
+                        <ShieldCheck className="w-3 h-3 text-slate-500" />
+                        <p className="text-[10px] text-slate-500 font-light uppercase tracking-wider">Conexión Segura Garantizada</p>
+                    </div>
+                )}
             </form>
         </div>
       </div>

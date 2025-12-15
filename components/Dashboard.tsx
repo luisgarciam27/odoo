@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ScatterChart, Scatter, ZAxis, Area, AreaChart 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin, CreditCard } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal, { ConnectionConfig } from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
@@ -17,6 +17,7 @@ const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
   ];
 
   const vendedores = ['Juan Pérez', 'María Gómez', 'Carlos Ruiz', 'Ana Torres', 'Caja Principal'];
+  const metodosPago = ['Efectivo', 'Yape', 'Plin', 'Visa', 'Mastercard', 'Transferencia'];
 
   const productos = [
     { id: 1, nombre: 'Paracetamol 500mg Genérico', costo: 0.50, precio: 2.00, cat: 'Farmacia' },
@@ -46,6 +47,7 @@ const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
         for (let i = 0; i < ventasPorDia; i++) {
             const sede = emp.sedes[Math.floor(Math.random() * emp.sedes.length)];
             const vendedor = vendedores[Math.floor(Math.random() * vendedores.length)];
+            const metodo = metodosPago[Math.floor(Math.random() * metodosPago.length)];
             
             if (sede === 'Tienda 4') {
                 const fechaCierreTienda4 = new Date('2024-08-31');
@@ -73,6 +75,7 @@ const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
                 producto: prodFinal.nombre,
                 categoria: prodFinal.cat,
                 vendedor,
+                metodoPago: metodo,
                 cantidad: 1,
                 total, 
                 costo: costoReal,
@@ -90,7 +93,7 @@ interface DashboardProps {
     view?: string;
 }
 
-type SortKey = 'producto' | 'cantidad' | 'transacciones' | 'costo' | 'ventaNeta' | 'ventaBruta' | 'ganancia' | 'margenPorcentaje';
+type SortKey = 'producto' | 'cantidad' | 'transacciones' | 'costo' | 'ventaNeta' | 'ventaBruta' | 'ganancia' | 'margenPorcentaje' | 'metodoPago';
 interface SortConfig {
   key: SortKey;
   direction: 'asc' | 'desc';
@@ -176,7 +179,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
       const client = new OdooClient(session.url, session.db, session.useProxy);
       const modelOrder = 'pos.order';
-      const fieldsOrder = ['date_order', 'config_id', 'lines', 'company_id', 'user_id', 'pos_reference', 'name'];
+      // Added 'payment_ids' to fetch payment relations
+      const fieldsOrder = ['date_order', 'config_id', 'lines', 'company_id', 'user_id', 'pos_reference', 'name', 'payment_ids'];
 
       const domain: any[] = [
         ['state', '!=', 'cancel'], 
@@ -202,6 +206,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           }
 
           const allLineIds = ordersRaw.flatMap((o: any) => o.lines || []);
+          const allPaymentIds = ordersRaw.flatMap((o: any) => o.payment_ids || []);
+
           if (allLineIds.length === 0) {
               setVentasData([]);
               setLoading(false);
@@ -214,6 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               return result;
           };
 
+          // --- FETCH ORDER LINES ---
           const lineChunks = chunkArray(allLineIds, 1000);
           let allLinesData: any[] = [];
           const fieldsLine = ['product_id', 'qty', 'price_subtotal', 'price_subtotal_incl']; 
@@ -223,6 +230,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               if (linesData) allLinesData = allLinesData.concat(linesData);
           }
 
+          // --- FETCH PRODUCTS INFO (COST) ---
           const productIds = new Set(allLinesData.map((l: any) => Array.isArray(l.product_id) ? l.product_id[0] : null).filter(id => id));
           let productMap = new Map<number, {cost: number, cat: string}>();
 
@@ -241,6 +249,36 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               }
           }
 
+          // --- FETCH PAYMENTS INFO ---
+          // Mapping OrderID -> Payment Method Name
+          let paymentMap = new Map<number, string>();
+          if (allPaymentIds.length > 0) {
+              const paymentChunks = chunkArray(allPaymentIds, 1000);
+              for (const payChunk of paymentChunks) {
+                  // Fetch pos.payment to get payment_method_id
+                  const paymentsData = await client.searchRead(session.uid, session.apiKey, 'pos.payment', [['id', 'in', payChunk]], ['payment_method_id', 'pos_order_id']);
+                  if (paymentsData) {
+                      paymentsData.forEach((p: any) => {
+                          // p.pos_order_id = [id, "Order Ref"]
+                          // p.payment_method_id = [id, "Cash"]
+                          if (p.pos_order_id && p.payment_method_id) {
+                              const orderId = p.pos_order_id[0];
+                              const methodName = p.payment_method_id[1];
+                              // If order has multiple payments, simpler logic: overwrite or first one. 
+                              // For robustness, we could concatenate if exists, but taking last one is usually fine for dominant method.
+                              // Or simply use the one we find.
+                              if (!paymentMap.has(orderId)) {
+                                  paymentMap.set(orderId, methodName);
+                              } else {
+                                  // Optional: Handle split payments (e.g. "Efectivo + Tarjeta")
+                                  // For now keeping simple.
+                              }
+                          }
+                      });
+                  }
+              }
+          }
+
           const linesMap = new Map(allLinesData.map((l: any) => [l.id, l]));
           const mappedVentas: Venta[] = [];
 
@@ -249,7 +287,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               const sede = Array.isArray(order.config_id) ? order.config_id[1] : 'Caja General';
               const compania = Array.isArray(order.company_id) ? order.company_id[1] : 'Empresa Principal';
               const vendedor = Array.isArray(order.user_id) ? order.user_id[1] : 'Usuario Sistema';
-              
+              const metodoPago = paymentMap.get(order.id) || 'Desconocido';
+
               if (order.lines && Array.isArray(order.lines)) {
                   order.lines.forEach((lineId: number) => {
                       const line = linesMap.get(lineId);
@@ -274,6 +313,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                               vendedor,
                               producto: productName,
                               categoria: prodInfo.cat,
+                              metodoPago, // Asignar metodo
                               cantidad: line.qty || 1,
                               total: ventaNeta, 
                               costo: costoTotal,
@@ -429,6 +469,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       return Object.entries(agg).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [filteredData]);
 
+  const ventasPorMetodoPago = useMemo(() => {
+      const agg: Record<string, number> = {};
+      filteredData.forEach(v => {
+          const metodo = v.metodoPago || 'No definido';
+          agg[metodo] = (agg[metodo] || 0) + v.total;
+      });
+      return Object.entries(agg).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [filteredData]);
+
   const rankingVendedores = useMemo(() => {
       const agg: Record<string, number> = {};
       filteredData.forEach(v => {
@@ -441,10 +490,21 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const reporteProductos = useMemo(() => {
     const agrupado: Record<string, any> = {};
     filteredData.forEach(v => {
-      if (!agrupado[v.producto]) {
-          agrupado[v.producto] = { 
+      // Creamos una clave única que combine producto y método de pago para que el detalle muestre por método también si se desea
+      // O mantenemos por producto y usamos el método más frecuente? 
+      // El requerimiento dice "columna de metodo de pago". Si agrupamos SOLO por producto, el metodo de pago es ambiguo.
+      // Para mostrarlo en tabla, es mejor listar las transacciones o agrupar por (Producto + Metodo).
+      // Sin embargo, para no romper la tabla de "Productos", vamos a dejarlo agrupado por producto
+      // y mostrar "Varios" si hay multiples, o el metodo si es unico.
+      // *Mejor aún*: Agregamos el método al group key para ver desglose.*
+      
+      const key = `${v.producto}-${v.metodoPago}`;
+      
+      if (!agrupado[key]) {
+          agrupado[key] = { 
               producto: v.producto,
               categoria: v.categoria || 'General', 
+              metodoPago: v.metodoPago,
               cantidad: 0, 
               transacciones: 0,
               costo: 0,
@@ -452,11 +512,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               ganancia: 0
           };
       }
-      agrupado[v.producto].cantidad += v.cantidad;
-      agrupado[v.producto].transacciones += 1;
-      agrupado[v.producto].costo += v.costo;
-      agrupado[v.producto].ventaNeta += v.total; 
-      agrupado[v.producto].ganancia += v.margen;
+      agrupado[key].cantidad += v.cantidad;
+      agrupado[key].transacciones += 1;
+      agrupado[key].costo += v.costo;
+      agrupado[key].ventaNeta += v.total; 
+      agrupado[key].ganancia += v.margen;
     });
 
     return Object.values(agrupado)
@@ -538,9 +598,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
         const detalleAgrupado: Record<string, any> = {};
         filteredData.forEach(v => {
-            const key = `${v.sede}|${v.producto}`;
+            const key = `${v.sede}|${v.producto}|${v.metodoPago}`;
             if (!detalleAgrupado[key]) {
-                detalleAgrupado[key] = { sede: v.sede, producto: v.producto, categoria: v.categoria, cantidad: 0, costo: 0, total: 0, margen: 0 };
+                detalleAgrupado[key] = { sede: v.sede, producto: v.producto, categoria: v.categoria, metodoPago: v.metodoPago, cantidad: 0, costo: 0, total: 0, margen: 0 };
             }
             detalleAgrupado[key].cantidad += v.cantidad;
             detalleAgrupado[key].costo += v.costo;
@@ -550,19 +610,19 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         
         const listaDetalle = Object.values(detalleAgrupado).sort((a, b) => a.sede === b.sede ? b.total - a.total : a.sede.localeCompare(b.sede));
         const tituloDetalle = [["DETALLE DE PRODUCTOS POR SEDE"]];
-        const headersDetalle = [["SEDE", "PRODUCTO", "CATEGORÍA", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "RENTABILIDAD %"]];
-        const bodyDetalle = listaDetalle.map(d => [d.sede, d.producto, d.categoria, d.cantidad, d.costo, d.total, d.margen, d.total > 0 ? (d.margen / d.total) : 0]);
+        const headersDetalle = [["SEDE", "PRODUCTO", "CATEGORÍA", "MÉTODO DE PAGO", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "RENTABILIDAD %"]];
+        const bodyDetalle = listaDetalle.map(d => [d.sede, d.producto, d.categoria, d.metodoPago, d.cantidad, d.costo, d.total, d.margen, d.total > 0 ? (d.margen / d.total) : 0]);
         const sumCant = listaDetalle.reduce((acc, curr) => acc + curr.cantidad, 0);
         const sumCosto = listaDetalle.reduce((acc, curr) => acc + curr.costo, 0);
         const sumTotal = listaDetalle.reduce((acc, curr) => acc + curr.total, 0);
         const sumMargen = listaDetalle.reduce((acc, curr) => acc + curr.margen, 0);
         const sumRentabilidad = sumTotal > 0 ? sumMargen / sumTotal : 0;
-        const totalRowDetalle = [["TOTAL GENERAL", "", "", sumCant, sumCosto, sumTotal, sumMargen, sumRentabilidad]];
+        const totalRowDetalle = [["TOTAL GENERAL", "", "", "", sumCant, sumCosto, sumTotal, sumMargen, sumRentabilidad]];
 
         const dataDetalle = [...tituloDetalle, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio, ...headersDetalle, ...bodyDetalle, ...totalRowDetalle];
         const wsDetalle = XLSX.utils.aoa_to_sheet(dataDetalle);
-        wsDetalle['!cols'] = [{ wch: 25 }, { wch: 40 }, { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }];
-        wsDetalle['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+        wsDetalle['!cols'] = [{ wch: 25 }, { wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }];
+        wsDetalle['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }];
 
         XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle Productos");
         XLSX.writeFile(wb, `Comparativa_Completa_${dateRange.start}.xlsx`);
@@ -583,11 +643,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         const rangoInfo = [["Periodo:", `${dateRange.start} al ${dateRange.end}`]];
         const espacio = [[""]];
 
-        const headers = [["PRODUCTO", "CATEGORÍA", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "MARGEN %"]];
+        const headers = [["PRODUCTO", "CATEGORÍA", "MÉTODO DE PAGO", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "MARGEN %"]];
         
         const body = reporteProductos.map(p => [
             p.producto,
             p.categoria,
+            p.metodoPago,
             p.cantidad,
             p.costo,
             p.ventaNeta,
@@ -601,13 +662,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         const sumMargen = reporteProductos.reduce((acc, curr) => acc + curr.ganancia, 0);
         const sumRentabilidad = sumTotal > 0 ? sumMargen / sumTotal : 0;
 
-        const totalRow = [["TOTALES", "", sumCant, sumCosto, sumTotal, sumMargen, sumRentabilidad]];
+        const totalRow = [["TOTALES", "", "", sumCant, sumCosto, sumTotal, sumMargen, sumRentabilidad]];
 
         const data = [...titulo, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio, ...headers, ...body, ...totalRow];
         const ws = XLSX.utils.aoa_to_sheet(data);
         
-        ws['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }];
-        ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
+        ws['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }];
+        ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
 
         XLSX.utils.book_append_sheet(wb, ws, "Productos");
         XLSX.writeFile(wb, `Reporte_Productos_${dateRange.start}.xlsx`);
@@ -966,14 +1027,17 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                     </div>
                 </div>
 
-                {/* VENTAS POR CATEGORIA */}
+                {/* VENTAS POR CATEGORIA (O METODO DE PAGO SI ESTAMOS EN VENTAS) */}
                 <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><PieChartIcon className="w-5 h-5 text-violet-500"/> Participación por Categoría</h3>
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                         {view === 'ventas' ? <CreditCard className="w-5 h-5 text-emerald-500"/> : <PieChartIcon className="w-5 h-5 text-violet-500"/>}
+                         {view === 'ventas' ? 'Distribución por Método de Pago' : 'Participación por Categoría'}
+                    </h3>
                     <div className="h-[300px] w-full flex">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
-                                    data={ventasPorCategoria}
+                                    data={view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria}
                                     cx="50%"
                                     cy="50%"
                                     innerRadius={70}
@@ -984,7 +1048,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                                     stroke="#fff"
                                     strokeWidth={3}
                                 >
-                                    {ventasPorCategoria.map((_, index) => (
+                                    {(view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria).map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
@@ -1076,6 +1140,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                     <tr>
                     <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('producto')}>Producto <SortIcon column="producto" /></th>
                     <th className="px-4 py-4 font-bold cursor-pointer">Categoría</th>
+                    <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('metodoPago')}>Pago <SortIcon column="metodoPago" /></th>
                     <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('cantidad')}>Unds. <SortIcon column="cantidad" /></th>
                     <th className="px-4 py-4 font-bold text-right text-slate-400 cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('costo')}>Costo Total <SortIcon column="costo" /></th>
                     <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('ventaNeta')}>Venta Neta <SortIcon column="ventaNeta" /></th>
@@ -1089,6 +1154,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                         <tr key={idx} className="hover:bg-slate-50 transition-colors group">
                             <td className="px-4 py-3.5 font-medium text-slate-700 group-hover:text-brand-700 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
                             <td className="px-4 py-3.5 text-slate-500 text-xs">{prod.categoria}</td>
+                            <td className="px-4 py-3.5 text-slate-500 text-xs">
+                                <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-medium">
+                                    {prod.metodoPago || 'Varios'}
+                                </span>
+                            </td>
                             <td className="px-4 py-3.5 text-right text-slate-600">{prod.cantidad}</td>
                             <td className="px-4 py-3.5 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
                             <td className="px-4 py-3.5 text-right font-bold text-slate-800">S/ {prod.ventaNeta.toFixed(2)}</td>

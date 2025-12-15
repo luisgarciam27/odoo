@@ -11,8 +11,9 @@ export interface Venta {
   sede: string;
   compania: string;
   producto: string;
-  categoria: string; // Nuevo: Para análisis por familia
-  vendedor: string;  // Nuevo: Para análisis de desempeño
+  categoria: string;
+  vendedor: string;
+  metodoPago: string;
   cantidad: number;
   total: number;
   costo: number;
@@ -30,12 +31,12 @@ export interface Filtros {
 
 export interface KPI {
   totalVentas: string;
-  variacionVentas: number; // Nuevo: % vs periodo anterior
+  variacionVentas: number;
   totalMargen: string;
-  variacionMargen: number; // Nuevo: % vs periodo anterior
+  variacionMargen: number;
   margenPromedio: string;
   unidadesVendidas: number;
-  variacionUnidades: number; // Nuevo: % vs periodo anterior
+  variacionUnidades: number;
   ticketPromedio: string;
 }
 
@@ -70,4 +71,14 @@ export interface OdooSession {
   useProxy: boolean;
   companyId?: number;
   companyName?: string;
+}
+
+// Nueva interfaz para la configuración de clientes
+export interface ClientConfig {
+  code: string; // El código de acceso (ej: REQUESALUD)
+  url: string;
+  db: string;
+  username: string;
+  apiKey: string;
+  companyFilter: string;
 }
