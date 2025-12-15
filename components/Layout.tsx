@@ -58,7 +58,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-40 w-72 flex-col bg-white/80 backdrop-blur-xl border-r border-slate-200/60 transition-transform duration-300 ease-out shadow-[4px_0_24px_-4px_rgba(0,0,0,0.05)]
+        fixed inset-y-0 left-0 z-40 w-72 flex-col bg-white/80 backdrop-blur-xl border-r border-slate-200/60 transition-transform duration-300 ease-out shadow-[4px_0_24px_-4px_rgba(0,0,0,0.03)]
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
         md:translate-x-0 md:static md:flex md:h-screen
       `}>

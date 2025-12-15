@@ -25,7 +25,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="antialiased text-slate-900 bg-slate-50 min-h-screen">
+    <div className="antialiased text-slate-800 bg-slate-50 min-h-screen">
       <Layout onLogout={handleLogout} currentView={currentView} onNavigate={setCurrentView}>
         <Dashboard session={odooSession} view={currentView} />
       </Layout>

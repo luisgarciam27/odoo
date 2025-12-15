@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
-  LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ScatterChart, Scatter, ZAxis, Area, AreaChart 
+  CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ScatterChart, Scatter, ZAxis, Area, AreaChart 
 } from 'recharts';
 import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
@@ -410,13 +410,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       return Object.values(agg).sort((a, b) => b.ventas - a.ventas);
   }, [filteredData]);
 
-  const topProductosVolumen = useMemo(() => {
-      const agg: Record<string, number> = {};
-      filteredData.forEach(v => {
-          agg[v.producto] = (agg[v.producto] || 0) + v.total;
-      });
-      return Object.entries(agg).map(([name, val]) => ({ name, val })).sort((a, b) => b.val - a.val).slice(0, 5);
-  }, [filteredData]);
+  // Removed unused topProductosVolumen
 
   const bottomProductosVolumen = useMemo(() => {
       const agg: Record<string, number> = {};
