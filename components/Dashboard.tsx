@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
-  LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ScatterChart, Scatter, ZAxis 
+  LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ScatterChart, Scatter, ZAxis, Area, AreaChart 
 } from 'recharts';
 import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
@@ -9,7 +9,7 @@ import { OdooClient } from '../services/odoo';
 // @ts-ignore
 import * as XLSX from 'xlsx';
 
-// --- GENERADOR DE DATOS (MOCK) ACTUALIZADO ---
+// --- GENERADOR DE DATOS (MOCK) ---
 const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
   const estructura = [
       { compania: 'BOTICAS MULTIFARMA S.A.C.', sedes: ['Multifarmas', 'Cristo Rey', 'Lomas', 'Tienda 4'] },
@@ -33,11 +33,9 @@ const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
   ];
 
   const ventas: Venta[] = [];
-  // Generamos datos desde 2 meses atrás para permitir comparativos
   const fechaInicioReq = new Date(`${startStr}T00:00:00`);
   const fechaFinReq = new Date(`${endStr}T23:59:59`);
   
-  // Generar un buffer de 60 días antes para tener "mes anterior"
   const fechaGeneracionInicio = new Date(fechaInicioReq);
   fechaGeneracionInicio.setDate(fechaGeneracionInicio.getDate() - 65);
 
@@ -57,7 +55,6 @@ const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
             const producto = productos[Math.floor(Math.random() * productos.length)];
             let prodFinal = producto;
             
-            // Lógica simple para asignar productos a tipos de empresa
             if (emp.compania.includes('CONSULTORIO')) {
                  if (Math.random() > 0.6) prodFinal = productos.find(p => p.cat === 'Servicios' || p.cat === 'Laboratorio' || p.cat === 'Imágenes') || producto;
             }
@@ -106,7 +103,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const [error, setError] = useState<string | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ventaNeta', direction: 'desc' });
-  
   const [drillDownSede, setDrillDownSede] = useState<string | null>(null);
 
   // Estados de Paginación
@@ -140,7 +136,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   useEffect(() => {
       let start = '';
       let end = '';
-
       if (filterMode === 'mes') {
           const firstDay = new Date(selectedYear, selectedMonth, 1);
           const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
@@ -151,7 +146,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           start = `${selectedYear}-01-01`;
           end = `${selectedYear}-12-31`;
       }
-      
       if (filterMode !== 'custom') {
           setDateRange({ start, end });
       }
@@ -163,10 +157,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       setError(null);
       setDrillDownSede(null); 
       
-      // Ampliamos el rango de búsqueda para incluir datos históricos si fuera necesario para comparativos
-      // En modo real, idealmente haríamos 2 queries, pero para simplificar traemos un buffer
       const bufferStart = new Date(dateRange.start);
-      bufferStart.setDate(bufferStart.getDate() - 40); // 40 días antes para asegurar mes previo
+      bufferStart.setDate(bufferStart.getDate() - 40); 
       const bufferEnd = new Date(dateRange.end);
       bufferEnd.setDate(bufferEnd.getDate() + 1);
       
@@ -178,13 +170,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             const demoData = generarDatosVentas(dateRange.start, dateRange.end);
             setVentasData(demoData);
             setLoading(false);
-          }, 600);
+          }, 800);
           return;
       }
 
       const client = new OdooClient(session.url, session.db, session.useProxy);
       const modelOrder = 'pos.order';
-      // Intentamos traer el user_id (vendedor)
       const fieldsOrder = ['date_order', 'config_id', 'lines', 'company_id', 'user_id', 'pos_reference', 'name'];
 
       const domain: any[] = [
@@ -232,14 +223,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               if (linesData) allLinesData = allLinesData.concat(linesData);
           }
 
-          // Mapeo de Categorías de productos (Extra fetch)
           const productIds = new Set(allLinesData.map((l: any) => Array.isArray(l.product_id) ? l.product_id[0] : null).filter(id => id));
           let productMap = new Map<number, {cost: number, cat: string}>();
 
           if (productIds.size > 0) {
               const productChunks = chunkArray(Array.from(productIds), 1000);
               for (const pChunk of productChunks) {
-                  // Traemos categ_id para categoría
                   const productsData = await client.searchRead(session.uid, session.apiKey, 'product.product', [['id', 'in', pChunk]], ['standard_price', 'categ_id']);
                   if (productsData) {
                       productsData.forEach((p: any) => {
@@ -268,13 +257,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                           const productId = Array.isArray(line.product_id) ? line.product_id[0] : 0;
                           const productName = Array.isArray(line.product_id) ? line.product_id[1] : 'Producto Desconocido';
                           const ventaNeta = line.price_subtotal || 0; 
-                          // const ventaBruta = line.price_subtotal_incl || 0; 
-                          
                           const prodInfo = productMap.get(productId) || { cost: 0, cat: 'Varios' };
                           let unitCost = prodInfo.cost;
                           
                           if (unitCost === 0) {
-                             // Estimación de costo si no hay standard_price
                              unitCost = (ventaNeta / (line.qty || 1)) * 0.65; 
                           }
 
@@ -313,36 +299,26 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   }, [fetchData]); 
 
 
-  // --- DATOS FILTRADOS POR RANGO SELECCIONADO ---
   const filteredData = useMemo(() => {
     const startStr = dateRange.start;
     const endStr = dateRange.end;
-    
     let datos = ventasData.filter(v => {
         const vDate = v.fecha.toLocaleDateString('en-CA'); 
         return vDate >= startStr && vDate <= endStr;
     });
 
-    if (filtros.sedeSeleccionada !== 'Todas') {
-        datos = datos.filter(v => v.sede === filtros.sedeSeleccionada);
-    }
-    if (!session && filtros.companiaSeleccionada !== 'Todas') {
-         datos = datos.filter(v => v.compania.includes(filtros.companiaSeleccionada));
-    }
-    if (drillDownSede) {
-        datos = datos.filter(v => v.sede === drillDownSede);
-    }
+    if (filtros.sedeSeleccionada !== 'Todas') datos = datos.filter(v => v.sede === filtros.sedeSeleccionada);
+    if (!session && filtros.companiaSeleccionada !== 'Todas') datos = datos.filter(v => v.compania.includes(filtros.companiaSeleccionada));
+    if (drillDownSede) datos = datos.filter(v => v.sede === drillDownSede);
     return datos;
   }, [ventasData, filtros, dateRange, session, drillDownSede]);
 
-  // --- DATOS PERIODO ANTERIOR (Para Comparativos) ---
   const previousPeriodData = useMemo(() => {
       const currentStart = new Date(dateRange.start);
       const currentEnd = new Date(dateRange.end);
       const diffTime = Math.abs(currentEnd.getTime() - currentStart.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
       
-      // Calcular rango anterior (mismo número de días hacia atrás)
       const prevEnd = new Date(currentStart);
       prevEnd.setDate(prevEnd.getDate() - 1);
       const prevStart = new Date(prevEnd);
@@ -356,7 +332,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           return vDate >= pStartStr && vDate <= pEndStr;
       });
 
-      // Aplicar mismos filtros de sede/compañia
       if (filtros.sedeSeleccionada !== 'Todas') datos = datos.filter(v => v.sede === filtros.sedeSeleccionada);
       if (!session && filtros.companiaSeleccionada !== 'Todas') datos = datos.filter(v => v.compania.includes(filtros.companiaSeleccionada));
       if (drillDownSede) datos = datos.filter(v => v.sede === drillDownSede);
@@ -365,7 +340,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   }, [ventasData, dateRange, filtros, session, drillDownSede]);
 
 
-  // Lista de Sedes para el Dropdown
   const sedes = useMemo(() => {
       let base = ventasData;
       if (!session && filtros.companiaSeleccionada !== 'Todas') {
@@ -375,19 +349,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   }, [ventasData, filtros.companiaSeleccionada, session]);
 
 
-  // --- KPIs CALCULADOS ---
   const kpis = useMemo(() => {
-    // Actuales
     const totalVentas = filteredData.reduce((sum, v) => sum + v.total, 0);
     const totalMargen = filteredData.reduce((sum, v) => sum + v.margen, 0);
     const unidades = filteredData.length;
     
-    // Anteriores
     const prevVentas = previousPeriodData.reduce((sum, v) => sum + v.total, 0);
     const prevMargen = previousPeriodData.reduce((sum, v) => sum + v.margen, 0);
     const prevUnidades = previousPeriodData.length;
 
-    // Variaciones %
     const calcVar = (curr: number, prev: number) => prev > 0 ? ((curr - prev) / prev) * 100 : 0;
 
     return {
@@ -402,20 +372,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     };
   }, [filteredData, previousPeriodData]);
 
-  // --- KPIs POR SEDE (Para Vista Comparativa) ---
   const kpisPorSede = useMemo(() => {
     const agrupado: Record<string, { name: string; ventas: number; costo: number; margen: number; transacciones: number; margenPct: number }> = {};
-    
-    // Si estamos en modo comparativa, ignoramos el filtro de sedeSeleccionada si está en 'Todas'
-    // Para que se muestren todas las tarjetas. Si el usuario filtra una sede, solo sale una tarjeta.
-    // Usamos filteredData que ya respeta el filtro global, pero si se quiere comparar SIEMPRE todas,
-    // deberíamos usar 'ventasData' filtrado solo por fecha. 
-    // Mantenemos filteredData para respetar la consistencia del filtro global.
-    
     filteredData.forEach(v => {
-        if (!agrupado[v.sede]) {
-            agrupado[v.sede] = { name: v.sede, ventas: 0, costo: 0, margen: 0, transacciones: 0, margenPct: 0 };
-        }
+        if (!agrupado[v.sede]) agrupado[v.sede] = { name: v.sede, ventas: 0, costo: 0, margen: 0, transacciones: 0, margenPct: 0 };
         agrupado[v.sede].ventas += v.total;
         agrupado[v.sede].costo += v.costo;
         agrupado[v.sede].margen += v.margen;
@@ -428,8 +388,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     })).sort((a, b) => b.ventas - a.ventas);
   }, [filteredData]);
 
-
-  // Gráfico Evolutivo
   const ventasPorDia = useMemo(() => {
     const agrupado: Record<string, AgrupadoPorDia> = {};
     filteredData.forEach(v => {
@@ -441,7 +399,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     return Object.values(agrupado).sort((a, b) => a.fecha.localeCompare(b.fecha));
   }, [filteredData]);
 
-  // Comparativa por Sedes (Gráfico General)
   const comparativaSedes = useMemo(() => {
       const agg: Record<string, { name: string; ventas: number; margen: number }> = {};
       filteredData.forEach(v => {
@@ -453,55 +410,40 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       return Object.values(agg).sort((a, b) => b.ventas - a.ventas);
   }, [filteredData]);
 
-  // Top Productos (Volumen)
   const topProductosVolumen = useMemo(() => {
       const agg: Record<string, number> = {};
       filteredData.forEach(v => {
           agg[v.producto] = (agg[v.producto] || 0) + v.total;
       });
-      return Object.entries(agg)
-        .map(([name, val]) => ({ name, val }))
-        .sort((a, b) => b.val - a.val)
-        .slice(0, 5);
+      return Object.entries(agg).map(([name, val]) => ({ name, val })).sort((a, b) => b.val - a.val).slice(0, 5);
   }, [filteredData]);
 
-  // Productos Menos Vendidos (Bottom 5)
   const bottomProductosVolumen = useMemo(() => {
       const agg: Record<string, number> = {};
       filteredData.forEach(v => {
           agg[v.producto] = (agg[v.producto] || 0) + v.total;
       });
-      return Object.entries(agg)
-        .map(([name, val]) => ({ name, val }))
-        .sort((a, b) => a.val - b.val) // Ascendente
-        .slice(0, 5);
+      return Object.entries(agg).map(([name, val]) => ({ name, val })).sort((a, b) => a.val - b.val).slice(0, 5);
   }, [filteredData]);
 
-  // Ventas por Categoría (Pie Chart)
   const ventasPorCategoria = useMemo(() => {
       const agg: Record<string, number> = {};
       filteredData.forEach(v => {
           const cat = v.categoria || 'Sin Categoría';
           agg[cat] = (agg[cat] || 0) + v.total;
       });
-      return Object.entries(agg)
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value);
+      return Object.entries(agg).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [filteredData]);
 
-  // Ventas por Vendedor (Ranking)
   const rankingVendedores = useMemo(() => {
       const agg: Record<string, number> = {};
       filteredData.forEach(v => {
           const vend = v.vendedor || 'Sistema';
           agg[vend] = (agg[vend] || 0) + v.total;
       });
-      return Object.entries(agg)
-        .map(([name, ventas]) => ({ name, ventas }))
-        .sort((a, b) => b.ventas - a.ventas);
+      return Object.entries(agg).map(([name, ventas]) => ({ name, ventas })).sort((a, b) => b.ventas - a.ventas);
   }, [filteredData]);
 
-  // --- TABLA DETALLE ---
   const reporteProductos = useMemo(() => {
     const agrupado: Record<string, any> = {};
     filteredData.forEach(v => {
@@ -532,15 +474,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             const valA = a[sortConfig.key];
             const valB = b[sortConfig.key];
             if (typeof valA === 'string') {
-                return sortConfig.direction === 'asc' 
-                    ? valA.localeCompare(valB) 
-                    : valB.localeCompare(valA);
+                return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
             }
             return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
         });
   }, [filteredData, sortConfig]);
 
-  // Paginación
   useEffect(() => { setCurrentPage(1); }, [reporteProductos.length, sortConfig]);
   const totalPages = Math.ceil(reporteProductos.length / itemsPerPage);
   const paginatedProductos = reporteProductos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -564,7 +503,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       if (isNaN(val)) return null;
       const isPositive = val >= 0;
       return (
-          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ml-2 flex items-center gap-0.5 ${isPositive ? 'bg-brand-100 text-brand-700' : 'bg-red-100 text-red-700'}`}>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ml-2 flex items-center gap-0.5 ${isPositive ? 'bg-brand-100 text-brand-700' : 'bg-red-50 text-red-600'}`}>
               {isPositive ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
               {Math.abs(val).toFixed(1)}%
           </span>
@@ -573,111 +512,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const ANIOS = [2023, 2024, 2025];
-  const COLORS = ['#84cc16', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981'];
-
-  const handleDownloadExcel = () => {
-    try {
-        // 1. Preparar Datos Generales
-        const titulo = [["REPORTE DETALLADO DE VENTAS Y RENTABILIDAD"]];
-        const fechaReporte = [["Fecha de Emisión:", new Date().toLocaleDateString()]];
-        const empresaInfo = [["Empresa:", session?.companyName || 'DEMO / LOCAL']];
-        const sedeInfo = [["Punto de Venta:", drillDownSede || filtros.sedeSeleccionada]];
-        const rangoInfo = [["Periodo:", `${dateRange.start} al ${dateRange.end}`]];
-        const espacio = [[""]];
-
-        // 2. Encabezados de Tabla
-        const headers = [["PRODUCTO", "CATEGORÍA", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "MARGEN %"]];
-
-        // 3. Cuerpo de Datos
-        const body = reporteProductos.map(p => [
-            p.producto,
-            p.categoria,
-            p.cantidad,
-            p.costo,      // Se aplicará formato numérico luego
-            p.ventaNeta,  // Se aplicará formato numérico luego
-            p.ganancia,   // Se aplicará formato numérico luego
-            p.margenPorcentaje / 100 // Para formato porcentaje (0.15 en vez de 15)
-        ]);
-
-        // 4. Calcular Totales
-        const totalUnidades = reporteProductos.reduce((sum, p) => sum + p.cantidad, 0);
-        const totalCosto = reporteProductos.reduce((sum, p) => sum + p.costo, 0);
-        const totalVenta = reporteProductos.reduce((sum, p) => sum + p.ventaNeta, 0);
-        const totalGanancia = reporteProductos.reduce((sum, p) => sum + p.ganancia, 0);
-        const margenTotal = totalVenta > 0 ? (totalGanancia / totalVenta) : 0;
-
-        const totalRow = [["TOTAL GENERAL", "", totalUnidades, totalCosto, totalVenta, totalGanancia, margenTotal]];
-
-        // 5. Unificar todo en una estructura de hoja
-        const data = [
-            ...titulo,
-            ...espacio,
-            ...fechaReporte,
-            ...empresaInfo,
-            ...sedeInfo,
-            ...rangoInfo,
-            ...espacio,
-            ...headers,
-            ...body,
-            ...totalRow
-        ];
-
-        // 6. Crear Hoja de Trabajo
-        const ws = XLSX.utils.aoa_to_sheet(data);
-
-        // 7. Estilizar Ancho de Columnas (Widths)
-        const wscols = [
-            { wch: 45 }, // Producto
-            { wch: 20 }, // Categoría
-            { wch: 12 }, // Unidades
-            { wch: 18 }, // Costo
-            { wch: 18 }, // Venta
-            { wch: 18 }, // Ganancia
-            { wch: 12 }  // Margen
-        ];
-        ws['!cols'] = wscols;
-
-        // 8. Fusionar Celdas del Título
-        ws['!merges'] = [
-            { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } } // Título principal
-        ];
-
-        // 9. Aplicar Formatos Numéricos (Currency & Percent)
-        // El rango de datos empieza en la fila 9 (índice 8) -> headers en fila 8 (índice 7)
-        const range = XLSX.utils.decode_range(ws['!ref'] || "A1:A1");
-        
-        for (let R = range.s.r; R <= range.e.r; ++R) {
-            for (let C = range.s.c; C <= range.e.c; ++C) {
-                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-                if (!ws[cellRef]) continue;
-
-                if (R >= 8) { 
-                    if (C === 3 || C === 4 || C === 5) { // Costo, Venta, Ganancia
-                        ws[cellRef].z = '"S/" #,##0.00'; 
-                    }
-                    if (C === 6) { // Margen
-                        ws[cellRef].z = '0.00%';
-                    }
-                }
-            }
-        }
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Reporte Ventas");
-        const fileName = `Reporte_Ventas_${filtros.sedeSeleccionada.replace(/\s+/g, '_')}_${dateRange.start}.xlsx`;
-        XLSX.writeFile(wb, fileName);
-
-    } catch (error) {
-        console.error("Error exportando Excel:", error);
-        alert("Hubo un error al generar el archivo Excel.");
-    }
-  };
+  // Vivid Lemon/Spring Palette
+  const COLORS = ['#84cc16', '#0ea5e9', '#f59e0b', '#ec4899', '#8b5cf6', '#10b981', '#f43f5e', '#6366f1'];
 
   const handleDownloadComparativa = () => {
     try {
         const wb = XLSX.utils.book_new();
 
-        // --- HOJA 1: RESUMEN EJECUTIVO POR SEDE ---
         const titulo = [["REPORTE COMPARATIVO DE SEDES"]];
         const fechaReporte = [["Fecha de Emisión:", new Date().toLocaleDateString()]];
         const empresaInfo = [["Empresa:", session?.companyName || 'Todas']];
@@ -685,63 +526,27 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         const espacio = [[""]];
 
         const headersResumen = [["SEDE / PUNTO DE VENTA", "TRANSACCIONES", "VENTA NETA (S/)", "COSTO TOTAL (S/)", "GANANCIA NETA (S/)", "MARGEN %"]];
-
-        const bodyResumen = kpisPorSede.map(s => [
-            s.name,
-            s.transacciones,
-            s.ventas,
-            s.costo,
-            s.margen,
-            s.margenPct / 100
-        ]);
-
+        const bodyResumen = kpisPorSede.map(s => [s.name, s.transacciones, s.ventas, s.costo, s.margen, s.margenPct / 100]);
+        
         const totalVentas = kpisPorSede.reduce((sum, s) => sum + s.ventas, 0);
         const totalCosto = kpisPorSede.reduce((sum, s) => sum + s.costo, 0);
         const totalMargen = kpisPorSede.reduce((sum, s) => sum + s.margen, 0);
         const totalTransacciones = kpisPorSede.reduce((sum, s) => sum + s.transacciones, 0);
         const margenPromedio = totalVentas > 0 ? (totalMargen / totalVentas) : 0;
-
         const totalRowResumen = [["TOTALES GLOBALES", totalTransacciones, totalVentas, totalCosto, totalMargen, margenPromedio]];
 
-        const dataResumen = [
-            ...titulo, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio,
-            ...headersResumen, ...bodyResumen, ...totalRowResumen
-        ];
-
+        const dataResumen = [...titulo, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio, ...headersResumen, ...bodyResumen, ...totalRowResumen];
         const wsResumen = XLSX.utils.aoa_to_sheet(dataResumen);
         wsResumen['!cols'] = [{ wch: 35 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }];
         wsResumen['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
-
-        // Formato Hoja 1
-        const rangeResumen = XLSX.utils.decode_range(wsResumen['!ref'] || "A1:A1");
-        for (let R = rangeResumen.s.r; R <= rangeResumen.e.r; ++R) {
-            for (let C = rangeResumen.s.c; C <= rangeResumen.e.c; ++C) {
-                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-                if (!wsResumen[cellRef]) continue;
-                if (R >= 7) { 
-                    if (C === 2 || C === 3 || C === 4) wsResumen[cellRef].z = '"S/" #,##0.00'; 
-                    if (C === 5) wsResumen[cellRef].z = '0.00%';
-                }
-            }
-        }
+        
         XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen Sedes");
 
-
-        // --- HOJA 2: DETALLE PRODUCTOS POR SEDE ---
-        // 1. Agrupar datos por Sede y Producto
         const detalleAgrupado: Record<string, any> = {};
         filteredData.forEach(v => {
             const key = `${v.sede}|${v.producto}`;
             if (!detalleAgrupado[key]) {
-                detalleAgrupado[key] = {
-                    sede: v.sede,
-                    producto: v.producto,
-                    categoria: v.categoria,
-                    cantidad: 0,
-                    costo: 0,
-                    total: 0,
-                    margen: 0
-                };
+                detalleAgrupado[key] = { sede: v.sede, producto: v.producto, categoria: v.categoria, cantidad: 0, costo: 0, total: 0, margen: 0 };
             }
             detalleAgrupado[key].cantidad += v.cantidad;
             detalleAgrupado[key].costo += v.costo;
@@ -749,124 +554,125 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             detalleAgrupado[key].margen += v.margen;
         });
         
-        // Convertir a array y ordenar por Sede (A-Z) y luego por Venta Total (Desc)
-        const listaDetalle = Object.values(detalleAgrupado).sort((a, b) => {
-            if (a.sede === b.sede) {
-                return b.total - a.total;
-            }
-            return a.sede.localeCompare(b.sede);
-        });
-
+        const listaDetalle = Object.values(detalleAgrupado).sort((a, b) => a.sede === b.sede ? b.total - a.total : a.sede.localeCompare(b.sede));
         const tituloDetalle = [["DETALLE DE PRODUCTOS POR SEDE"]];
         const headersDetalle = [["SEDE", "PRODUCTO", "CATEGORÍA", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "RENTABILIDAD %"]];
-        
-        const bodyDetalle = listaDetalle.map(d => [
-            d.sede,
-            d.producto,
-            d.categoria,
-            d.cantidad,
-            d.costo,
-            d.total,
-            d.margen,
-            d.total > 0 ? (d.margen / d.total) : 0
-        ]);
-
-        // Totales Hoja 2
+        const bodyDetalle = listaDetalle.map(d => [d.sede, d.producto, d.categoria, d.cantidad, d.costo, d.total, d.margen, d.total > 0 ? (d.margen / d.total) : 0]);
         const sumCant = listaDetalle.reduce((acc, curr) => acc + curr.cantidad, 0);
         const sumCosto = listaDetalle.reduce((acc, curr) => acc + curr.costo, 0);
         const sumTotal = listaDetalle.reduce((acc, curr) => acc + curr.total, 0);
         const sumMargen = listaDetalle.reduce((acc, curr) => acc + curr.margen, 0);
         const sumRentabilidad = sumTotal > 0 ? sumMargen / sumTotal : 0;
-
         const totalRowDetalle = [["TOTAL GENERAL", "", "", sumCant, sumCosto, sumTotal, sumMargen, sumRentabilidad]];
 
-        const dataDetalle = [
-             ...tituloDetalle, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio,
-             ...headersDetalle, ...bodyDetalle, ...totalRowDetalle
-        ];
-
+        const dataDetalle = [...tituloDetalle, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio, ...headersDetalle, ...bodyDetalle, ...totalRowDetalle];
         const wsDetalle = XLSX.utils.aoa_to_sheet(dataDetalle);
-        wsDetalle['!cols'] = [
-            { wch: 25 }, // Sede
-            { wch: 40 }, // Producto
-            { wch: 20 }, // Categoria
-            { wch: 10 }, // Unidades
-            { wch: 15 }, // Costo
-            { wch: 15 }, // Venta
-            { wch: 15 }, // Ganancia
-            { wch: 12 }  // Rentabilidad
-        ];
+        wsDetalle['!cols'] = [{ wch: 25 }, { wch: 40 }, { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }];
         wsDetalle['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
 
-        // Formato Hoja 2
-        const rangeDetalle = XLSX.utils.decode_range(wsDetalle['!ref'] || "A1:A1");
-        for (let R = rangeDetalle.s.r; R <= rangeDetalle.e.r; ++R) {
-            for (let C = rangeDetalle.s.c; C <= rangeDetalle.e.c; ++C) {
-                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-                if (!wsDetalle[cellRef]) continue;
-                // Headers están en fila index 7 (row 8)
-                if (R >= 8) { 
-                    if (C === 4 || C === 5 || C === 6) wsDetalle[cellRef].z = '"S/" #,##0.00'; 
-                    if (C === 7) wsDetalle[cellRef].z = '0.00%';
-                }
-            }
-        }
         XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle Productos");
-
-
         XLSX.writeFile(wb, `Comparativa_Completa_${dateRange.start}.xlsx`);
 
     } catch (error) {
-        console.error("Error exportando Excel Comparativa:", error);
+        console.error("Error exportando Excel:", error);
         alert("Error al generar el reporte comparativo.");
+    }
+  };
+
+  const handleDownloadExcel = () => {
+    try {
+        const wb = XLSX.utils.book_new();
+        
+        const titulo = [[drillDownSede ? `REPORTE DE PRODUCTOS - SEDE: ${drillDownSede}` : "REPORTE DETALLADO DE PRODUCTOS"]];
+        const fechaReporte = [["Fecha de Emisión:", new Date().toLocaleDateString()]];
+        const empresaInfo = [["Empresa:", session?.companyName || 'Todas']];
+        const rangoInfo = [["Periodo:", `${dateRange.start} al ${dateRange.end}`]];
+        const espacio = [[""]];
+
+        const headers = [["PRODUCTO", "CATEGORÍA", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "MARGEN %"]];
+        
+        const body = reporteProductos.map(p => [
+            p.producto,
+            p.categoria,
+            p.cantidad,
+            p.costo,
+            p.ventaNeta,
+            p.ganancia,
+            p.margenPorcentaje / 100
+        ]);
+
+        const sumCant = reporteProductos.reduce((acc, curr) => acc + curr.cantidad, 0);
+        const sumCosto = reporteProductos.reduce((acc, curr) => acc + curr.costo, 0);
+        const sumTotal = reporteProductos.reduce((acc, curr) => acc + curr.ventaNeta, 0);
+        const sumMargen = reporteProductos.reduce((acc, curr) => acc + curr.ganancia, 0);
+        const sumRentabilidad = sumTotal > 0 ? sumMargen / sumTotal : 0;
+
+        const totalRow = [["TOTALES", "", sumCant, sumCosto, sumTotal, sumMargen, sumRentabilidad]];
+
+        const data = [...titulo, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio, ...headers, ...body, ...totalRow];
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        
+        ws['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }];
+        ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
+
+        XLSX.utils.book_append_sheet(wb, ws, "Productos");
+        XLSX.writeFile(wb, `Reporte_Productos_${dateRange.start}.xlsx`);
+
+    } catch (error) {
+        console.error("Error exportando Excel:", error);
+        alert("Error al generar el reporte de productos.");
     }
   };
 
   const isRentabilidad = view === 'rentabilidad';
   const chartDataKey = isRentabilidad ? 'margen' : 'ventas'; 
-  const chartColor = isRentabilidad ? '#84cc16' : '#3b82f6'; 
+  const chartColor = isRentabilidad ? '#84cc16' : '#0ea5e9'; 
   const chartLabel = isRentabilidad ? 'Ganancia' : 'Venta Neta';
 
   // --- RENDER ---
   return (
-    <div className="p-4 md:p-6 lg:p-8 font-sans w-full relative pb-20">
+    <div className="p-4 md:p-6 lg:p-8 font-sans w-full relative pb-20 text-slate-700">
       <OdooConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} />
       
       {loading && (
-          <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center h-screen fixed">
-              <div className="bg-white p-4 rounded-xl shadow-xl flex items-center gap-3 border border-slate-100">
-                  <RefreshCw className="w-5 h-5 animate-spin text-brand-600" />
-                  <span className="font-medium text-slate-700">Procesando datos...</span>
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-50 flex flex-col items-center justify-center h-screen fixed transition-all duration-300">
+              <div className="relative">
+                <div className="absolute inset-0 bg-brand-200 blur-xl opacity-50 animate-pulse"></div>
+                <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 border border-slate-100 relative z-10">
+                    <RefreshCw className="w-8 h-8 animate-spin text-brand-500" />
+                    <span className="font-medium text-slate-600 tracking-wide">Procesando datos...</span>
+                </div>
               </div>
           </div>
       )}
 
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6 animate-fade-in-up">
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-2">
            <div>
-              <h1 className="text-2xl font-bold text-slate-800">
+              <h1 className="text-3xl font-bold text-slate-800 tracking-tight drop-shadow-sm flex items-center gap-2">
                 {view === 'rentabilidad' ? 'Rentabilidad y Ganancias' : 
                  view === 'ventas' ? 'Gestión de Ventas' :
                  view === 'comparativa' ? 'Comparativa de Sedes' :
                  view === 'reportes' ? 'Reportes Gráficos' : 'Dashboard General'}
+                 {view === 'general' && <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-700 border border-brand-200">LIVE</span>}
               </h1>
-              <p className="text-slate-500 text-sm font-light">
-                  {session ? `Compañía: ${session.companyName || 'Todas'}` : 'Modo Demo'} | {dateRange.start} al {dateRange.end}
+              <p className="text-slate-500 text-sm font-light mt-1">
+                  {session ? `Compañía: ${session.companyName || 'Todas'}` : 'Modo Demo'} | <span className="text-brand-600 font-medium">{dateRange.start}</span> al <span className="text-brand-600 font-medium">{dateRange.end}</span>
               </p>
            </div>
            
            <div className="mt-4 md:mt-0 flex gap-3">
               {view === 'comparativa' && (
-                <button onClick={handleDownloadComparativa} className="flex items-center gap-2 bg-brand-600 text-white px-3 py-1.5 rounded-lg font-medium text-sm hover:bg-brand-700 transition-colors shadow-sm shadow-brand-200">
-                  <Download className="w-4 h-4" /> Reporte Completo (Excel)
+                <button onClick={handleDownloadComparativa} className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-xl font-medium text-sm hover:bg-brand-700 transition-all shadow-md shadow-brand-200 hover:shadow-lg hover:shadow-brand-200/50">
+                  <Download className="w-4 h-4" /> Reporte Completo
                 </button>
               )}
-              <button onClick={() => fetchData()} className="flex items-center gap-2 bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 font-medium text-sm hover:bg-slate-50 transition-colors shadow-sm">
+              <button onClick={() => fetchData()} className="flex items-center gap-2 bg-white text-slate-600 px-4 py-2 rounded-xl border border-slate-200 font-medium text-sm hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm">
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Recargar
               </button>
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border font-medium text-sm ${session ? 'bg-brand-50 text-brand-700 border-brand-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-medium text-sm shadow-sm ${session ? 'bg-brand-50 text-brand-700 border-brand-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                 <span className="relative flex h-2 w-2">
                   <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${session ? 'bg-brand-400' : 'bg-amber-400'}`}></span>
                   <span className={`relative inline-flex rounded-full h-2 w-2 ${session ? 'bg-brand-500' : 'bg-amber-500'}`}></span>
@@ -877,27 +683,30 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         </div>
         
         {error && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex gap-3 items-center shadow-sm">
-                <AlertCircle className="w-5 h-5 shrink-0" />
-                <div className="flex-1"><p className="text-sm opacity-90">{error}</p></div>
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex gap-3 items-center shadow-sm animate-in slide-in-from-top-2">
+                <AlertCircle className="w-5 h-5 shrink-0 text-red-500" />
+                <div className="flex-1"><p className="text-sm">{error}</p></div>
             </div>
         )}
 
         {/* FILTROS GLOBALES */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="flex flex-col gap-4">
+        <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-5 relative overflow-hidden">
+          {/* Decorative side accent */}
+          <div className="absolute top-0 left-0 w-1 h-full bg-brand-500"></div>
+          
+          <div className="flex flex-col gap-4 relative z-10">
             <div className="flex flex-wrap gap-4 items-end border-b border-slate-100 pb-4">
                 <div className="w-full md:w-auto">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5"><Building2 className="inline w-3 h-3 mr-1" />Compañía</label>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2"><Building2 className="inline w-3 h-3 mr-1" />Compañía</label>
                     {session?.companyName ? (
-                        <div className="w-full md:w-48 px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-800 font-medium flex items-center gap-2"><Building2 className="w-4 h-4" /><span className="truncate">{session.companyName}</span></div>
+                        <div className="w-full md:w-56 px-4 py-2.5 bg-brand-50 border border-brand-200 rounded-xl text-sm text-brand-700 font-medium flex items-center gap-2"><Building2 className="w-4 h-4" /><span className="truncate">{session.companyName}</span></div>
                     ) : (
-                        <select disabled className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 cursor-not-allowed"><option>Demo / Todas</option></select>
+                        <select disabled className="w-full md:w-56 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-400 cursor-not-allowed"><option>Demo / Todas</option></select>
                     )}
                 </div>
                 <div className="w-full md:w-auto">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5"><Store className="inline w-3 h-3 mr-1" />Punto de Venta</label>
-                    <select value={filtros.sedeSeleccionada} onChange={(e) => setFiltros({...filtros, sedeSeleccionada: e.target.value})} className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 outline-none">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2"><Store className="inline w-3 h-3 mr-1" />Punto de Venta</label>
+                    <select value={filtros.sedeSeleccionada} onChange={(e) => setFiltros({...filtros, sedeSeleccionada: e.target.value})} className="w-full md:w-56 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all shadow-sm">
                         {sedes.map(sede => <option key={sede} value={sede}>{sede}</option>)}
                     </select>
                 </div>
@@ -905,31 +714,31 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
             <div className="flex flex-wrap gap-6 items-center">
                 <div>
-                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2"><ListFilter className="inline w-3 h-3 mr-1" />Modo de Filtro</label>
-                   <div className="flex bg-slate-100 p-1 rounded-lg">
-                       <button onClick={() => setFilterMode('mes')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'mes' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Por Mes</button>
-                       <button onClick={() => setFilterMode('anio')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'anio' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Por Año</button>
-                       <button onClick={() => setFilterMode('custom')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'custom' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Personalizado</button>
+                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2"><ListFilter className="inline w-3 h-3 mr-1" />Modo de Filtro</label>
+                   <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-200">
+                       <button onClick={() => setFilterMode('mes')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${filterMode === 'mes' ? 'bg-white text-brand-600 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}>Por Mes</button>
+                       <button onClick={() => setFilterMode('anio')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${filterMode === 'anio' ? 'bg-white text-brand-600 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}>Por Año</button>
+                       <button onClick={() => setFilterMode('custom')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${filterMode === 'custom' ? 'bg-white text-brand-600 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}>Personalizado</button>
                    </div>
                 </div>
                 <div className="flex-1 flex items-center gap-4">
                     {filterMode === 'mes' && (
                         <>
                             <div className="w-32">
-                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Año</label>
-                                <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none">{ANIOS.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Año</label>
+                                <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all">{ANIOS.map(y => <option key={y} value={y}>{y}</option>)}</select>
                             </div>
                             <div className="w-40">
-                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Mes</label>
-                                <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none">{MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Mes</label>
+                                <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all">{MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
                             </div>
                         </>
                     )}
                     {filterMode === 'custom' && (
                         <div className="flex gap-2 items-center">
-                            <div><label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Desde</label><input type="date" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none" /></div>
-                            <div className="h-px w-4 bg-slate-300 mt-6"></div>
-                            <div><label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Hasta</label><input type="date" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none" /></div>
+                            <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Desde</label><input type="date" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></div>
+                            <div className="h-px w-4 bg-slate-200 mt-6"></div>
+                            <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Hasta</label><input type="date" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></div>
                         </div>
                     )}
                 </div>
@@ -939,64 +748,64 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
         {/* DRILL DOWN INDICATOR */}
         {drillDownSede && (
-            <div className="bg-brand-600 text-white px-4 py-3 rounded-lg shadow-md flex items-center justify-between animate-in slide-in-from-top-2">
-                <div className="flex items-center gap-3">
-                    <div className="bg-white/20 p-1.5 rounded-md"><Target className="w-5 h-5" /></div>
+            <div className="bg-brand-50 border border-brand-200 text-brand-800 px-5 py-4 rounded-xl shadow-sm flex items-center justify-between animate-in slide-in-from-top-2">
+                <div className="flex items-center gap-4">
+                    <div className="bg-brand-100 p-2 rounded-lg"><Target className="w-5 h-5 text-brand-600" /></div>
                     <div>
-                        <p className="text-xs uppercase font-bold tracking-wider opacity-80">Visualizando Detalles de</p>
-                        <p className="font-bold text-lg leading-tight">{drillDownSede}</p>
+                        <p className="text-[10px] uppercase font-bold tracking-widest text-brand-500">Visualizando Detalles de</p>
+                        <p className="font-bold text-xl leading-tight text-slate-800">{drillDownSede}</p>
                     </div>
                 </div>
-                <button onClick={() => setDrillDownSede(null)} className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"><X className="w-4 h-4" /> Ver Todo</button>
+                <button onClick={() => setDrillDownSede(null)} className="flex items-center gap-2 bg-white hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200 shadow-sm text-slate-600"><X className="w-4 h-4" /> Ver Todo</button>
             </div>
         )}
 
         {/* --- VISTA COMPARATIVA DE SEDES (TIPO CAJONES) --- */}
         {view === 'comparativa' ? (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
              
              {/* CAJONES: Tarjetas Interactivas por Sede */}
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                  {kpisPorSede.map((sede, idx) => (
-                    <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-md hover:border-brand-300 transition-all p-5 flex flex-col justify-between group relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-slate-100 to-transparent rounded-bl-3xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                    <div key={idx} className="bg-white rounded-2xl shadow-md border border-slate-100 hover:border-brand-300 hover:shadow-lg transition-all duration-300 p-6 flex flex-col justify-between group relative overflow-hidden hover:-translate-y-1">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-brand-50 rounded-bl-[100px] transition-all group-hover:bg-brand-100"></div>
                         
                         <div className="flex justify-between items-start mb-4 relative z-10">
-                            <div className="p-2 bg-brand-50 text-brand-700 rounded-lg">
-                                <Store className="w-6 h-6" />
+                            <div className="p-2.5 bg-brand-50 rounded-xl border border-brand-100 group-hover:bg-brand-100 transition-colors">
+                                <Store className="w-6 h-6 text-brand-600" />
                             </div>
-                            <button onClick={() => setDrillDownSede(sede.name)} className="text-xs font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
-                                Ver Detalle <ArrowUpRight className="w-3 h-3" />
+                            <button onClick={() => setDrillDownSede(sede.name)} className="text-[10px] font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 uppercase tracking-wider">
+                                Detalle <ArrowUpRight className="w-3 h-3" />
                             </button>
                         </div>
 
                         <h3 className="text-lg font-bold text-slate-800 mb-1 truncate" title={sede.name}>{sede.name}</h3>
-                        <p className="text-xs text-slate-500 mb-4">{sede.transacciones} transacciones</p>
+                        <p className="text-xs text-slate-400 mb-5 font-mono">{sede.transacciones} transacciones</p>
 
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-end border-b border-slate-100 pb-2">
-                                <span className="text-xs font-semibold text-slate-500 uppercase">Venta Neta</span>
-                                <span className="text-base font-bold text-slate-800">S/ {sede.ventas.toLocaleString()}</span>
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-end border-b border-slate-50 pb-2">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Venta Neta</span>
+                                <span className="text-base font-bold text-slate-700">S/ {sede.ventas.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between items-end border-b border-slate-100 pb-2">
-                                <span className="text-xs font-semibold text-red-400 uppercase">Costo/Pérdida</span>
-                                <span className="text-base font-medium text-red-600">- S/ {sede.costo.toLocaleString()}</span>
+                            <div className="flex justify-between items-end border-b border-slate-50 pb-2">
+                                <span className="text-[10px] font-bold text-red-300 uppercase tracking-widest">Costo/Pérdida</span>
+                                <span className="text-base font-medium text-red-500">- S/ {sede.costo.toLocaleString()}</span>
                             </div>
                             <div className="flex justify-between items-end pt-1">
-                                <span className="text-xs font-bold text-brand-600 uppercase">Ganancia</span>
-                                <span className="text-xl font-extrabold text-brand-700">S/ {sede.margen.toLocaleString()}</span>
+                                <span className="text-[10px] font-bold text-brand-500 uppercase tracking-widest">Ganancia</span>
+                                <span className="text-2xl font-bold text-brand-600">S/ {sede.margen.toLocaleString()}</span>
                             </div>
                         </div>
 
                         {/* Visualizador de Margen (Barra) */}
-                        <div className="mt-4">
-                            <div className="flex justify-between text-xs mb-1">
-                                <span className="text-slate-500">Rentabilidad</span>
+                        <div className="mt-6">
+                            <div className="flex justify-between text-xs mb-1.5">
+                                <span className="text-slate-500 font-medium">Rentabilidad</span>
                                 <span className={`font-bold ${sede.margenPct < 15 ? 'text-red-500' : 'text-brand-600'}`}>{sede.margenPct.toFixed(1)}%</span>
                             </div>
-                            <div className="w-full bg-slate-100 rounded-full h-2">
+                            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                                 <div 
-                                    className={`h-2 rounded-full transition-all duration-1000 ${sede.margenPct < 15 ? 'bg-red-500' : 'bg-brand-500'}`} 
+                                    className={`h-full rounded-full transition-all duration-1000 ${sede.margenPct < 15 ? 'bg-red-500' : 'bg-brand-500'}`} 
                                     style={{ width: `${Math.min(sede.margenPct, 100)}%` }}
                                 ></div>
                             </div>
@@ -1008,48 +817,56 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
              {/* GRÁFICOS DE ANÁLISIS COMPARATIVO */}
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
-                {/* 1. Stacked Bar: Ventas vs Costos (Visualizar el Margen) */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                {/* 1. Stacked Bar */}
+                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
                     <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <ArrowUpDown className="w-5 h-5 text-brand-600"/> Composición Venta vs Costo
+                        <ArrowUpDown className="w-5 h-5 text-brand-500"/> Composición Venta vs Costo
                     </h3>
                     <div className="h-[350px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={kpisPorSede} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                                 <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11}} />
-                                <Tooltip formatter={(value: number) => `S/ ${value.toLocaleString()}`} cursor={{fill: 'transparent'}} />
+                                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11, fill: '#64748b'}} />
+                                <Tooltip 
+                                    formatter={(value: number) => `S/ ${value.toLocaleString()}`} 
+                                    cursor={{fill: '#f8fafc'}}
+                                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                                />
                                 <Legend />
                                 <Bar dataKey="margen" name="Ganancia Neta" stackId="a" fill="#84cc16" radius={[0, 4, 4, 0]} />
-                                <Bar dataKey="costo" name="Costo Mercadería" stackId="a" fill="#ef4444" radius={[4, 0, 0, 4]} />
+                                <Bar dataKey="costo" name="Costo Mercadería" stackId="a" fill="#f43f5e" radius={[4, 0, 0, 4]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* 2. Scatter Plot: Volumen vs Rentabilidad */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                {/* 2. Scatter Plot */}
+                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
                     <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <Target className="w-5 h-5 text-brand-600"/> Matriz de Rendimiento (Volumen vs Margen %)
+                        <Target className="w-5 h-5 text-brand-500"/> Matriz de Rendimiento
                     </h3>
                     <div className="h-[350px] w-full">
                          <ResponsiveContainer width="100%" height="100%">
                             <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                <XAxis type="number" dataKey="ventas" name="Volumen Venta" unit=" S/" tick={{fontSize: 12}} stroke="#94a3b8" />
-                                <YAxis type="number" dataKey="margenPct" name="Margen" unit="%" tick={{fontSize: 12}} stroke="#94a3b8" />
+                                <XAxis type="number" dataKey="ventas" name="Volumen Venta" unit=" S/" tick={{fontSize: 12, fill: '#94a3b8'}} stroke="#cbd5e1" />
+                                <YAxis type="number" dataKey="margenPct" name="Margen" unit="%" tick={{fontSize: 12, fill: '#94a3b8'}} stroke="#cbd5e1" />
                                 <ZAxis type="number" dataKey="transacciones" range={[60, 400]} name="Transacciones" />
-                                <Tooltip cursor={{ strokeDasharray: '3 3' }} formatter={(value: any, name: string) => [name === 'Margen' ? `${Number(value).toFixed(1)}%` : `S/ ${Number(value).toLocaleString()}`, name]} />
+                                <Tooltip 
+                                    cursor={{ strokeDasharray: '3 3' }} 
+                                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                                    formatter={(value: any, name: string) => [name === 'Margen' ? `${Number(value).toFixed(1)}%` : `S/ ${Number(value).toLocaleString()}`, name]} 
+                                />
                                 <Legend />
                                 <Scatter name="Sedes" data={kpisPorSede} fill="#3b82f6">
                                     {kpisPorSede.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.margenPct > 20 ? '#84cc16' : entry.margenPct < 10 ? '#ef4444' : '#eab308'} />
+                                        <Cell key={`cell-${index}`} fill={entry.margenPct > 20 ? '#84cc16' : entry.margenPct < 10 ? '#f43f5e' : '#f59e0b'} strokeWidth={1} stroke="#fff" />
                                     ))}
                                 </Scatter>
                             </ScatterChart>
                         </ResponsiveContainer>
-                        <p className="text-xs text-center text-slate-400 mt-2">
+                        <p className="text-xs text-center text-slate-400 mt-2 font-mono">
                             * Eje X: Volumen Venta | Eje Y: % Margen | Tamaño: Nro. Transacciones
                         </p>
                     </div>
@@ -1062,39 +879,40 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           /* --- VISTAS ANTERIORES (General, Rentabilidad, Ventas, Reportes) --- */
           <>
             {/* KPIs SUPERIORES CON COMPARATIVOS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
             
-            <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-blue-600 to-blue-700'} rounded-xl shadow-lg p-6 flex flex-col justify-between`}>
-                <div className="flex items-center justify-between mb-4">
-                <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
+            <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-brand-500 to-brand-600'} rounded-2xl shadow-lg shadow-brand-500/20 p-6 flex flex-col justify-between hover:scale-[1.02] transition-transform duration-300 relative overflow-hidden group`}>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-white/30 transition-colors"></div>
+                <div className="flex items-center justify-between mb-4 relative z-10">
+                <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
                     {isRentabilidad ? <DollarSign className="w-6 h-6 text-white" /> : <TrendingUp className="w-6 h-6 text-white" />}
                 </div>
                 <VariacionBadge val={kpis.variacionVentas} />
                 </div>
-                <div>
-                <p className="text-white/80 text-sm font-medium tracking-wide opacity-90">{isRentabilidad ? 'Venta Total Acumulada' : 'Volumen de Ventas'}</p>
-                <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">S/ {kpis.totalVentas}</h3>
+                <div className="relative z-10">
+                <p className="text-white/80 text-sm font-medium tracking-wide">{isRentabilidad ? 'Venta Total Acumulada' : 'Volumen de Ventas'}</p>
+                <h3 className="text-3xl font-bold text-white mt-1 tracking-tight drop-shadow-sm">S/ {kpis.totalVentas}</h3>
                 </div>
             </div>
 
-            <div className={`rounded-xl shadow-sm border p-6 flex flex-col justify-between transition-colors ${isRentabilidad ? 'bg-brand-50 border-brand-200' : 'bg-white border-slate-200'}`}>
+            <div className={`rounded-2xl shadow-md border p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 bg-white ${isRentabilidad ? 'border-brand-200' : 'border-slate-100'}`}>
                 <div className="flex items-center justify-between mb-4">
-                <div className={`p-2 rounded-lg ${isRentabilidad ? 'bg-brand-100' : 'bg-blue-50'}`}>
-                    {isRentabilidad ? <TrendingUp className="w-6 h-6 text-brand-600" /> : <Receipt className="w-6 h-6 text-blue-600" />}
+                <div className={`p-2.5 rounded-xl ${isRentabilidad ? 'bg-brand-100 text-brand-600' : 'bg-blue-50 text-blue-600'}`}>
+                    {isRentabilidad ? <TrendingUp className="w-6 h-6" /> : <Receipt className="w-6 h-6" />}
                 </div>
                 {isRentabilidad && <VariacionBadge val={kpis.variacionMargen} />}
                 </div>
                 <div>
                 <p className="text-slate-500 text-sm font-medium">{isRentabilidad ? 'Ganancia Neta' : 'Ticket Promedio Est.'}</p>
-                <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-700' : 'text-slate-800'}`}>
+                <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-600' : 'text-slate-800'}`}>
                     S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}
                 </h3>
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-purple-300 transition-colors">
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-violet-200 transition-all hover:scale-[1.02] duration-300">
                 <div className="flex items-center justify-between mb-4">
-                <div className="p-2 bg-purple-50 rounded-lg"><Package className="w-6 h-6 text-purple-600" /></div>
+                <div className="p-2.5 bg-violet-50 rounded-xl text-violet-600"><Package className="w-6 h-6" /></div>
                 <VariacionBadge val={kpis.variacionUnidades} />
                 </div>
                 <div>
@@ -1103,9 +921,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-orange-300 transition-colors">
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-orange-200 transition-all hover:scale-[1.02] duration-300">
                 <div className="flex items-center justify-between mb-4">
-                <div className="p-2 bg-orange-50 rounded-lg"><Store className="w-6 h-6 text-orange-600" /></div>
+                <div className="p-2.5 bg-orange-50 rounded-xl text-orange-600"><Store className="w-6 h-6" /></div>
                 </div>
                 <div>
                 <p className="text-slate-500 text-sm font-medium">Margen Promedio %</p>
@@ -1114,27 +932,36 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             </div>
             </div>
 
-            {/* GRAFICOS PRINCIPALES Y RANKING */}
+            {/* GRAFICOS PRINCIPALES */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
                 {/* TENDENCIA */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ArrowUpRight className="w-5 h-5 text-brand-600"/> Tendencia de Ventas (Diario)</h3>
+                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ArrowUpRight className="w-5 h-5 text-brand-500"/> Tendencia de Ventas (Diario)</h3>
                     <div className="h-[300px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                        <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
-                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
-                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                        <Line type="monotone" dataKey={chartDataKey} stroke={chartColor} strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                        </LineChart>
+                        <AreaChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                            <defs>
+                                <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor={chartColor} stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor={chartColor} stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                            <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
+                            <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
+                            <Tooltip 
+                                formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} 
+                                contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                            />
+                            <Area type="monotone" dataKey={chartDataKey} stroke={chartColor} fillOpacity={1} fill="url(#colorVentas)" strokeWidth={2} />
+                        </AreaChart>
                     </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* VENTAS POR CATEGORIA (PIE CHART) */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><PieChartIcon className="w-5 h-5 text-purple-600"/> Participación por Categoría</h3>
+                {/* VENTAS POR CATEGORIA */}
+                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><PieChartIcon className="w-5 h-5 text-violet-500"/> Participación por Categoría</h3>
                     <div className="h-[300px] w-full flex">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
@@ -1142,17 +969,19 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                                     data={ventasPorCategoria}
                                     cx="50%"
                                     cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
+                                    innerRadius={70}
+                                    outerRadius={90}
                                     fill="#8884d8"
-                                    paddingAngle={5}
+                                    paddingAngle={3}
                                     dataKey="value"
+                                    stroke="#fff"
+                                    strokeWidth={3}
                                 >
                                     {ventasPorCategoria.map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip formatter={(value: number) => `S/ ${value.toFixed(2)}`} />
+                                <Tooltip formatter={(value: number) => `S/ ${value.toFixed(2)}`} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                                 <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '11px', color: '#64748b'}} />
                             </PieChart>
                         </ResponsiveContainer>
@@ -1160,10 +989,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 </div>
             </div>
 
-            {/* COMPARATIVA POR PUNTO DE VENTA (SEDES) - Visible solo si no es view comparativa (que tiene su propia vista) */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            {/* COMPARATIVA POR PUNTO DE VENTA (SEDES) */}
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700 hover:shadow-lg transition-shadow">
                 <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-brand-600"/> Comparativa por Punto de Venta (Venta vs Ganancia)
+                    <MapPin className="w-5 h-5 text-brand-500"/> Comparativa por Punto de Venta
                 </h3>
                 <div className="h-[350px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
@@ -1173,111 +1002,89 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                             <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value/1000}k`} />
                             <Tooltip 
                                 formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, '']}
-                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
                                 cursor={{fill: '#f8fafc'}} 
                             />
                             <Legend wrapperStyle={{paddingTop: '20px'}} />
-                            <Bar dataKey="ventas" name="Venta Total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="ventas" name="Venta Total" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
                             <Bar dataKey="margen" name="Ganancia" fill="#84cc16" radius={[4, 4, 0, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
             </div>
 
-            {/* RANKING VENDEDORES Y TOP PRODUCTOS */}
+            {/* RANKING Y ALERTA */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                {/* RANKING VENDEDORES */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><Users className="w-5 h-5 text-blue-600"/> Desempeño por Vendedor/Caja</h3>
+                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><Users className="w-5 h-5 text-blue-500"/> Ranking Vendedores</h3>
                     <div className="h-[300px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={rankingVendedores} layout="vertical" margin={{ left: 20, right: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                                 <XAxis type="number" hide />
-                                <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10}} />
-                                <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']} cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                <Bar dataKey="ventas" radius={[0, 4, 4, 0]} barSize={20} fill="#3b82f6" />
+                                <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10, fill: '#64748b'}} />
+                                <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']} cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                                <Bar dataKey="ventas" radius={[0, 4, 4, 0]} barSize={20} fill="#0ea5e9" />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* TOP 5 PRODUCTOS */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><Package className="w-5 h-5 text-brand-600"/> Top 5 Productos (Más Vendidos)</h3>
-                    <div className="h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={topProductosVolumen} layout="vertical" margin={{ left: 40, right: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                                <XAxis type="number" hide />
-                                <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10}} />
-                                <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Venta Total']} cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                <Bar dataKey="val" radius={[0, 4, 4, 0]} barSize={20}>
-                                    {topProductosVolumen.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
+                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-red-500"/> Menor Rotación (Bottom 5)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {bottomProductosVolumen.map((p, idx) => (
+                            <div key={idx} className="bg-red-50 border border-red-100 rounded-xl p-3 flex flex-col hover:bg-red-100 transition-colors">
+                                <p className="text-[10px] font-bold text-red-400 uppercase mb-1">Puesto #{idx+1}</p>
+                                <p className="text-sm font-medium text-slate-800 truncate flex-1" title={p.name}>{p.name}</p>
+                                <p className="text-lg font-bold text-red-500 mt-1">S/ {p.val.toFixed(2)}</p>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
 
-            {/* BOTTOM PRODUCTOS (ALERTA) */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-red-500"/> Productos con Menor Rotación (Bottom 5)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    {bottomProductosVolumen.map((p, idx) => (
-                        <div key={idx} className="bg-red-50 border border-red-100 rounded-lg p-3">
-                            <p className="text-xs font-bold text-red-400 uppercase mb-1">Puesto #{idx+1}</p>
-                            <p className="text-sm font-medium text-slate-800 truncate" title={p.name}>{p.name}</p>
-                            <p className="text-lg font-bold text-red-700 mt-1">S/ {p.val.toFixed(2)}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* TABLA DE DETALLE CON PAGINACIÓN */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 overflow-hidden animate-in fade-in slide-in-from-bottom-12 duration-1000">
+            {/* TABLA DE DETALLE */}
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 overflow-hidden animate-in fade-in slide-in-from-bottom-12 duration-1000">
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                 <div>
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                     <FileSpreadsheet className="w-5 h-5 text-brand-600" />
                     {drillDownSede ? `Productos en ${drillDownSede}` : 'Detalle Global de Productos'}
                 </h3>
-                <p className="text-xs text-slate-500 font-light">
+                <p className="text-xs text-slate-500 font-light mt-1">
                     {drillDownSede ? 'Mostrando únicamente items vendidos en la sede seleccionada.' : 'Desglose general por item, costo real y rentabilidad.'}
                 </p>
                 </div>
-                <button onClick={handleDownloadExcel} className="px-4 py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                <button onClick={handleDownloadExcel} className="px-4 py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
                 <Download className="w-4 h-4" />Descargar Excel
                 </button>
             </div>
-            <div className="overflow-x-auto border rounded-lg border-slate-100">
-                <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200 select-none">
+            <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                <table className="w-full text-sm text-left text-slate-600">
+                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100 select-none">
                     <tr>
-                    <th className="px-4 py-3 font-semibold cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('producto')}>Producto <SortIcon column="producto" /></th>
-                    <th className="px-4 py-3 font-semibold cursor-pointer text-slate-500">Categoría</th>
-                    <th className="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('cantidad')}>Unds. <SortIcon column="cantidad" /></th>
-                    <th className="px-4 py-3 font-semibold text-right text-slate-400 cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('costo')}>Costo Total <SortIcon column="costo" /></th>
-                    <th className="px-4 py-3 font-semibold text-right text-slate-700 cursor-pointer hover:bg-slate-100 hover:text-brand-700 transition-colors" onClick={() => handleSort('ventaNeta')}>Venta Neta <SortIcon column="ventaNeta" /></th>
-                    <th className="px-4 py-3 font-semibold text-right text-brand-700 bg-brand-50/30 cursor-pointer hover:bg-brand-100 transition-colors" onClick={() => handleSort('ganancia')}>Ganancia <SortIcon column="ganancia" /></th>
-                    <th className="px-4 py-3 font-semibold text-right text-brand-700 bg-brand-50/30 cursor-pointer hover:bg-brand-100 transition-colors" onClick={() => handleSort('margenPorcentaje')}>Margen % <SortIcon column="margenPorcentaje" /></th>
+                    <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('producto')}>Producto <SortIcon column="producto" /></th>
+                    <th className="px-4 py-4 font-bold cursor-pointer">Categoría</th>
+                    <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('cantidad')}>Unds. <SortIcon column="cantidad" /></th>
+                    <th className="px-4 py-4 font-bold text-right text-slate-400 cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('costo')}>Costo Total <SortIcon column="costo" /></th>
+                    <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('ventaNeta')}>Venta Neta <SortIcon column="ventaNeta" /></th>
+                    <th className="px-4 py-4 font-bold text-right text-brand-600 cursor-pointer hover:text-brand-800 transition-colors" onClick={() => handleSort('ganancia')}>Ganancia <SortIcon column="ganancia" /></th>
+                    <th className="px-4 py-4 font-bold text-right text-brand-600 cursor-pointer hover:text-brand-800 transition-colors" onClick={() => handleSort('margenPorcentaje')}>Margen % <SortIcon column="margenPorcentaje" /></th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-50">
                     {paginatedProductos.length > 0 ? (
                         paginatedProductos.map((prod, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
-                            <td className="px-4 py-3 font-medium text-slate-800 group-hover:text-blue-600 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
-                            <td className="px-4 py-3 text-slate-500 text-xs">{prod.categoria}</td>
-                            <td className="px-4 py-3 text-right text-slate-600">{prod.cantidad}</td>
-                            <td className="px-4 py-3 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-right font-bold text-slate-800">S/ {prod.ventaNeta.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-right font-medium text-brand-600 bg-brand-50/10">S/ {prod.ganancia.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-right font-medium text-brand-700 bg-brand-50/10">
-                                <span className={`px-2 py-0.5 rounded text-xs ${prod.margenPorcentaje < 20 ? 'bg-red-100 text-red-700' : 'bg-brand-100 text-brand-800'}`}>
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                            <td className="px-4 py-3.5 font-medium text-slate-700 group-hover:text-brand-700 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
+                            <td className="px-4 py-3.5 text-slate-500 text-xs">{prod.categoria}</td>
+                            <td className="px-4 py-3.5 text-right text-slate-600">{prod.cantidad}</td>
+                            <td className="px-4 py-3.5 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
+                            <td className="px-4 py-3.5 text-right font-bold text-slate-800">S/ {prod.ventaNeta.toFixed(2)}</td>
+                            <td className="px-4 py-3.5 text-right font-medium text-brand-600">S/ {prod.ganancia.toFixed(2)}</td>
+                            <td className="px-4 py-3.5 text-right font-medium text-brand-600">
+                                <span className={`px-2 py-1 rounded-md text-xs font-bold ${prod.margenPorcentaje < 20 ? 'bg-red-100 text-red-600' : 'bg-brand-100 text-brand-700'}`}>
                                     {prod.margenPorcentaje.toFixed(1)}%
                                 </span>
                             </td>
@@ -1296,27 +1103,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
             {/* Pagination Controls */}
             {reporteProductos.length > 0 && (
-                <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-6 mt-2">
-                    <div className="flex flex-1 justify-between sm:hidden">
-                        <button 
-                            onClick={() => handlePageChange(currentPage - 1)}
-                            disabled={currentPage === 1}
-                            className="relative inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Anterior
-                        </button>
-                        <button 
-                            onClick={() => handlePageChange(currentPage + 1)}
-                            disabled={currentPage === totalPages}
-                            className="relative ml-3 inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Siguiente
-                        </button>
-                    </div>
+                <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-6 mt-4">
                     <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
                         <div>
-                            <p className="text-sm text-slate-700">
-                                Mostrando <span className="font-bold text-slate-900">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-slate-900">{Math.min(currentPage * itemsPerPage, reporteProductos.length)}</span> de <span className="font-bold text-slate-900">{reporteProductos.length}</span> resultados
+                            <p className="text-sm text-slate-500">
+                                Mostrando <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-slate-800">{Math.min(currentPage * itemsPerPage, reporteProductos.length)}</span> de <span className="font-bold text-slate-800">{reporteProductos.length}</span> resultados
                             </p>
                         </div>
                         <div>
@@ -1324,18 +1115,18 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                                 <button
                                     onClick={() => handlePageChange(currentPage - 1)}
                                     disabled={currentPage === 1}
-                                    className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                     <span className="sr-only">Anterior</span>
                                     <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                                 </button>
-                                <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 focus:outline-offset-0">
+                                <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200 focus:outline-offset-0">
                                     Página {currentPage} de {totalPages}
                                 </span>
                                 <button
                                     onClick={() => handlePageChange(currentPage + 1)}
                                     disabled={currentPage === totalPages}
-                                    className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                     <span className="sr-only">Siguiente</span>
                                     <ChevronRight className="h-5 w-5" aria-hidden="true" />

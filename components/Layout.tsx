@@ -9,7 +9,7 @@ import {
   Menu,
   Citrus,
   X,
-  Building2 // Importamos el icono para la nueva vista
+  Building2 
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -30,61 +30,66 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
   const NavItem = ({ view, icon: Icon, label }: { view: string, icon: any, label: string }) => (
     <button 
       onClick={() => handleNavigate(view)}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${
+      className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 group relative overflow-hidden mb-1.5 font-medium ${
         currentView === view 
-          ? 'bg-brand-500/10 text-brand-500 border border-brand-500/20 shadow-sm' 
-          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          ? 'text-brand-700 bg-brand-50 shadow-sm border border-brand-200' 
+          : 'text-slate-500 hover:text-slate-800 hover:bg-white hover:shadow-sm border border-transparent'
       }`}
     >
-      <Icon className={`w-5 h-5 ${currentView === view ? 'text-brand-500' : 'text-slate-500 group-hover:text-white'}`} />
-      <span className="font-condensed text-base tracking-wide">{label}</span>
+      <Icon className={`w-5 h-5 transition-transform group-hover:scale-110 duration-300 ${currentView === view ? 'text-brand-600' : 'text-slate-400 group-hover:text-brand-500'}`} />
+      <span className="font-sans text-sm tracking-wide">{label}</span>
+      
+      {currentView === view && (
+        <div className="absolute right-3 w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse"></div>
+      )}
     </button>
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans">
+    <div className="min-h-screen flex font-sans text-slate-800 selection:bg-brand-200 selection:text-brand-900">
+      
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-30 md:hidden transition-opacity"
+          className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-40 w-64 flex-col bg-slate-900 text-white transition-transform duration-300 ease-in-out shadow-xl
+        fixed inset-y-0 left-0 z-40 w-72 flex-col bg-white/80 backdrop-blur-xl border-r border-slate-200/60 transition-transform duration-300 ease-out shadow-[4px_0_24px_-4px_rgba(0,0,0,0.05)]
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
         md:translate-x-0 md:static md:flex md:h-screen
       `}>
-        <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+        <div className="p-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-brand-500 p-1.5 rounded-lg shadow-[0_0_15px_rgba(132,204,22,0.3)]">
-              <Citrus className="w-6 h-6 text-slate-900" />
+            <div className="bg-gradient-to-br from-brand-400 to-brand-500 p-2.5 rounded-2xl shadow-lg shadow-brand-500/30 transform rotate-3 hover:rotate-6 transition-transform">
+              <Citrus className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="font-bold text-xl leading-none tracking-tight">LEMON BI</h2>
-              <p className="text-[10px] text-brand-400 font-medium tracking-wide mt-1">INTEGRADO CON ODOO</p>
+              <h2 className="font-bold text-xl leading-none tracking-tight text-slate-800">LEMON BI</h2>
+              <p className="text-[10px] text-brand-600 font-bold tracking-widest mt-1 uppercase">Analytics</p>
             </div>
           </div>
           {/* Mobile Close Button */}
           <button 
             onClick={() => setIsMobileMenuOpen(false)}
-            className="md:hidden text-slate-400 hover:text-white transition-colors"
+            className="md:hidden text-slate-400 hover:text-slate-600 transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <div className="font-condensed text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 px-3 mt-2">
+        <nav className="flex-1 p-5 space-y-1 overflow-y-auto">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-4 mt-2">
             Principal
           </div>
           
           <NavItem view="general" icon={LayoutDashboard} label="Dashboard General" />
           <NavItem view="rentabilidad" icon={TrendingUp} label="Rentabilidad" />
 
-          <div className="font-condensed text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 px-3 mt-6">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-4 mt-6">
             Gestión
           </div>
 
@@ -93,33 +98,33 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
           <NavItem view="reportes" icon={PieChart} label="Reportes Gráficos" />
         </nav>
 
-        <div className="p-4 border-t border-slate-800">
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors mb-1">
+        <div className="p-5 border-t border-slate-100 bg-slate-50/50">
+          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-800 hover:bg-white rounded-xl transition-all mb-2 hover:shadow-sm">
             <Settings className="w-5 h-5" />
-            <span className="font-condensed text-base tracking-wide">Configuración</span>
+            <span className="font-sans text-sm font-medium">Configuración</span>
           </button>
           
           <button 
             onClick={onLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
+            className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all group"
           >
-            <LogOut className="w-5 h-5" />
-            <span className="font-condensed text-base tracking-wide">Cerrar Sesión</span>
+            <LogOut className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
+            <span className="font-sans text-sm font-medium">Cerrar Sesión</span>
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 transition-all w-full h-screen overflow-y-auto">
+      <main className="flex-1 transition-all w-full h-screen overflow-y-auto relative z-10 scroll-smooth">
         {/* Mobile Header */}
-        <div className="md:hidden bg-slate-900 text-white p-4 flex items-center justify-between sticky top-0 z-20 shadow-md">
+        <div className="md:hidden bg-white/90 backdrop-blur-md border-b border-slate-200 text-slate-800 p-4 flex items-center justify-between sticky top-0 z-20 shadow-sm">
           <div className="flex items-center gap-2">
             <Citrus className="w-6 h-6 text-brand-500" />
             <span className="font-bold text-lg">LEMON BI</span>
           </div>
           <button 
             onClick={() => setIsMobileMenuOpen(true)}
-            className="text-slate-300 hover:text-white"
+            className="text-slate-500 hover:text-slate-800"
           >
             <Menu className="w-6 h-6" />
           </button>

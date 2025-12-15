@@ -13,6 +13,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
+      darkMode: 'class',
       theme: {
         extend: {
           colors: {
@@ -22,11 +23,12 @@
               200: '#d9f99d',
               300: '#bef264',
               400: '#a3e635',
-              500: '#84cc16', // Lime-500 (Primary)
+              500: '#84cc16', // Lime-500 (Vivid Lemon)
               600: '#65a30d',
               700: '#4d7c0f',
               800: '#3f6212',
               900: '#365314',
+              950: '#1a2e05',
             }
           },
           fontFamily: {
@@ -34,10 +36,48 @@
             condensed: ['"Ubuntu Condensed"', 'sans-serif'],
             mono: ['"Ubuntu Mono"', 'monospace'],
           },
+          animation: {
+            'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
+            'bounce-slow': 'bounce 3s infinite',
+          },
+          keyframes: {
+            fadeInUp: {
+              '0%': { opacity: '0', transform: 'translateY(15px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            }
+          }
         }
       }
     }
   </script>
+  <style>
+    /* Custom Scrollbar for light mode */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9; 
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1; 
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #84cc16; 
+    }
+    
+    body {
+      background-color: #f8fafc; /* Slate 50 */
+      color: #334155; /* Slate 700 */
+      /* Fondo sutil y fresco */
+      background-image: 
+        radial-gradient(circle at 0% 0%, #f7fee7 0%, transparent 50%),
+        radial-gradient(circle at 100% 100%, #eff6ff 0%, transparent 50%);
+      background-attachment: fixed;
+      min-height: 100vh;
+    }
+  </style>
 
 <script type="importmap">
 {
