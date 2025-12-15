@@ -87,27 +87,32 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       setError(null);
       const client = new OdooClient(session.url, session.db, session.useProxy);
       
-      // CONFIGURACIÓN PARA PUNTO DE VENTA (PoS) - MODO PEDIDOS (Exactitud Total)
-      // Usamos 'pos.order' que es la tabla que el usuario ve en la pantalla "Pedidos".
-      // Esto garantiza que los montos cuadren con su vista.
       const model = 'pos.order';
-      
-      // Campos necesarios para KPI y Gráficos Generales
-      // Nota: No pedimos líneas para no saturar la petición. Mostraremos referencias de tickets.
       const fields = ['date_order', 'config_id', 'amount_total', 'company_id', 'state', 'partner_id', 'pos_reference', 'name'];
 
-      // Filtro ROBUSTO:
-      // 1. Fechas con hora completa para no perder el último día por UTC.
-      // 2. Estado: Todo lo que NO esté cancelado ni en borrador (si aplica).
+      // --- CORRECCIÓN DE ZONA HORARIA ---
+      // Odoo guarda en UTC. Si filtramos estrictamente por la fecha local en el servidor, 
+      // perdemos las ventas de la noche (que en UTC ya son el día siguiente).
+      // Solución: Pedimos a Odoo un rango más amplio (-1 día inicio, +1 día fin)
+      // y luego filtramos con precisión en Javascript usando la hora local.
+      
+      const queryStart = new Date(filtros.fechaInicio);
+      queryStart.setDate(queryStart.getDate() - 1); // Un día antes para asegurar
+      const queryStartStr = queryStart.toISOString().split('T')[0];
+
+      const queryEnd = new Date(filtros.fechaFin);
+      queryEnd.setDate(queryEnd.getDate() + 1); // Un día después para capturar la noche (UTC+5/UTC+X)
+      const queryEndStr = queryEnd.toISOString().split('T')[0];
+
       const domain = [
         ['state', '!=', 'cancel'], 
         ['state', '!=', 'draft'],
-        ['date_order', '>=', `${filtros.fechaInicio} 00:00:00`],
-        ['date_order', '<=', `${filtros.fechaFin} 23:59:59`]
+        ['date_order', '>=', `${queryStartStr} 00:00:00`],
+        ['date_order', '<=', `${queryEndStr} 23:59:59`]
       ];
 
       const options: any = {
-        limit: 2000, // Aumentado para traer más historial
+        limit: 5000, // Aumentamos límite para asegurar que traemos todo el historial necesario
         order: 'date_order desc'
       };
 
@@ -121,7 +126,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
              );
              if (userData && userData.length > 0) {
                  allowedCompanyIds = userData[0].company_ids || [];
-                 // Cargar nombres de compañías para el filtro
                  client.searchRead(session.uid, session.apiKey, 'res.company', [['id', 'in', allowedCompanyIds]], ['name'])
                     .then((comps: any[]) => setRealCompanies(comps.map(c => c.name))).catch(() => {});
              }
@@ -131,22 +135,23 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               options.context = { allowed_company_ids: allowedCompanyIds };
           }
 
-          console.log("Consultando Pedidos PoS (pos.order)...", { domain });
+          console.log("Consultando Pedidos PoS con Buffer UTC...", { domain });
           
           const rawData: any[] = await client.searchRead(session.uid, session.apiKey, model, domain, fields, options);
 
           if (!rawData) throw new Error("Respuesta vacía de Odoo.");
 
+          // Preparar fechas límite locales para el filtrado exacto
+          const filterStartDate = new Date(`${filtros.fechaInicio}T00:00:00`);
+          const filterEndDate = new Date(`${filtros.fechaFin}T23:59:59`);
+
           // Mapeo de datos
-          const mappedVentas: Venta[] = rawData.map((line: any) => {
+          const mappedVentas: Venta[] = rawData
+          .map((line: any) => {
               const total = line.amount_total || 0;
-              
-              // PoS Config (Caja/Sede)
               const sede = Array.isArray(line.config_id) ? line.config_id[1] : 'Caja General';
               const compania = Array.isArray(line.company_id) ? line.company_id[1] : 'Empresa Principal';
               
-              // Para 'Producto', usamos la referencia del ticket o el cliente, ya que estamos consultando cabeceras
-              // para asegurar que el monto total sea exacto.
               let producto = line.pos_reference || line.name || 'Ticket';
               if (Array.isArray(line.partner_id)) {
                   producto = `${producto} - ${line.partner_id[1]}`;
@@ -154,21 +159,29 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                    producto = `${producto} - Cliente General`;
               }
 
-              // Estimación de costo (70%)
               const costo = total * 0.7;
               const margen = total - costo;
 
+              // Parsear fecha UTC de Odoo a Objeto JS (Local Time)
+              // Odoo devuelve "YYYY-MM-DD HH:mm:ss". Reemplazamos espacio por T y agregamos Z para indicar UTC.
+              const utcString = (line.date_order || "").replace(" ", "T") + "Z";
+              const fechaLocal = new Date(utcString);
+
               return {
-                  fecha: new Date(line.date_order),
+                  fecha: fechaLocal,
                   sede,
                   compania,
-                  producto, // Representa el Ticket/Pedido
-                  cantidad: 1, // 1 Ticket
+                  producto,
+                  cantidad: 1,
                   total,
                   costo,
                   margen,
                   margenPorcentaje: total > 0 ? ((margen / total) * 100).toFixed(1) : '0.0'
               };
+          })
+          .filter((v: Venta) => {
+              // Filtrado exacto en memoria (Local Time vs Rango Local seleccionado)
+              return v.fecha >= filterStartDate && v.fecha <= filterEndDate;
           });
 
           setVentasData(mappedVentas);
@@ -223,7 +236,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   const ventasPorDia = useMemo(() => {
     const agrupado: Record<string, AgrupadoPorDia> = {};
     datosFiltrados.forEach(v => {
-      const fecha = v.fecha.toISOString().split('T')[0];
+      // Usar fecha local para agrupar
+      const fecha = v.fecha.toLocaleDateString('en-CA'); // YYYY-MM-DD local
       if (!agrupado[fecha]) agrupado[fecha] = { fecha, ventas: 0, margen: 0 };
       agrupado[fecha].ventas += v.total;
       agrupado[fecha].margen += v.margen;
@@ -484,7 +498,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                   <XAxis 
                     dataKey="fecha" 
-                    tickFormatter={(value) => new Date(value).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
+                    tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
                     stroke="#94a3b8"
                     tick={{fontSize: 12}}
                     axisLine={false}
@@ -501,7 +515,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                   />
                   <Tooltip 
                     formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']}
-                    labelFormatter={(label) => new Date(label).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    labelFormatter={(label) => new Date(label + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
                   <Line 
