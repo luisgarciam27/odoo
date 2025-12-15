@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   LineChart, Line, PieChart, Pie, Cell, 
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
@@ -8,8 +8,8 @@ import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, OdooSession } from '..
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
 
-// Datos simulados para PUNTO DE VENTA (Estructura específica del cliente)
-const generarDatosVentas = (): Venta[] => {
+// Generador de datos dinámico basado en el rango solicitado
+const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
   const estructura = [
       { compania: 'BOTICAS MULTIFARMA S.A.C.', sedes: ['Multifarmas', 'Cristo Rey', 'Lomas', 'Tienda 4'] },
       { compania: 'CONSULTORIO MEDICO REQUESALUD', sedes: ['Caja Requesalud'] }
@@ -28,10 +28,11 @@ const generarDatosVentas = (): Venta[] => {
   ];
 
   const ventas: Venta[] = [];
-  const fechaInicio = new Date('2024-01-01');
-  const fechaFin = new Date();
+  // Aseguramos que las fechas se interpreten correctamente
+  const fechaInicio = new Date(`${startStr}T00:00:00`);
+  const fechaFin = new Date(`${endStr}T23:59:59`);
 
-  // Generamos datos para ambas empresas en el modo demo
+  // Iteramos día por día en el rango seleccionado
   for (let d = new Date(fechaInicio); d <= fechaFin; d.setDate(d.getDate() + 1)) {
     estructura.forEach(emp => {
         const ventasPorDia = Math.floor(Math.random() * 6) + 1; 
@@ -39,6 +40,7 @@ const generarDatosVentas = (): Venta[] => {
         for (let i = 0; i < ventasPorDia; i++) {
             const sede = emp.sedes[Math.floor(Math.random() * emp.sedes.length)];
             
+            // Lógica específica de simulación
             if (sede === 'Tienda 4') {
                 const fechaCierreTienda4 = new Date('2024-08-31');
                 if (d > fechaCierreTienda4) continue; 
@@ -107,15 +109,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   
   // Fechas calculadas (strings YYYY-MM-DD)
   const [dateRange, setDateRange] = useState({
-      start: new Date(currentYear, currentMonth, 1).toISOString().split('T')[0],
-      end: new Date(currentYear, currentMonth + 1, 0).toISOString().split('T')[0]
+      start: new Date(currentYear, currentMonth, 1).toLocaleDateString('en-CA'),
+      end: new Date(currentYear, currentMonth + 1, 0).toLocaleDateString('en-CA')
   });
 
   const [filtros, setFiltros] = useState<Filtros>({
     sedeSeleccionada: 'Todas',
     companiaSeleccionada: session?.companyName || 'Todas',
     periodoSeleccionado: 'mes',
-    fechaInicio: '', // Se gestionará vía dateRange
+    fechaInicio: '', 
     fechaFin: ''
   });
 
@@ -125,20 +127,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       let end = '';
 
       if (filterMode === 'mes') {
-          // Primer día del mes
           const firstDay = new Date(selectedYear, selectedMonth, 1);
-          // Último día del mes (día 0 del siguiente mes)
           const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
           
-          // Ajuste zona horaria local para string YYYY-MM-DD
-          start = firstDay.toLocaleDateString('en-CA'); // formatea YYYY-MM-DD local
+          start = firstDay.toLocaleDateString('en-CA'); 
           end = lastDay.toLocaleDateString('en-CA');
       } 
       else if (filterMode === 'anio') {
           start = `${selectedYear}-01-01`;
           end = `${selectedYear}-12-31`;
       }
-      // Para 'custom', no sobrescribimos aquí, dejamos que los inputs controlen dateRange
       
       if (filterMode !== 'custom') {
           setDateRange({ start, end });
@@ -146,22 +144,35 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   }, [filterMode, selectedYear, selectedMonth]);
 
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+      setLoading(true);
+      setError(null);
+      
+      // Buffer de fechas para evitar problemas de Timezone (UTC vs Local)
+      // Pedimos 1 día antes y 1 día después a la API, y luego filtramos exacto en memoria.
+      const bufferStart = new Date(dateRange.start);
+      bufferStart.setDate(bufferStart.getDate() - 1);
+      
+      const bufferEnd = new Date(dateRange.end);
+      bufferEnd.setDate(bufferEnd.getDate() + 1);
+
+      const queryStart = bufferStart.toISOString().split('T')[0];
+      const queryEnd = bufferEnd.toISOString().split('T')[0];
+
       if (!session) {
-          if (ventasData.length === 0) setVentasData(generarDatosVentas());
+          // Modo Demo: Generamos datos EXACTAMENTE para el rango seleccionado
+          // Usamos un pequeño timeout para simular carga
+          setTimeout(() => {
+            const demoData = generarDatosVentas(dateRange.start, dateRange.end);
+            setVentasData(demoData);
+            setLoading(false);
+          }, 600);
           return;
       }
 
-      setLoading(true);
-      setError(null);
       const client = new OdooClient(session.url, session.db, session.useProxy);
-      
       const modelOrder = 'pos.order';
       const fieldsOrder = ['date_order', 'config_id', 'lines', 'company_id', 'partner_id', 'pos_reference', 'name'];
-
-      // Traer datos desde 2023 para cubrir selectores de año anterior
-      const queryStart = '2023-01-01'; 
-      const queryEnd = new Date().toISOString().split('T')[0];
 
       const domain: any[] = [
         ['state', '!=', 'cancel'], 
@@ -174,29 +185,27 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           domain.push(['company_id', '=', session.companyId]);
       }
 
-      // Aumentamos límite para soportar más histórico
-      const options: any = { limit: 2000, order: 'date_order desc' };
+      const options: any = { limit: 5000, order: 'date_order desc' }; // Límite amplio para el mes
 
       try {
           if (session.companyId) options.context = { allowed_company_ids: [session.companyId] };
 
-          console.log("Consultando Pedidos...");
+          console.log(`Consultando Pedidos entre ${queryStart} y ${queryEnd}...`);
           const ordersRaw: any[] = await client.searchRead(session.uid, session.apiKey, modelOrder, domain, fieldsOrder, options);
 
           if (!ordersRaw || ordersRaw.length === 0) {
-             setError("No se encontraron pedidos en el rango base.");
+             // No es error, es simplemente que no hay datos. Limpiamos.
              setVentasData([]);
+             setLoading(false);
              return;
           }
 
           const allLineIds = ordersRaw.flatMap((o: any) => o.lines || []);
           if (allLineIds.length === 0) {
-              setError("Se encontraron pedidos pero sin líneas de producto.");
               setVentasData([]);
+              setLoading(false);
               return;
           }
-
-          console.log(`Consultando ${allLineIds.length} líneas de detalle...`);
           
           const chunkArray = (array: any[], size: number) => {
               const result = [];
@@ -204,11 +213,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               return result;
           };
 
-          // Optimización: Solo consultar detalles de pedidos que probablemente estén en el rango visualizado
-          // Pero para simplificar y garantizar filtros correctos, traemos todo lo del limit.
           const lineChunks = chunkArray(allLineIds, 1000);
           let allLinesData: any[] = [];
-          
           const fieldsLine = ['product_id', 'qty', 'price_subtotal', 'price_subtotal_incl']; 
 
           for (const chunk of lineChunks) {
@@ -216,7 +222,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               if (linesData) allLinesData = allLinesData.concat(linesData);
           }
 
-          // Obtener Costos Reales
+          // Costos
           const productIds = new Set(allLinesData.map((l: any) => Array.isArray(l.product_id) ? l.product_id[0] : null).filter(id => id));
           let productCostMap = new Map<number, number>();
 
@@ -305,21 +311,21 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       } finally {
           setLoading(false);
       }
-  };
+  }, [session, dateRange]); // Re-crear función solo si cambia sesión o fechas
 
+  // Disparador principal: Recargar datos cuando cambian las fechas
   useEffect(() => {
-      if (session && ventasData.length === 0) fetchData();
-      else if (!session && ventasData.length === 0) fetchData();
-  }, [session]);
+      fetchData();
+  }, [fetchData]); 
 
+  // Filtro en memoria (Sedes, Compañía y Limpieza fina de fechas)
   const datosFiltrados = useMemo(() => {
     let datos = ventasData;
     const startStr = dateRange.start;
     const endStr = dateRange.end;
     
-    // Filtro ESTRICTO por string YYYY-MM-DD
+    // Filtro ESTRICTO por string YYYY-MM-DD (limpieza de bordes de buffer)
     datos = datos.filter(v => {
-        // Convertimos la fecha de venta a string local YYYY-MM-DD para comparar
         const vDate = v.fecha.toLocaleDateString('en-CA'); 
         return vDate >= startStr && vDate <= endStr;
     });
