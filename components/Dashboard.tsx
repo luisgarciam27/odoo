@@ -8,45 +8,74 @@ import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, AgrupadoProducto, Odoo
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
 
-// Datos simulados para PUNTO DE VENTA (Cajas, Tiendas físicas)
+// Datos simulados para PUNTO DE VENTA (Estructura específica del cliente)
 const generarDatosVentas = (): Venta[] => {
-  const sedes = ['Caja Principal', 'Barra 1', 'Tienda Centro', 'Kiosko Norte'];
-  const companias = ['Mi Empresa S.A.C.', 'Sucursal Arequipa IRL'];
+  // ESTRUCTURA: 
+  // BOTICAS MULTIFARMA -> Multifarmas, Cristo Rey, Lomas, Tienda 4
+  // CONSULTORIO -> Caja Requesalud
+
+  const estructura = [
+      { compania: 'BOTICAS MULTIFARMA S.A.C.', sedes: ['Multifarmas', 'Cristo Rey', 'Lomas', 'Tienda 4'] },
+      { compania: 'CONSULTORIO MEDICO REQUESALUD', sedes: ['Caja Requesalud'] }
+  ];
+
   const productos = [
-    { id: 1, nombre: 'Ticket #001 - Consumo General', costo: 15, precio: 35 },
-    { id: 2, nombre: 'Ticket #002 - Menu Ejecutivo', costo: 8, precio: 15 },
-    { id: 3, nombre: 'Ticket #003 - Servicios Varios', costo: 10, precio: 25 },
-    { id: 4, nombre: 'Ticket #004 - Venta Directa', costo: 30, precio: 80 },
-    { id: 5, nombre: 'Ticket #005 - Cafe y Postre', costo: 12, precio: 25 }
+    { id: 1, nombre: 'Paracetamol 500mg Genérico', costo: 0.50, precio: 2.00 },
+    { id: 2, nombre: 'Amoxicilina 500mg Blister', costo: 1.20, precio: 3.50 },
+    { id: 3, nombre: 'Ibuprofeno 400mg Caja', costo: 8.00, precio: 15.00 },
+    { id: 4, nombre: 'Ensure Advance Vainilla', costo: 85.00, precio: 105.00 },
+    { id: 5, nombre: 'Panales Huggies XG', costo: 45.00, precio: 58.00 },
+    { id: 6, nombre: 'Consulta Médica General', costo: 0.00, precio: 50.00 },
+    { id: 7, nombre: 'Inyectable - Servicio', costo: 1.00, precio: 10.00 }
   ];
 
   const ventas: Venta[] = [];
   const fechaInicio = new Date('2024-01-01');
   const fechaFin = new Date();
 
+  // Generamos datos para ambas empresas en el modo demo
   for (let d = new Date(fechaInicio); d <= fechaFin; d.setDate(d.getDate() + 1)) {
-    const ventasPorDia = Math.floor(Math.random() * 8) + 2;
-    
-    for (let i = 0; i < ventasPorDia; i++) {
-      const producto = productos[Math.floor(Math.random() * productos.length)];
-      const sede = sedes[Math.floor(Math.random() * sedes.length)];
-      const compania = companias[Math.floor(Math.random() * companias.length)];
-      const total = producto.precio;
-      const costo = producto.costo;
-      const margen = total - costo;
-      
-      ventas.push({
-        fecha: new Date(d),
-        sede, 
-        compania,
-        producto: producto.nombre,
-        cantidad: 1,
-        total,
-        costo,
-        margen,
-        margenPorcentaje: ((margen / total) * 100).toFixed(1)
-      });
-    }
+    // Para cada empresa
+    estructura.forEach(emp => {
+        const ventasPorDia = Math.floor(Math.random() * 6) + 1; // 1 a 7 ventas por empresa por día
+        
+        for (let i = 0; i < ventasPorDia; i++) {
+            const sede = emp.sedes[Math.floor(Math.random() * emp.sedes.length)];
+            
+            // --- REGLA DE NEGOCIO: Tienda 4 cerró en Agosto ---
+            if (sede === 'Tienda 4') {
+                const fechaCierreTienda4 = new Date('2024-08-31');
+                // Si la fecha actual del bucle es mayor a agosto, Tienda 4 ya no vende.
+                if (d > fechaCierreTienda4) {
+                    continue; // Saltamos esta venta (no se registra, o se podría asignar a otra sede si quisiéramos mantener volumen)
+                }
+            }
+
+            const producto = productos[Math.floor(Math.random() * productos.length)];
+            
+            // Si es consultorio, preferimos servicios
+            let prodFinal = producto;
+            if (emp.compania.includes('CONSULTORIO')) {
+                 if (Math.random() > 0.6) prodFinal = productos.find(p => p.nombre.includes('Consulta')) || producto;
+            }
+
+            const total = prodFinal.precio;
+            const costo = prodFinal.costo;
+            const margen = total - costo;
+
+            ventas.push({
+                fecha: new Date(d),
+                sede, 
+                compania: emp.compania,
+                producto: prodFinal.nombre,
+                cantidad: 1,
+                total,
+                costo,
+                margen,
+                margenPorcentaje: total > 0 ? ((margen / total) * 100).toFixed(1) : '0.0'
+            });
+        }
+    });
   }
   return ventas;
 };
@@ -61,7 +90,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [realCompanies, setRealCompanies] = useState<string[]>([]);
   
   // Default: Año actual
   const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
@@ -69,21 +97,22 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
   const [filtros, setFiltros] = useState<Filtros>({
     sedeSeleccionada: 'Todas',
-    companiaSeleccionada: 'Todas',
+    companiaSeleccionada: session?.companyName || 'Todas',
     periodoSeleccionado: 'año',
     fechaInicio: yearStart,
     fechaFin: today
   });
 
   const fetchData = async () => {
+      // 1. MODO DEMO / SIN SESIÓN
       if (!session) {
           if (ventasData.length === 0) {
               setVentasData(generarDatosVentas());
-              setRealCompanies(['Mi Empresa S.A.C.', 'Sucursal Arequipa IRL']);
           }
           return;
       }
 
+      // 2. MODO CONECTADO A ODOO
       setLoading(true);
       setError(null);
       const client = new OdooClient(session.url, session.db, session.useProxy);
@@ -100,12 +129,17 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       queryEnd.setDate(queryEnd.getDate() + 1); 
       const queryEndStr = queryEnd.toISOString().split('T')[0];
 
-      const domain = [
+      const domain: any[] = [
         ['state', '!=', 'cancel'], 
         ['state', '!=', 'draft'],
         ['date_order', '>=', `${queryStartStr} 00:00:00`],
         ['date_order', '<=', `${queryEndStr} 23:59:59`]
       ];
+
+      // --- FILTRADO OBLIGATORIO POR COMPAÑÍA SELECCIONADA EN LOGIN ---
+      if (session.companyId) {
+          domain.push(['company_id', '=', session.companyId]);
+      }
 
       const options: any = {
         limit: 5000, 
@@ -113,25 +147,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       };
 
       try {
-          // 1. Obtener Compañías permitidas
-          let allowedCompanyIds: number[] = [];
-          try {
-             const userData: any[] = await client.searchRead(
-                 session.uid, session.apiKey, 'res.users',
-                 [['id', '=', session.uid]], ['company_ids']
-             );
-             if (userData && userData.length > 0) {
-                 allowedCompanyIds = userData[0].company_ids || [];
-                 client.searchRead(session.uid, session.apiKey, 'res.company', [['id', 'in', allowedCompanyIds]], ['name'])
-                    .then((comps: any[]) => setRealCompanies(comps.map(c => c.name))).catch(() => {});
-             }
-          } catch (e) { console.warn("Fallo leve obteniendo users", e); }
-
-          if (allowedCompanyIds.length > 0) {
-              options.context = { allowed_company_ids: allowedCompanyIds };
+          // Si hay compañía seleccionada, la forzamos en el contexto
+          if (session.companyId) {
+              options.context = { allowed_company_ids: [session.companyId] };
           }
 
-          console.log("Consultando Pedidos PoS con Buffer UTC...", { domain });
+          console.log("Consultando Pedidos PoS...", { domain, company: session.companyName });
           
           const rawData: any[] = await client.searchRead(session.uid, session.apiKey, model, domain, fields, options);
 
@@ -145,6 +166,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           const mappedVentas: Venta[] = rawData
           .map((line: any) => {
               const total = line.amount_total || 0;
+              // config_id[1] es el nombre del Punto de Venta (ej: "Multifarmas", "Tienda 4")
               const sede = Array.isArray(line.config_id) ? line.config_id[1] : 'Caja General';
               const compania = Array.isArray(line.company_id) ? line.company_id[1] : 'Empresa Principal';
               
@@ -155,7 +177,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                    producto = `${producto} - Cliente General`;
               }
 
-              const costo = total * 0.7;
+              const costo = total * 0.7; // Simulado si Odoo no devuelve costo en pos.order
               const margen = total - costo;
 
               const utcString = (line.date_order || "").replace(" ", "T") + "Z";
@@ -180,7 +202,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           setVentasData(mappedVentas);
 
           if (mappedVentas.length === 0) {
-            setError("Conexión exitosa. No se encontraron pedidos en este rango de fechas.");
+            setError("Conexión exitosa. No se encontraron pedidos en este rango de fechas para la compañía seleccionada.");
           }
 
       } catch (err: any) {
@@ -199,18 +221,33 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   }, [session, filtros.fechaInicio, filtros.fechaFin]);
 
   // --- MEMOS ---
-  const sedes = useMemo(() => ['Todas', ...Array.from(new Set(ventasData.map(v => v.sede)))], [ventasData]);
-  const companias = useMemo(() => {
-      if (realCompanies.length > 0) return ['Todas', ...realCompanies];
-      return ['Todas', ...Array.from(new Set(ventasData.map(v => v.compania)))];
-  }, [ventasData, realCompanies]);
-
+  // Calculamos las sedes basadas en los datos ya filtrados por compañía (si existe sesión) o datos demo
+  const sedes = useMemo(() => {
+      let datosParaSedes = ventasData;
+      // Si estamos en modo DEMO y el usuario no ha filtrado (simulando login con filtros vacíos)
+      // En modo real, ventasData ya viene filtrado por la API
+      if (!session && filtros.companiaSeleccionada !== 'Todas') {
+          // Filtrado manual para demo
+          datosParaSedes = ventasData.filter(v => v.compania.includes(filtros.companiaSeleccionada));
+      }
+      return ['Todas', ...Array.from(new Set(datosParaSedes.map(v => v.sede)))];
+  }, [ventasData, session, filtros.companiaSeleccionada]);
+  
   const datosFiltrados = useMemo(() => {
     let datos = ventasData;
+    
+    // Filtro por Punto de Venta (Sede)
     if (filtros.sedeSeleccionada !== 'Todas') datos = datos.filter(v => v.sede === filtros.sedeSeleccionada);
-    if (filtros.companiaSeleccionada !== 'Todas') datos = datos.filter(v => v.compania === filtros.companiaSeleccionada);
+    
+    // Filtro adicional por Compañía (Solo relevante en Modo Demo o si hay mezcla de datos)
+    // En producción (session existe), ventasData ya es solo de una compañía.
+    if (!session && filtros.companiaSeleccionada !== 'Todas') {
+         // Lógica simple para Demo: "BOTICAS" muestra Multifarma, "CONSULTORIO" muestra Requesalud
+         /* En el componente Login ya definimos el nombre. Aquí solo filtramos si el string coincide. */
+    }
+
     return datos;
-  }, [ventasData, filtros.sedeSeleccionada, filtros.companiaSeleccionada]);
+  }, [ventasData, filtros.sedeSeleccionada, filtros.companiaSeleccionada, session]);
 
   const kpis = useMemo(() => {
     const totalVentas = datosFiltrados.reduce((sum, v) => sum + v.total, 0);
@@ -282,9 +319,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
   // --- CONFIGURACIÓN DE VISTAS ---
   const isRentabilidad = view === 'rentabilidad';
-  // Si es rentabilidad usamos 'margen', si no 'ventas' (para reportes y general)
   const chartDataKey = isRentabilidad ? 'margen' : 'ventas'; 
-  const chartColor = isRentabilidad ? '#10b981' : '#3b82f6'; // Verde para margen, Azul para ventas
+  const chartColor = isRentabilidad ? '#10b981' : '#3b82f6'; 
   const chartLabel = isRentabilidad ? 'Margen (Ganancia)' : 'Ventas Totales';
 
   const showKPIs = view === 'general' || view === 'rentabilidad';
@@ -315,7 +351,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                  view === 'reportes' ? 'Reportes Gráficos' : 'Dashboard General'}
               </h1>
               <p className="text-slate-500 text-sm">
-                  {session ? `Base de datos: ${session.db}` : 'Modo Demo (Simulación)'}
+                  {session ? `Compañía: ${session.companyName || 'Todas'}` : 'Modo Demo'}
               </p>
            </div>
            
@@ -357,15 +393,19 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 <Building2 className="inline w-3 h-3 mr-1" />
                 Compañía
               </label>
-              <select 
-                value={filtros.companiaSeleccionada}
-                onChange={(e) => setFiltros({...filtros, companiaSeleccionada: e.target.value})}
-                className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
-              >
-                {companias.map(comp => (
-                  <option key={comp} value={comp}>{comp}</option>
-                ))}
-              </select>
+              {session?.companyName ? (
+                   <div className="w-full md:w-48 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800 font-medium flex items-center gap-2">
+                       <Building2 className="w-4 h-4" />
+                       <span className="truncate">{session.companyName}</span>
+                   </div>
+              ) : (
+                <select 
+                    disabled={true}
+                    className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 cursor-not-allowed"
+                >
+                    <option>Demo / Todas</option>
+                </select>
+              )}
             </div>
 
             <div className="w-full md:w-auto">

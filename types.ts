@@ -62,4 +62,6 @@ export interface OdooSession {
   apiKey: string;
   uid: number;
   useProxy: boolean;
+  companyId?: number;
+  companyName?: string;
 }
