@@ -290,11 +290,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                           const productName = Array.isArray(line.product_id) ? line.product_id[1] : 'Producto Desconocido';
                           const ventaNeta = line.price_subtotal || 0; 
                           const prodInfo = productMap.get(productId) || { cost: 0, cat: 'Varios' };
-                          let unitCost = prodInfo.cost;
-                          
-                          if (unitCost === 0) {
-                             unitCost = (ventaNeta / (line.qty || 1)) * 0.65; 
-                          }
+                          const unitCost = prodInfo.cost; 
+                          // SE ELIMINÓ LA ESTIMACIÓN DEL 65%. 
+                          // Ahora el costo es el que viene de Odoo (incluso si es 0).
 
                           const costoTotal = unitCost * (line.qty || 1);
                           const margen = ventaNeta - costoTotal; 
