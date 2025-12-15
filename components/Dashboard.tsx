@@ -3,7 +3,7 @@ import {
   LineChart, Line, PieChart, Pie, Cell, 
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, Calendar, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, CalendarRange } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
