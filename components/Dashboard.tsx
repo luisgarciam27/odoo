@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
-  LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer 
+  LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, LayoutGrid } from 'lucide-react';
-import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
+import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, LayoutGrid, Receipt, X, Target } from 'lucide-react';
+import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
 
@@ -27,11 +27,9 @@ const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
   ];
 
   const ventas: Venta[] = [];
-  // Aseguramos que las fechas se interpreten correctamente
   const fechaInicio = new Date(`${startStr}T00:00:00`);
   const fechaFin = new Date(`${endStr}T23:59:59`);
 
-  // Iteramos día por día en el rango seleccionado
   for (let d = new Date(fechaInicio); d <= fechaFin; d.setDate(d.getDate() + 1)) {
     estructura.forEach(emp => {
         const ventasPorDia = Math.floor(Math.random() * 6) + 1; 
@@ -39,14 +37,12 @@ const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
         for (let i = 0; i < ventasPorDia; i++) {
             const sede = emp.sedes[Math.floor(Math.random() * emp.sedes.length)];
             
-            // Lógica específica de simulación
             if (sede === 'Tienda 4') {
                 const fechaCierreTienda4 = new Date('2024-08-31');
                 if (d > fechaCierreTienda4) continue; 
             }
 
             const producto = productos[Math.floor(Math.random() * productos.length)];
-            
             let prodFinal = producto;
             if (emp.compania.includes('CONSULTORIO')) {
                  if (Math.random() > 0.6) prodFinal = productos.find(p => p.nombre.includes('Consulta') || p.nombre.includes('[LAB]') || p.nombre.includes('[ECO]')) || producto;
@@ -81,14 +77,11 @@ interface DashboardProps {
     view?: string;
 }
 
-// Configuración de Ordenamiento
 type SortKey = 'producto' | 'cantidad' | 'transacciones' | 'costo' | 'ventaNeta' | 'ventaBruta' | 'ganancia' | 'margenPorcentaje';
 interface SortConfig {
   key: SortKey;
   direction: 'asc' | 'desc';
 }
-
-// Tipos de Filtro de Fecha
 type FilterMode = 'mes' | 'anio' | 'custom';
 
 const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
@@ -98,15 +91,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ventaNeta', direction: 'desc' });
   
-  // --- ESTADO DE FILTROS ---
+  // Nuevo Estado: Drill-Down por Sede
+  const [drillDownSede, setDrillDownSede] = useState<string | null>(null);
+
   const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth(); // 0-11
+  const currentMonth = new Date().getMonth(); 
 
   const [filterMode, setFilterMode] = useState<FilterMode>('mes');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   
-  // Fechas calculadas (strings YYYY-MM-DD)
   const [dateRange, setDateRange] = useState({
       start: new Date(currentYear, currentMonth, 1).toLocaleDateString('en-CA'),
       end: new Date(currentYear, currentMonth + 1, 0).toLocaleDateString('en-CA')
@@ -120,7 +114,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     fechaFin: ''
   });
 
-  // Efecto para recalcular fechas cuando cambian los selectores (Mes/Año/Modo)
+  // Limpiar selección de sede cuando cambia la vista o los filtros globales
+  useEffect(() => {
+    setDrillDownSede(null);
+  }, [view, dateRange]);
+
   useEffect(() => {
       let start = '';
       let end = '';
@@ -128,7 +126,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       if (filterMode === 'mes') {
           const firstDay = new Date(selectedYear, selectedMonth, 1);
           const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
-          
           start = firstDay.toLocaleDateString('en-CA'); 
           end = lastDay.toLocaleDateString('en-CA');
       } 
@@ -146,14 +143,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const fetchData = useCallback(async () => {
       setLoading(true);
       setError(null);
+      setDrillDownSede(null); // Reset drilldown on fetch
       
-      // Buffer de fechas para evitar problemas de Timezone (UTC vs Local)
       const bufferStart = new Date(dateRange.start);
       bufferStart.setDate(bufferStart.getDate() - 1);
-      
       const bufferEnd = new Date(dateRange.end);
       bufferEnd.setDate(bufferEnd.getDate() + 1);
-
       const queryStart = bufferStart.toISOString().split('T')[0];
       const queryEnd = bufferEnd.toISOString().split('T')[0];
 
@@ -185,8 +180,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
       try {
           if (session.companyId) options.context = { allowed_company_ids: [session.companyId] };
-
-          console.log(`Consultando Pedidos entre ${queryStart} y ${queryEnd}...`);
           const ordersRaw: any[] = await client.searchRead(session.uid, session.apiKey, modelOrder, domain, fieldsOrder, options);
 
           if (!ordersRaw || ordersRaw.length === 0) {
@@ -217,7 +210,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               if (linesData) allLinesData = allLinesData.concat(linesData);
           }
 
-          // Costos
           const productIds = new Set(allLinesData.map((l: any) => Array.isArray(l.product_id) ? l.product_id[0] : null).filter(id => id));
           let productCostMap = new Map<number, number>();
 
@@ -245,10 +237,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                       if (line) {
                           const productId = Array.isArray(line.product_id) ? line.product_id[0] : 0;
                           const productName = Array.isArray(line.product_id) ? line.product_id[1] : 'Producto Desconocido';
-                          
                           const ventaNeta = line.price_subtotal || 0; 
                           const ventaBruta = line.price_subtotal_incl || 0; 
-                          
                           let unitCost = productCostMap.get(productId) || 0;
                           
                           if (unitCost === 0) {
@@ -298,9 +288,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           });
 
           setVentasData(mappedVentas);
-
       } catch (err: any) {
-          console.error("Error Fetching Data:", err);
           setError(`Error de Conexión: ${err.message || "Fallo en consulta XML-RPC"}`);
           setVentasData([]); 
       } finally {
@@ -308,18 +296,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       }
   }, [session, dateRange]); 
 
-  // Disparador principal: Recargar datos cuando cambian las fechas
   useEffect(() => {
       fetchData();
   }, [fetchData]); 
 
-  // Filtro en memoria (Sedes, Compañía y Limpieza fina de fechas)
-  const datosFiltrados = useMemo(() => {
+  // 1. Datos base filtrados globalmente (Top Bars)
+  const datosBase = useMemo(() => {
     let datos = ventasData;
     const startStr = dateRange.start;
     const endStr = dateRange.end;
     
-    // Filtro ESTRICTO por string YYYY-MM-DD (limpieza de bordes de buffer)
     datos = datos.filter(v => {
         const vDate = v.fecha.toLocaleDateString('en-CA'); 
         return vDate >= startStr && vDate <= endStr;
@@ -332,7 +318,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
          datos = datos.filter(v => v.compania.includes(filtros.companiaSeleccionada));
     }
     return datos;
-  }, [ventasData, filtros.sedeSeleccionada, filtros.companiaSeleccionada, dateRange, session]);
+  }, [ventasData, filtros, dateRange, session]);
 
   const sedes = useMemo(() => {
       let base = ventasData;
@@ -342,50 +328,79 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       return ['Todas', ...Array.from(new Set(base.map(v => v.sede)))];
   }, [ventasData, filtros.companiaSeleccionada, session]);
 
+  // 2. Datos Activos para Gráficos y Tablas (Responden al Click de Sede)
+  const activeData = useMemo(() => {
+      if (drillDownSede) {
+          return datosBase.filter(v => v.sede === drillDownSede);
+      }
+      return datosBase;
+  }, [datosBase, drillDownSede]);
+
+  // KPIs
   const kpis = useMemo(() => {
-    const totalVentas = datosFiltrados.reduce((sum, v) => sum + v.total, 0);
-    const totalCostos = datosFiltrados.reduce((sum, v) => sum + v.costo, 0);
+    // Calculamos KPIs basados en activeData para que cambien al drilldown? 
+    // MEJOR: KPIs Generales (Top) siempre muestran el global del filtro superior, 
+    // y añadimos un banner de detalle cuando hay drilldown.
+    // Pero si es Dashboard General, mostramos métricas de Volumen.
+    // Si es Rentabilidad, métricas de Dinero.
+    
+    const dataToUse = datosBase; // KPIs top level respetan filtro global
+    const totalVentas = dataToUse.reduce((sum, v) => sum + v.total, 0);
+    const totalCostos = dataToUse.reduce((sum, v) => sum + v.costo, 0);
     const totalMargen = totalVentas - totalCostos;
     const margenPromedio = totalVentas > 0 ? ((totalMargen / totalVentas) * 100) : 0;
-    const unidadesVendidas = datosFiltrados.length;
+    const unidadesVendidas = dataToUse.length; // Aproximación por lineas
+    const ticketPromedio = unidadesVendidas > 0 ? (totalVentas / (unidadesVendidas * 0.6)) : 0; // Estimación simple
     
     return {
       totalVentas: totalVentas.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       totalMargen: totalMargen.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       margenPromedio: margenPromedio.toFixed(1),
-      unidadesVendidas
+      unidadesVendidas: unidadesVendidas.toLocaleString(),
+      ticketPromedio: ticketPromedio.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     };
-  }, [datosFiltrados]);
+  }, [datosBase]);
 
+  // Gráficos Evolutivos
   const ventasPorDia = useMemo(() => {
     const agrupado: Record<string, AgrupadoPorDia> = {};
-    datosFiltrados.forEach(v => {
-      // Usar en-CA para asegurar YYYY-MM-DD y ordenamiento correcto
+    activeData.forEach(v => {
       const fecha = v.fecha.toLocaleDateString('en-CA');
       if (!agrupado[fecha]) agrupado[fecha] = { fecha, ventas: 0, margen: 0 };
       agrupado[fecha].ventas += v.total;
       agrupado[fecha].margen += v.margen;
     });
     return Object.values(agrupado).sort((a, b) => a.fecha.localeCompare(b.fecha));
-  }, [datosFiltrados]);
+  }, [activeData]);
 
-  // Nueva estructura para Tarjetas de Sedes
+  // Top Productos (Para Dashboard General)
+  const topProductosVolumen = useMemo(() => {
+      const agg: Record<string, number> = {};
+      activeData.forEach(v => {
+          agg[v.producto] = (agg[v.producto] || 0) + v.total;
+      });
+      return Object.entries(agg)
+        .map(([name, val]) => ({ name, val }))
+        .sort((a, b) => b.val - a.val)
+        .slice(0, 5);
+  }, [activeData]);
+
+  // Tarjetas de Sedes (SIEMPRE usan datosBase para no desaparecer al filtrar)
   const infoSedesDetallada = useMemo(() => {
     const agrupado: Record<string, {
         sede: string;
         ventas: number;
         margen: number;
-        productos: Record<string, number>; // nombre -> totalVenta
+        productos: Record<string, number>; 
     }> = {};
 
-    datosFiltrados.forEach(v => {
+    datosBase.forEach(v => {
         if (!agrupado[v.sede]) {
             agrupado[v.sede] = { sede: v.sede, ventas: 0, margen: 0, productos: {} };
         }
         agrupado[v.sede].ventas += v.total;
         agrupado[v.sede].margen += v.margen;
         
-        // Agrupar productos por venta total para sacar los top
         if (!agrupado[v.sede].productos[v.producto]) {
             agrupado[v.sede].productos[v.producto] = 0;
         }
@@ -395,7 +410,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     return Object.values(agrupado).map(s => {
         const topProductos = Object.entries(s.productos)
             .sort(([, a], [, b]) => b - a)
-            .slice(0, 3) // Top 3
+            .slice(0, 3) 
             .map(([nombre, total]) => ({ nombre, total }));
 
         return {
@@ -404,11 +419,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             topProductos
         };
     }).sort((a, b) => b.ventas - a.ventas);
-  }, [datosFiltrados]);
+  }, [datosBase]); // <-- Importante: Depende de datosBase, no activeData
 
   const reporteProductos = useMemo(() => {
     const agrupado: Record<string, any> = {};
-    datosFiltrados.forEach(v => {
+    activeData.forEach(v => {
       if (!agrupado[v.producto]) {
           agrupado[v.producto] = { 
               producto: v.producto, 
@@ -444,7 +459,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             }
             return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
         });
-  }, [datosFiltrados, sortConfig]);
+  }, [activeData, sortConfig]);
 
   const handleSort = (key: SortKey) => {
       setSortConfig(current => ({
@@ -462,6 +477,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const ANIOS = [2023, 2024, 2025];
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
   const handleDownloadCSV = () => {
       const headers = ['Producto', 'Unidades', '#Transac.', 'Costo Total', 'Venta Neta', 'Venta Bruta', 'Ganancia', 'Margen %'];
@@ -487,14 +503,22 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       document.body.removeChild(link);
   };
 
-  // Vistas
+  // --- LÓGICA DE VISTAS ---
   const isRentabilidad = view === 'rentabilidad';
+  
+  // En General: Color azul, datos de Venta. En Rentabilidad: Color esmeralda, datos de Margen.
   const chartDataKey = isRentabilidad ? 'margen' : 'ventas'; 
   const chartColor = isRentabilidad ? '#10b981' : '#3b82f6'; 
-  const chartLabel = isRentabilidad ? 'Ganancia (Margen)' : 'Venta Neta';
-  const showKPIs = view === 'general' || view === 'rentabilidad';
-  const showCharts = view === 'general' || view === 'reportes' || view === 'rentabilidad';
-  const showTable = true; 
+  const chartLabel = isRentabilidad ? 'Ganancia' : 'Venta Neta';
+
+  // Control de Secciones
+  const showKPIs = true; // Siempre mostrar
+  const showSedeGrid = isRentabilidad; // Solo en rentabilidad
+  const showGeneralCharts = view === 'general'; // Charts de volumen solo en general
+  const showProfitCharts = isRentabilidad; // Charts de margen en rentabilidad
+  
+  // La tabla se muestra siempre, pero en General se prioriza volumen y en Rentabilidad se prioriza margen
+  // (Aunque es la misma tabla, el contexto visual cambia)
 
   return (
     <div className="p-4 md:p-6 lg:p-8 font-sans w-full relative">
@@ -510,6 +534,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       )}
 
       <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-2">
            <div>
               <h1 className="text-2xl font-bold text-slate-800">
@@ -528,7 +554,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 className="flex items-center gap-2 bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 font-medium text-sm hover:bg-slate-50 transition-colors shadow-sm"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Recargar API
+                Recargar
               </button>
               
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border font-medium text-sm ${session ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
@@ -542,20 +568,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         </div>
         
         {error && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex gap-3 items-center shadow-sm animate-in fade-in slide-in-from-top-2">
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex gap-3 items-center shadow-sm">
                 <AlertCircle className="w-5 h-5 shrink-0" />
-                <div className="flex-1">
-                    <p className="font-semibold text-sm">Aviso</p>
-                    <p className="text-xs opacity-90">{error}</p>
-                </div>
+                <div className="flex-1"><p className="text-sm opacity-90">{error}</p></div>
             </div>
         )}
 
-        {/* BARRA DE FILTROS REDISEÑADA */}
+        {/* FILTROS GLOBALES */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
           <div className="flex flex-col gap-4">
-            
-            {/* Fila 1: Filtros de Negocio (Sede/Compañía) */}
             <div className="flex flex-wrap gap-4 items-end border-b border-slate-100 pb-4">
                 <div className="w-full md:w-auto">
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
@@ -586,130 +607,116 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 </div>
             </div>
 
-            {/* Fila 2: Filtros de Tiempo (Tabs + Inputs) */}
             <div className="flex flex-wrap gap-6 items-center">
-                
-                {/* Selector de Modo */}
                 <div>
                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
                         <ListFilter className="inline w-3 h-3 mr-1" />Modo de Filtro
                    </label>
                    <div className="flex bg-slate-100 p-1 rounded-lg">
-                       <button 
-                         onClick={() => setFilterMode('mes')}
-                         className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'mes' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                       >Por Mes</button>
-                       <button 
-                         onClick={() => setFilterMode('anio')}
-                         className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'anio' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                       >Por Año</button>
-                       <button 
-                         onClick={() => setFilterMode('custom')}
-                         className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'custom' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                       >Personalizado</button>
+                       <button onClick={() => setFilterMode('mes')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'mes' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Por Mes</button>
+                       <button onClick={() => setFilterMode('anio')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'anio' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Por Año</button>
+                       <button onClick={() => setFilterMode('custom')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterMode === 'custom' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Personalizado</button>
                    </div>
                 </div>
 
-                {/* Controles Dinámicos según Modo */}
-                <div className="flex-1 flex items-center gap-4 animate-in fade-in slide-in-from-left-2 duration-300">
-                    
+                <div className="flex-1 flex items-center gap-4">
                     {filterMode === 'mes' && (
                         <>
                             <div className="w-32">
                                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Año</label>
-                                <select 
-                                    value={selectedYear}
-                                    onChange={(e) => setSelectedYear(Number(e.target.value))}
-                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
-                                >
-                                    {ANIOS.map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
+                                <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none">{ANIOS.map(y => <option key={y} value={y}>{y}</option>)}</select>
                             </div>
                             <div className="w-40">
                                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Mes</label>
-                                <select 
-                                    value={selectedMonth}
-                                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
-                                >
-                                    {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                </select>
+                                <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none">{MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
                             </div>
                         </>
                     )}
-
                     {filterMode === 'anio' && (
                          <div className="w-32">
                             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Año Fiscal</label>
-                            <select 
-                                value={selectedYear}
-                                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
-                            >
-                                {ANIOS.map(y => <option key={y} value={y}>{y}</option>)}
-                            </select>
+                            <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none">{ANIOS.map(y => <option key={y} value={y}>{y}</option>)}</select>
                         </div>
                     )}
-
                     {filterMode === 'custom' && (
                         <div className="flex gap-2 items-center">
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Desde</label>
-                                <input 
-                                    type="date" 
-                                    value={dateRange.start} 
-                                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} 
-                                    className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" 
-                                />
-                            </div>
+                            <div><label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Desde</label><input type="date" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none" /></div>
                             <div className="h-px w-4 bg-slate-300 mt-6"></div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Hasta</label>
-                                <input 
-                                    type="date" 
-                                    value={dateRange.end} 
-                                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} 
-                                    className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" 
-                                />
-                            </div>
+                            <div><label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Hasta</label><input type="date" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none" /></div>
                         </div>
                     )}
                 </div>
-
             </div>
           </div>
         </div>
 
+        {/* INDICADOR DE FILTRO ACTIVO (DRILL DOWN) */}
+        {drillDownSede && (
+            <div className="bg-emerald-600 text-white px-4 py-3 rounded-lg shadow-md flex items-center justify-between animate-in slide-in-from-top-2">
+                <div className="flex items-center gap-3">
+                    <div className="bg-white/20 p-1.5 rounded-md">
+                        <Target className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <p className="text-xs uppercase font-bold tracking-wider opacity-80">Visualizando Detalles de</p>
+                        <p className="font-bold text-lg leading-tight">{drillDownSede}</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={() => setDrillDownSede(null)}
+                    className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                >
+                    <X className="w-4 h-4" />
+                    Ver Todo
+                </button>
+            </div>
+        )}
+
+        {/* KPIs SUPERIORES */}
         {showKPIs && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-emerald-600 to-emerald-700'} rounded-xl shadow-lg p-6 flex flex-col justify-between`}>
+          
+          {/* KPI 1: VENTA (Difiere visualmente según vista) */}
+          <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-blue-600 to-blue-700'} rounded-xl shadow-lg p-6 flex flex-col justify-between`}>
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm"><TrendingUp className="w-6 h-6 text-white" /></div>
-              <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 bg-white/20 text-white rounded-full"><ArrowUpRight className="w-3 h-3" /> PoS</span>
+              <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
+                  {isRentabilidad ? <DollarSign className="w-6 h-6 text-white" /> : <TrendingUp className="w-6 h-6 text-white" />}
+              </div>
+              <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 bg-white/20 text-white rounded-full"><ArrowUpRight className="w-3 h-3" /> Global</span>
             </div>
             <div>
-              <p className="text-white/80 text-sm font-medium tracking-wide opacity-90">Venta Neta Total</p>
+              <p className="text-white/80 text-sm font-medium tracking-wide opacity-90">{isRentabilidad ? 'Venta Total Acumulada' : 'Volumen de Ventas'}</p>
               <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">S/ {kpis.totalVentas}</h3>
             </div>
           </div>
-          <div className={`rounded-xl shadow-sm border p-6 flex flex-col justify-between transition-colors ${isRentabilidad ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200 hover:border-blue-300'}`}>
+
+          {/* KPI 2: VARIABLE (Ganancia en Rentabilidad vs Ticket en General) */}
+          <div className={`rounded-xl shadow-sm border p-6 flex flex-col justify-between transition-colors ${isRentabilidad ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200'}`}>
             <div className="flex items-center justify-between mb-4">
-              <div className={`p-2 rounded-lg ${isRentabilidad ? 'bg-emerald-100' : 'bg-blue-50'}`}><DollarSign className={`w-6 h-6 ${isRentabilidad ? 'text-emerald-600' : 'text-blue-600'}`} /></div>
+              <div className={`p-2 rounded-lg ${isRentabilidad ? 'bg-emerald-100' : 'bg-blue-50'}`}>
+                  {isRentabilidad ? <TrendingUp className="w-6 h-6 text-emerald-600" /> : <Receipt className="w-6 h-6 text-blue-600" />}
+              </div>
             </div>
             <div>
-              <p className="text-slate-500 text-sm font-medium">Ganancia Total</p>
-              <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-emerald-700' : 'text-slate-800'}`}>S/ {kpis.totalMargen}</h3>
+              <p className="text-slate-500 text-sm font-medium">{isRentabilidad ? 'Ganancia Neta' : 'Ticket Promedio Est.'}</p>
+              <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-emerald-700' : 'text-slate-800'}`}>
+                  S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}
+              </h3>
             </div>
           </div>
+
+          {/* KPI 3: Items/Transacciones */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-purple-300 transition-colors">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 bg-purple-50 rounded-lg"><Package className="w-6 h-6 text-purple-600" /></div>
             </div>
             <div>
-              <p className="text-slate-500 text-sm font-medium">Items Vendidos</p>
+              <p className="text-slate-500 text-sm font-medium">Items Procesados</p>
               <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3>
             </div>
           </div>
+
+          {/* KPI 4: Margen % */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-orange-300 transition-colors">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 bg-orange-50 rounded-lg"><Store className="w-6 h-6 text-orange-600" /></div>
@@ -722,41 +729,76 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         </div>
         )}
 
-        {showCharts && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-800">{isRentabilidad ? 'Evolución de la Ganancia' : 'Evolución de Ventas Neta'}</h3>
+        {/* DASHBOARD GENERAL CHARTS (Volumen) */}
+        {showGeneralCharts && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6">Tendencia de Ventas (Volumen)</h3>
+                    <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
+                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
+                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Venta']} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                        <Line type="monotone" dataKey="ventas" stroke="#3b82f6" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                        </LineChart>
+                    </ResponsiveContainer>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6">Top 5 Productos (Por Volumen S/)</h3>
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={topProductosVolumen} layout="vertical" margin={{ left: 40, right: 20 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                <XAxis type="number" hide />
+                                <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10}} />
+                                <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Venta Total']} cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                <Bar dataKey="val" radius={[0, 4, 4, 0]} barSize={20}>
+                                    {topProductosVolumen.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
             </div>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
-                  <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
-                  <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} labelFormatter={(label) => new Date(label + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                  <Line type="monotone" dataKey={chartDataKey} stroke={chartColor} strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} name={chartLabel} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          
-          {/* SECCIÓN DE TARJETAS POR SEDE (Nuevo Grid) */}
-          <div>
+        )}
+
+        {/* RENTABILIDAD SECTION */}
+        {showSedeGrid && (
+          <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
             <div className="flex items-center gap-2 mb-4">
                 <LayoutGrid className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-lg font-bold text-slate-800">Desempeño por Sede</h3>
+                <h3 className="text-lg font-bold text-slate-800">Desempeño por Sede (Click para Filtrar)</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {infoSedesDetallada.map((sede, idx) => (
-                    <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hover:shadow-md transition-shadow">
+            
+            {/* GRID DE SEDES (CLICABLE) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {infoSedesDetallada.map((sede, idx) => {
+                    const isSelected = drillDownSede === sede.sede;
+                    return (
+                    <div 
+                        key={idx} 
+                        onClick={() => setDrillDownSede(isSelected ? null : sede.sede)}
+                        className={`bg-white rounded-xl shadow-sm border p-5 transition-all cursor-pointer group relative overflow-hidden ${
+                            isSelected 
+                            ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md transform scale-[1.02]' 
+                            : 'border-slate-200 hover:border-emerald-300 hover:shadow-md'
+                        }`}
+                    >
+                        {isSelected && <div className="absolute top-0 right-0 p-1.5 bg-emerald-500 rounded-bl-xl"><Target className="w-3 h-3 text-white" /></div>}
+                        
                         <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-3">
                             <div className="flex items-center gap-2">
-                                <div className="p-1.5 bg-slate-100 rounded-md">
-                                    <Store className="w-4 h-4 text-slate-600" />
+                                <div className={`p-1.5 rounded-md ${isSelected ? 'bg-emerald-100' : 'bg-slate-100 group-hover:bg-emerald-50'}`}>
+                                    <Store className={`w-4 h-4 ${isSelected ? 'text-emerald-700' : 'text-slate-600 group-hover:text-emerald-600'}`} />
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-slate-700 leading-tight">{sede.sede}</h4>
+                                    <h4 className={`font-bold leading-tight ${isSelected ? 'text-emerald-800' : 'text-slate-700'}`}>{sede.sede}</h4>
                                 </div>
                             </div>
                             <div className={`px-2 py-1 rounded text-xs font-bold ${Number(sede.margenPorcentaje) > 20 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -775,14 +817,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                             </div>
                         </div>
 
-                        <div className="bg-slate-50/80 rounded-lg p-3 border border-slate-100">
+                        <div className={`rounded-lg p-3 border ${isSelected ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50/80 border-slate-100'}`}>
                             <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-2">Top 3 Productos</p>
                             <div className="space-y-2">
                                 {sede.topProductos.map((prod, i) => (
-                                    <div key={i} className="flex justify-between items-center text-sm group">
+                                    <div key={i} className="flex justify-between items-center text-sm group/item">
                                         <div className="flex items-center gap-2 overflow-hidden">
                                             <span className="text-[10px] font-bold text-slate-300 w-3">{i+1}</span>
-                                            <span className="text-slate-600 truncate text-xs font-medium group-hover:text-emerald-700 transition-colors" title={prod.nombre}>
+                                            <span className="text-slate-600 truncate text-xs font-medium group-hover/item:text-emerald-700 transition-colors" title={prod.nombre}>
                                                 {prod.nombre}
                                             </span>
                                         </div>
@@ -795,18 +837,42 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                             </div>
                         </div>
                     </div>
-                ))}
+                )})}
+            </div>
+
+            {/* CHART RENTABILIDAD (Drill Down Aware) */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-bold text-slate-800">
+                        {drillDownSede ? `Evolución de Ganancia: ${drillDownSede}` : 'Evolución de Ganancia (Global)'}
+                    </h3>
+                </div>
+                <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
+                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
+                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} labelFormatter={(label) => new Date(label + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                        <Line type="monotone" dataKey={chartDataKey} stroke={chartColor} strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} name={chartLabel} />
+                    </LineChart>
+                    </ResponsiveContainer>
+                </div>
             </div>
           </div>
-        </div>
         )}
 
-        {showTable && (
+        {/* TABLA DE DETALLE (Siempre Visible, pero filtrada por drillDown) */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 overflow-hidden animate-in fade-in slide-in-from-bottom-12 duration-1000">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
             <div>
-               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><FileSpreadsheet className="w-5 h-5 text-emerald-600" />Detalle de Productos</h3>
-               <p className="text-xs text-slate-500">Desglose por item, costo real (Odoo) y rentabilidad.</p>
+               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                   <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                   {drillDownSede ? `Productos en ${drillDownSede}` : 'Detalle Global de Productos'}
+               </h3>
+               <p className="text-xs text-slate-500">
+                   {drillDownSede ? 'Mostrando únicamente items vendidos en la sede seleccionada.' : 'Desglose general por item, costo real y rentabilidad.'}
+               </p>
             </div>
             <button onClick={handleDownloadCSV} className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
               <Download className="w-4 h-4" />Descargar CSV
@@ -827,27 +893,34 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {reporteProductos.map((prod, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="px-4 py-3 font-medium text-slate-800 group-hover:text-blue-600 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
-                    <td className="px-4 py-3 text-right text-slate-600">{prod.cantidad}</td>
-                    <td className="px-4 py-3 text-right text-slate-500">{prod.transacciones}</td>
-                    <td className="px-4 py-3 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-bold text-slate-800">S/ {prod.ventaNeta.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right text-slate-400">S/ {prod.ventaBruta.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-medium text-emerald-600 bg-emerald-50/10">S/ {prod.ganancia.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-medium text-emerald-700 bg-emerald-50/10">
-                        <span className={`px-2 py-0.5 rounded text-xs ${prod.margenPorcentaje < 20 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'}`}>
-                            {prod.margenPorcentaje.toFixed(1)}%
-                        </span>
-                    </td>
-                  </tr>
-                ))}
+                {reporteProductos.length > 0 ? (
+                    reporteProductos.map((prod, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
+                        <td className="px-4 py-3 font-medium text-slate-800 group-hover:text-blue-600 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
+                        <td className="px-4 py-3 text-right text-slate-600">{prod.cantidad}</td>
+                        <td className="px-4 py-3 text-right text-slate-500">{prod.transacciones}</td>
+                        <td className="px-4 py-3 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-800">S/ {prod.ventaNeta.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right text-slate-400">S/ {prod.ventaBruta.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-medium text-emerald-600 bg-emerald-50/10">S/ {prod.ganancia.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-medium text-emerald-700 bg-emerald-50/10">
+                            <span className={`px-2 py-0.5 rounded text-xs ${prod.margenPorcentaje < 20 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'}`}>
+                                {prod.margenPorcentaje.toFixed(1)}%
+                            </span>
+                        </td>
+                    </tr>
+                    ))
+                ) : (
+                    <tr>
+                        <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">
+                            No se encontraron productos para los filtros seleccionados.
+                        </td>
+                    </tr>
+                )}
               </tbody>
             </table>
           </div>
         </div>
-        )}
       </div>
     </div>
   );
