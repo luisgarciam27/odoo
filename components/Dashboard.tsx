@@ -768,6 +768,43 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const chartColor = isRentabilidad ? '#84cc16' : '#0ea5e9'; 
   const chartLabel = isRentabilidad ? 'Ganancia' : 'Venta Neta';
 
+  // Helper for rendering table rows to avoid complex nesting in JSX
+  const renderTableRows = () => {
+      if (paginatedData.length === 0) {
+          return (
+            <tr>
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">
+                    No se encontraron productos para los filtros seleccionados.
+                </td>
+            </tr>
+          );
+      }
+
+      return paginatedData.map((item: any, idx: number) => {
+          const prod = item as any;
+          return (
+            <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                <td className="px-4 py-3.5 font-medium text-slate-700 group-hover:text-brand-700 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
+                <td className="px-4 py-3.5 text-slate-500 text-xs">{prod.categoria}</td>
+                <td className="px-4 py-3.5 text-slate-500 text-xs">
+                    <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-medium">
+                        {prod.metodoPago || 'Varios'}
+                    </span>
+                </td>
+                <td className="px-4 py-3.5 text-right text-slate-600">{prod.cantidad}</td>
+                <td className="px-4 py-3.5 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
+                <td className="px-4 py-3.5 text-right font-bold text-slate-800">S/ {prod.ventaNeta.toFixed(2)}</td>
+                <td className="px-4 py-3.5 text-right font-medium text-brand-600">S/ {prod.ganancia.toFixed(2)}</td>
+                <td className="px-4 py-3.5 text-right font-medium text-brand-600">
+                    <span className={`px-2 py-1 rounded-md text-xs font-bold ${prod.margenPorcentaje < 20 ? 'bg-red-100 text-red-600' : 'bg-brand-100 text-brand-700'}`}>
+                        {prod.margenPorcentaje.toFixed(1)}%
+                    </span>
+                </td>
+            </tr>
+          );
+      });
+  };
+
   // --- RENDER ---
   return (
     <div className="p-4 md:p-6 lg:p-8 font-sans w-full relative pb-20 text-slate-700">
@@ -1404,36 +1441,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                    {paginatedData.length > 0 ? (
-                        paginatedData.map((item: any, idx: number) => {
-                            const prod = item as any;
-                            return (
-                        <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                            <td className="px-4 py-3.5 font-medium text-slate-700 group-hover:text-brand-700 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
-                            <td className="px-4 py-3.5 text-slate-500 text-xs">{prod.categoria}</td>
-                            <td className="px-4 py-3.5 text-slate-500 text-xs">
-                                <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-medium">
-                                    {prod.metodoPago || 'Varios'}
-                                </span>
-                            </td>
-                            <td className="px-4 py-3.5 text-right text-slate-600">{prod.cantidad}</td>
-                            <td className="px-4 py-3.5 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
-                            <td className="px-4 py-3.5 text-right font-bold text-slate-800">S/ {prod.ventaNeta.toFixed(2)}</td>
-                            <td className="px-4 py-3.5 text-right font-medium text-brand-600">S/ {prod.ganancia.toFixed(2)}</td>
-                            <td className="px-4 py-3.5 text-right font-medium text-brand-600">
-                                <span className={`px-2 py-1 rounded-md text-xs font-bold ${prod.margenPorcentaje < 20 ? 'bg-red-100 text-red-600' : 'bg-brand-100 text-brand-700'}`}>
-                                    {prod.margenPorcentaje.toFixed(1)}%
-                                </span>
-                            </td>
-                        </tr>
-                        )})
-                    ) : (
-                        <tr>
-                            <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">
-                                No se encontraron productos para los filtros seleccionados.
-                            </td>
-                        </tr>
-                    )}
+                    {renderTableRows()}
                 </tbody>
                 </table>
             </div>
