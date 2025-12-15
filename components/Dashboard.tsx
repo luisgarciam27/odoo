@@ -6,6 +6,8 @@ import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, 
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
+// @ts-ignore
+import * as XLSX from 'xlsx';
 
 // Generador de datos dinámico basado en el rango solicitado
 const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
@@ -479,28 +481,44 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const ANIOS = [2023, 2024, 2025];
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-  const handleDownloadCSV = () => {
-      const headers = ['Producto', 'Unidades', '#Transac.', 'Costo Total', 'Venta Neta', 'Venta Bruta', 'Ganancia', 'Margen %'];
-      const rows = reporteProductos.map(p => [
-          `"${p.producto.replace(/"/g, '""')}"`,
-          p.cantidad,
-          p.transacciones,
-          p.costo.toFixed(2),
-          p.ventaNeta.toFixed(2),
-          p.ventaBruta.toFixed(2),
-          p.ganancia.toFixed(2),
-          `${p.margenPorcentaje.toFixed(2)}%`
-      ]);
+  const handleDownloadExcel = () => {
+    // Preparar datos para Excel con nombres de columnas amigables
+    const dataToExport = reporteProductos.map(p => ({
+        'Producto': p.producto,
+        'Unidades': p.cantidad,
+        '# Transacciones': p.transacciones,
+        'Costo Total': Number(p.costo.toFixed(2)),
+        'Venta Neta': Number(p.ventaNeta.toFixed(2)),
+        'Venta Bruta': Number(p.ventaBruta.toFixed(2)),
+        'Ganancia': Number(p.ganancia.toFixed(2)),
+        'Margen %': Number(p.margenPorcentaje.toFixed(2)) / 100 // Para formato porcentaje en Excel
+    }));
 
-      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `reporte_ventas_${dateRange.start}_${dateRange.end}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    // Crear hoja de trabajo
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+
+    // Ajustar ancho de columnas (aproximado)
+    const wscols = [
+        { wch: 40 }, // Producto
+        { wch: 10 }, // Unidades
+        { wch: 15 }, // Transacciones
+        { wch: 15 }, // Costo
+        { wch: 15 }, // Venta Neta
+        { wch: 15 }, // Venta Bruta
+        { wch: 15 }, // Ganancia
+        { wch: 12 }, // Margen %
+    ];
+    ws['!cols'] = wscols;
+
+    // Crear libro de trabajo
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Detalle Productos");
+
+    // Generar nombre de archivo
+    const fileName = `Reporte_Ventas_${dateRange.start}_${dateRange.end}.xlsx`;
+    
+    // Descargar
+    XLSX.writeFile(wb, fileName);
   };
 
   // --- LÓGICA DE VISTAS ---
@@ -873,8 +891,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                    {drillDownSede ? 'Mostrando únicamente items vendidos en la sede seleccionada.' : 'Desglose general por item, costo real y rentabilidad.'}
                </p>
             </div>
-            <button onClick={handleDownloadCSV} className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-              <Download className="w-4 h-4" />Descargar CSV
+            <button onClick={handleDownloadExcel} className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+              <Download className="w-4 h-4" />Descargar Excel
             </button>
           </div>
           <div className="overflow-x-auto border rounded-lg border-slate-100">
