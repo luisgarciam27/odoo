@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ScatterChart, Scatter, ZAxis, Area, AreaChart 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin, CreditCard } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin, CreditCard, Wallet, CalendarRange } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal, { ConnectionConfig } from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
@@ -48,6 +48,7 @@ const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
             const sede = emp.sedes[Math.floor(Math.random() * emp.sedes.length)];
             const vendedor = vendedores[Math.floor(Math.random() * vendedores.length)];
             const metodo = metodosPago[Math.floor(Math.random() * metodosPago.length)];
+            const fakeSession = `POS/${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2, '0')}/${Math.floor(Math.random()*100) + 1000}`;
             
             if (sede === 'Tienda 4') {
                 const fechaCierreTienda4 = new Date('2024-08-31');
@@ -72,6 +73,7 @@ const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
                 fecha: new Date(d),
                 sede, 
                 compania: emp.compania,
+                sesion: fakeSession,
                 producto: prodFinal.nombre,
                 categoria: prodFinal.cat,
                 vendedor,
@@ -93,7 +95,7 @@ interface DashboardProps {
     view?: string;
 }
 
-type SortKey = 'producto' | 'cantidad' | 'transacciones' | 'costo' | 'ventaNeta' | 'ventaBruta' | 'ganancia' | 'margenPorcentaje' | 'metodoPago';
+type SortKey = 'producto' | 'cantidad' | 'transacciones' | 'costo' | 'ventaNeta' | 'ventaBruta' | 'ganancia' | 'margenPorcentaje' | 'metodoPago' | 'sesion' | 'fecha';
 interface SortConfig {
   key: SortKey;
   direction: 'asc' | 'desc';
@@ -105,7 +107,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ventaNeta', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'fecha', direction: 'desc' });
   const [drillDownSede, setDrillDownSede] = useState<string | null>(null);
 
   // Estados de Paginación
@@ -179,8 +181,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
       const client = new OdooClient(session.url, session.db, session.useProxy);
       const modelOrder = 'pos.order';
-      // Added 'payment_ids' to fetch payment relations
-      const fieldsOrder = ['date_order', 'config_id', 'lines', 'company_id', 'user_id', 'pos_reference', 'name', 'payment_ids'];
+      // Added 'payment_ids' and 'session_id'
+      const fieldsOrder = ['date_order', 'config_id', 'lines', 'company_id', 'user_id', 'pos_reference', 'name', 'payment_ids', 'session_id'];
 
       const domain: any[] = [
         ['state', '!=', 'cancel'], 
@@ -250,28 +252,18 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           }
 
           // --- FETCH PAYMENTS INFO ---
-          // Mapping OrderID -> Payment Method Name
           let paymentMap = new Map<number, string>();
           if (allPaymentIds.length > 0) {
               const paymentChunks = chunkArray(allPaymentIds, 1000);
               for (const payChunk of paymentChunks) {
-                  // Fetch pos.payment to get payment_method_id
                   const paymentsData = await client.searchRead(session.uid, session.apiKey, 'pos.payment', [['id', 'in', payChunk]], ['payment_method_id', 'pos_order_id']);
                   if (paymentsData) {
                       paymentsData.forEach((p: any) => {
-                          // p.pos_order_id = [id, "Order Ref"]
-                          // p.payment_method_id = [id, "Cash"]
                           if (p.pos_order_id && p.payment_method_id) {
                               const orderId = p.pos_order_id[0];
                               const methodName = p.payment_method_id[1];
-                              // If order has multiple payments, simpler logic: overwrite or first one. 
-                              // For robustness, we could concatenate if exists, but taking last one is usually fine for dominant method.
-                              // Or simply use the one we find.
                               if (!paymentMap.has(orderId)) {
                                   paymentMap.set(orderId, methodName);
-                              } else {
-                                  // Optional: Handle split payments (e.g. "Efectivo + Tarjeta")
-                                  // For now keeping simple.
                               }
                           }
                       });
@@ -287,6 +279,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               const sede = Array.isArray(order.config_id) ? order.config_id[1] : 'Caja General';
               const compania = Array.isArray(order.company_id) ? order.company_id[1] : 'Empresa Principal';
               const vendedor = Array.isArray(order.user_id) ? order.user_id[1] : 'Usuario Sistema';
+              const sesion = Array.isArray(order.session_id) ? order.session_id[1] : 'Sesión Desconocida';
               const metodoPago = paymentMap.get(order.id) || 'Desconocido';
 
               if (order.lines && Array.isArray(order.lines)) {
@@ -311,9 +304,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                               sede,
                               compania,
                               vendedor,
+                              sesion, // Nuevo campo
                               producto: productName,
                               categoria: prodInfo.cat,
-                              metodoPago, // Asignar metodo
+                              metodoPago, 
                               cantidad: line.qty || 1,
                               total: ventaNeta, 
                               costo: costoTotal,
@@ -450,7 +444,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       return Object.values(agg).sort((a, b) => b.ventas - a.ventas);
   }, [filteredData]);
 
-  // Removed unused topProductosVolumen
 
   const bottomProductosVolumen = useMemo(() => {
       const agg: Record<string, number> = {};
@@ -487,17 +480,56 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       return Object.entries(agg).map(([name, ventas]) => ({ name, ventas })).sort((a, b) => b.ventas - a.ventas);
   }, [filteredData]);
 
+  // --- LOGICA ESPECIFICA PARA VISTA 'PAGOS' ---
+  const pagosData = useMemo(() => {
+      if (view !== 'pagos') return [];
+      
+      // Agrupar por Fecha + Sesión + Método (Para la tabla detalle)
+      // Aunque en la tabla queremos filas individuales, para los gráficos necesitamos agrupamientos.
+      
+      // Para tabla detallada, podemos usar filteredData directamente (mapeando campos) o agrupar ligeramente.
+      // Vamos a mostrar detalle por producto/linea que es lo que tenemos, pero con info de sesión.
+      
+      return filteredData.map(v => ({
+          fecha: v.fecha,
+          fechaStr: v.fecha.toLocaleDateString('es-PE'),
+          sesion: v.sesion,
+          sede: v.sede,
+          metodo: v.metodoPago,
+          producto: v.producto,
+          total: v.total
+      })).sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
+
+  }, [filteredData, view]);
+
+  const pagosPorDiaStack = useMemo(() => {
+      if (view !== 'pagos') return [];
+      const agg: Record<string, any> = {};
+      // Get all methods to ensure keys exist
+      const methods = new Set(filteredData.map(v => v.metodoPago));
+      
+      filteredData.forEach(v => {
+          const f = v.fecha.toLocaleDateString('en-CA');
+          if(!agg[f]) {
+              agg[f] = { fecha: f };
+              methods.forEach(m => agg[f][m] = 0);
+          }
+          agg[f][v.metodoPago] = (agg[f][v.metodoPago] || 0) + v.total;
+      });
+      return Object.values(agg).sort((a: any, b: any) => a.fecha.localeCompare(b.fecha));
+  }, [filteredData, view]);
+
+  // --- REPORTES Y TABLAS ---
+
   const reporteProductos = useMemo(() => {
+    // Si estamos en vista pagos, usamos pagosData para la tabla, pero la lógica de paginación es compartida.
+    // Separaremos la lógica de tabla según la vista.
+    if (view === 'pagos') {
+        return pagosData; // Usamos esto como fuente para la tabla de pagos
+    }
+
     const agrupado: Record<string, any> = {};
     filteredData.forEach(v => {
-      // Creamos una clave única que combine producto y método de pago para que el detalle muestre por método también si se desea
-      // O mantenemos por producto y usamos el método más frecuente? 
-      // El requerimiento dice "columna de metodo de pago". Si agrupamos SOLO por producto, el metodo de pago es ambiguo.
-      // Para mostrarlo en tabla, es mejor listar las transacciones o agrupar por (Producto + Metodo).
-      // Sin embargo, para no romper la tabla de "Productos", vamos a dejarlo agrupado por producto
-      // y mostrar "Varios" si hay multiples, o el metodo si es unico.
-      // *Mejor aún*: Agregamos el método al group key para ver desglose.*
-      
       const key = `${v.producto}-${v.metodoPago}`;
       
       if (!agrupado[key]) {
@@ -524,19 +556,24 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             ...p,
             margenPorcentaje: p.ventaNeta > 0 ? (p.ganancia / p.ventaNeta) * 100 : 0
         }))
-        .sort((a, b) => {
+        .sort((a: any, b: any) => {
             const valA = a[sortConfig.key];
             const valB = b[sortConfig.key];
+            if (valA === undefined || valB === undefined) return 0;
             if (typeof valA === 'string') {
                 return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
             }
-            return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+            return sortConfig.direction === 'asc' ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
         });
-  }, [filteredData, sortConfig]);
+  }, [filteredData, sortConfig, view, pagosData]);
 
-  useEffect(() => { setCurrentPage(1); }, [reporteProductos.length, sortConfig]);
-  const totalPages = Math.ceil(reporteProductos.length / itemsPerPage);
-  const paginatedProductos = reporteProductos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  // Use a generic source for pagination based on view
+  const tableSource = view === 'pagos' ? pagosData : reporteProductos;
+
+  useEffect(() => { setCurrentPage(1); }, [tableSource.length, sortConfig, view]);
+  const totalPages = Math.ceil(tableSource.length / itemsPerPage);
+  const paginatedData = tableSource.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  
   const handlePageChange = (newPage: number) => { if (newPage >= 1 && newPage <= totalPages) setCurrentPage(newPage); };
 
   const handleSort = (key: SortKey) => {
@@ -568,6 +605,47 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const ANIOS = [2023, 2024, 2025];
   // Vivid Lemon/Spring Palette
   const COLORS = ['#84cc16', '#0ea5e9', '#f59e0b', '#ec4899', '#8b5cf6', '#10b981', '#f43f5e', '#6366f1'];
+
+  const handleDownloadPagos = () => {
+    try {
+        const wb = XLSX.utils.book_new();
+        const titulo = [["REPORTE DE INGRESOS POR MÉTODO DE PAGO Y SESIÓN"]];
+        const fechaReporte = [["Fecha de Emisión:", new Date().toLocaleDateString()]];
+        const empresaInfo = [["Empresa:", session?.companyName || 'Todas']];
+        const rangoInfo = [["Periodo:", `${dateRange.start} al ${dateRange.end}`]];
+        const espacio = [[""]];
+
+        const headers = [["FECHA", "SEDE", "SESIÓN CAJA", "MÉTODO DE PAGO", "PRODUCTO / CONCEPTO", "MONTO (S/)"]];
+        
+        const body = pagosData.map((row: any) => [
+            row.fechaStr,
+            row.sede,
+            row.sesion,
+            row.metodo,
+            row.producto,
+            row.total
+        ]);
+
+        const totalSum = pagosData.reduce((acc: number, r: any) => acc + r.total, 0);
+        const totalRow = [["TOTAL GENERAL", "", "", "", "", totalSum]];
+
+        // Resumen por Metodo
+        const resumenMetodo = ventasPorMetodoPago.map(m => [m.name, m.value]);
+        const headerResumen = [["RESUMEN POR MÉTODO", "TOTAL"]];
+
+        const dataMain = [...titulo, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio, ...headers, ...body, ...totalRow, ...espacio, ...espacio, ...headerResumen, ...resumenMetodo];
+        
+        const ws = XLSX.utils.aoa_to_sheet(dataMain);
+        ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
+
+        XLSX.utils.book_append_sheet(wb, ws, "Pagos Detalle");
+        XLSX.writeFile(wb, `Reporte_Pagos_${dateRange.start}.xlsx`);
+
+    } catch (e) {
+        console.error(e);
+        alert("Error generando Excel de pagos.");
+    }
+  };
 
   const handleDownloadComparativa = () => {
     try {
@@ -645,7 +723,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
         const headers = [["PRODUCTO", "CATEGORÍA", "MÉTODO DE PAGO", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "MARGEN %"]];
         
-        const body = reporteProductos.map(p => [
+        // Use generic casting or checking for reporteProductos items
+        const body = (reporteProductos as any[]).map(p => [
             p.producto,
             p.categoria,
             p.metodoPago,
@@ -656,10 +735,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             p.margenPorcentaje / 100
         ]);
 
-        const sumCant = reporteProductos.reduce((acc, curr) => acc + curr.cantidad, 0);
-        const sumCosto = reporteProductos.reduce((acc, curr) => acc + curr.costo, 0);
-        const sumTotal = reporteProductos.reduce((acc, curr) => acc + curr.ventaNeta, 0);
-        const sumMargen = reporteProductos.reduce((acc, curr) => acc + curr.ganancia, 0);
+        const sumCant = (reporteProductos as any[]).reduce((acc, curr) => acc + curr.cantidad, 0);
+        const sumCosto = (reporteProductos as any[]).reduce((acc, curr) => acc + curr.costo, 0);
+        const sumTotal = (reporteProductos as any[]).reduce((acc, curr) => acc + curr.ventaNeta, 0);
+        const sumMargen = (reporteProductos as any[]).reduce((acc, curr) => acc + curr.ganancia, 0);
         const sumRentabilidad = sumTotal > 0 ? sumMargen / sumTotal : 0;
 
         const totalRow = [["TOTALES", "", "", sumCant, sumCosto, sumTotal, sumMargen, sumRentabilidad]];
@@ -723,6 +802,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 {view === 'rentabilidad' ? 'Rentabilidad y Ganancias' : 
                  view === 'ventas' ? 'Gestión de Ventas' :
                  view === 'comparativa' ? 'Comparativa de Sedes' :
+                 view === 'pagos' ? 'Tesorería y Métodos de Pago' :
                  view === 'reportes' ? 'Reportes Gráficos' : 'Dashboard General'}
                  {view === 'general' && <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-700 border border-brand-200">LIVE</span>}
               </h1>
@@ -735,6 +815,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               {view === 'comparativa' && (
                 <button onClick={handleDownloadComparativa} className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-xl font-medium text-sm hover:bg-brand-700 transition-all shadow-md shadow-brand-200 hover:shadow-lg hover:shadow-brand-200/50">
                   <Download className="w-4 h-4" /> Reporte Completo
+                </button>
+              )}
+              {view === 'pagos' && (
+                <button onClick={handleDownloadPagos} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-xl font-medium text-sm hover:bg-slate-900 transition-all shadow-md shadow-slate-800/20">
+                  <FileSpreadsheet className="w-4 h-4" /> Exportar Informe
                 </button>
               )}
               <button onClick={() => fetchData()} className="flex items-center gap-2 bg-white text-slate-600 px-4 py-2 rounded-xl border border-slate-200 font-medium text-sm hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm">
@@ -814,8 +899,172 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           </div>
         </div>
 
-        {/* DRILL DOWN INDICATOR */}
-        {drillDownSede && (
+        {/* --- VISTA: PAGOS (TESORERÍA) --- */}
+        {view === 'pagos' ? (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                
+                {/* KPIs de Pagos */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-slate-800 text-white rounded-2xl shadow-xl shadow-slate-200 p-6 flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="p-3 bg-white/10 rounded-xl"><Wallet className="w-6 h-6 text-emerald-400" /></div>
+                            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Total Recaudado</span>
+                        </div>
+                        <h3 className="text-3xl font-bold tracking-tight">S/ {kpis.totalVentas}</h3>
+                        <p className="text-slate-400 text-sm mt-1">{kpis.unidadesVendidas} transacciones procesadas</p>
+                    </div>
+
+                    <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="p-3 bg-brand-50 rounded-xl text-brand-600"><Target className="w-6 h-6" /></div>
+                            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Método Principal</span>
+                        </div>
+                        <h3 className="text-2xl font-bold text-slate-800">
+                            {ventasPorMetodoPago[0]?.name || 'N/A'}
+                        </h3>
+                        <p className="text-slate-500 text-sm mt-1">
+                            S/ {ventasPorMetodoPago[0]?.value.toLocaleString()} ({ventasPorMetodoPago[0] ? ((ventasPorMetodoPago[0].value / Number(kpis.totalVentas.replace(',',''))) * 100).toFixed(0) : 0}%)
+                        </p>
+                    </div>
+
+                    <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="p-3 bg-blue-50 rounded-xl text-blue-600"><CalendarRange className="w-6 h-6" /></div>
+                            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Promedio Diario</span>
+                        </div>
+                        <h3 className="text-2xl font-bold text-slate-800">
+                             S/ {(Number(kpis.totalVentas.replace(/,/g,'')) / (pagosPorDiaStack.length || 1)).toLocaleString('es-PE', {maximumFractionDigits: 0})}
+                        </h3>
+                        <p className="text-slate-500 text-sm mt-1">Ingreso promedio por día operativo</p>
+                    </div>
+                </div>
+
+                {/* Gráficos de Pagos */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Gráfico 1: Evolución por Método (Stacked Bar) */}
+                    <div className="lg:col-span-2 bg-white rounded-2xl shadow-md border border-slate-100 p-6">
+                         <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                             <TrendingUp className="w-5 h-5 text-brand-600"/> Evolución de Ingresos por Día
+                         </h3>
+                         <div className="h-[350px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={pagosPorDiaStack} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="fecha" stroke="#94a3b8" tick={{fontSize: 12}} tickFormatter={(val) => val.split('-')[2]} />
+                                    <YAxis stroke="#94a3b8" tick={{fontSize: 12}} />
+                                    <Tooltip 
+                                        cursor={{fill: '#f8fafc'}}
+                                        contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                                        formatter={(val: number) => `S/ ${val.toLocaleString()}`}
+                                    />
+                                    <Legend wrapperStyle={{paddingTop: '20px'}}/>
+                                    {ventasPorMetodoPago.map((m, idx) => (
+                                        <Bar key={m.name} dataKey={m.name} stackId="a" fill={COLORS[idx % COLORS.length]} />
+                                    ))}
+                                </BarChart>
+                            </ResponsiveContainer>
+                         </div>
+                    </div>
+
+                    {/* Gráfico 2: Distribución Total */}
+                    <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
+                        <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                            <PieChartIcon className="w-5 h-5 text-brand-600"/> Distribución
+                        </h3>
+                        <div className="h-[350px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={ventasPorMetodoPago}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                    >
+                                        {ventasPorMetodoPago.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip formatter={(value: number) => `S/ ${value.toLocaleString()}`} />
+                                    <Legend layout="vertical" verticalAlign="middle" align="right" />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Tabla Detallada de Pagos */}
+                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 overflow-hidden">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <CreditCard className="w-5 h-5 text-slate-600" />
+                                Detalle de Operaciones de Caja
+                            </h3>
+                            <p className="text-xs text-slate-500 font-light mt-1">
+                                Listado completo de transacciones por sesión y método de pago.
+                            </p>
+                        </div>
+                        {/* Buscador Simple */}
+                        {/* <input type="text" placeholder="Buscar sesión..." className="border rounded px-3 py-1 text-sm"/> */}
+                    </div>
+
+                    <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                        <table className="w-full text-sm text-left text-slate-600">
+                            <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100 select-none">
+                                <tr>
+                                    <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600" onClick={() => handleSort('fecha')}>Fecha <SortIcon column="fecha"/></th>
+                                    <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600" onClick={() => handleSort('sesion')}>Sesión Caja <SortIcon column="sesion"/></th>
+                                    <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600" onClick={() => handleSort('metodoPago')}>Método <SortIcon column="metodoPago"/></th>
+                                    <th className="px-4 py-4 font-bold">Concepto / Producto</th>
+                                    <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600" onClick={() => handleSort('ventaNeta')}>Monto <SortIcon column="ventaNeta"/></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {(paginatedData as any[]).map((row, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{row.fechaStr}</td>
+                                        <td className="px-4 py-3 font-mono text-xs text-brand-700 font-medium bg-brand-50/50 rounded">{row.sesion}</td>
+                                        <td className="px-4 py-3">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200">
+                                                {row.metodo}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-500 truncate max-w-xs">{row.producto}</td>
+                                        <td className="px-4 py-3 text-right font-bold text-slate-700">S/ {row.total.toFixed(2)}</td>
+                                    </tr>
+                                ))}
+                                {paginatedData.length === 0 && (
+                                    <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No hay registros de pagos para este periodo.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    {/* Pagination for Payment Table */}
+                    {tableSource.length > 0 && (
+                        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-6 mt-4">
+                            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                                <div>
+                                    <p className="text-sm text-slate-500">
+                                        Mostrando <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-slate-800">{Math.min(currentPage * itemsPerPage, tableSource.length)}</span> de <span className="font-bold text-slate-800">{tableSource.length}</span> registros
+                                    </p>
+                                </div>
+                                <div>
+                                    <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                        <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
+                                        <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">Página {currentPage}</span>
+                                        <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
+                                    </nav>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+            </div>
+        ) : drillDownSede && (
             <div className="bg-brand-50 border border-brand-200 text-brand-800 px-5 py-4 rounded-xl shadow-sm flex items-center justify-between animate-in slide-in-from-top-2">
                 <div className="flex items-center gap-4">
                     <div className="bg-brand-100 p-2 rounded-lg"><Target className="w-5 h-5 text-brand-600" /></div>
@@ -828,8 +1077,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             </div>
         )}
 
-        {/* --- VISTA COMPARATIVA DE SEDES (TIPO CAJONES) --- */}
-        {view === 'comparativa' ? (
+        {/* --- VISTA COMPARATIVA (TIPO CAJONES) --- */}
+        {view === 'comparativa' && !drillDownSede ? (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
              
              {/* CAJONES: Tarjetas Interactivas por Sede */}
@@ -943,7 +1192,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
              </div>
 
           </div>
-        ) : (
+        ) : view !== 'pagos' ? (
           /* --- VISTAS ANTERIORES (General, Rentabilidad, Ventas, Reportes) --- */
           <>
             {/* KPIs SUPERIORES CON COMPARATIVOS */}
@@ -1115,10 +1364,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 </div>
             </div>
           </>
-        )}
+          : null
+        }
 
         {/* TABLA DE DETALLE - Visible en General y en Comparativa (solo si hay DrillDown) */}
-        {(view !== 'comparativa' || drillDownSede) && (
+        {(view !== 'pagos' && view !== 'comparativa') || (view === 'comparativa' && drillDownSede) ? (
             <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 overflow-hidden animate-in fade-in slide-in-from-bottom-12 duration-1000">
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                 <div>
@@ -1149,8 +1399,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                    {paginatedProductos.length > 0 ? (
-                        paginatedProductos.map((prod, idx) => (
+                    {paginatedData.length > 0 ? (
+                        (paginatedData as any[]).map((prod, idx) => (
                         <tr key={idx} className="hover:bg-slate-50 transition-colors group">
                             <td className="px-4 py-3.5 font-medium text-slate-700 group-hover:text-brand-700 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
                             <td className="px-4 py-3.5 text-slate-500 text-xs">{prod.categoria}</td>
@@ -1182,12 +1432,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             </div>
 
             {/* Pagination Controls */}
-            {reporteProductos.length > 0 && (
+            {tableSource.length > 0 && (
                 <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-6 mt-4">
                     <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
                         <div>
                             <p className="text-sm text-slate-500">
-                                Mostrando <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-slate-800">{Math.min(currentPage * itemsPerPage, reporteProductos.length)}</span> de <span className="font-bold text-slate-800">{reporteProductos.length}</span> resultados
+                                Mostrando <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-slate-800">{Math.min(currentPage * itemsPerPage, tableSource.length)}</span> de <span className="font-bold text-slate-800">{tableSource.length}</span> resultados
                             </p>
                         </div>
                         <div>
@@ -1217,7 +1467,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 </div>
             )}
             </div>
-        )}
+        ) : null}
 
       </div>
     </div>

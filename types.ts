@@ -10,6 +10,7 @@ export interface Venta {
   fecha: Date;
   sede: string;
   compania: string;
+  sesion: string; // Nuevo campo para la Sesión del POS (Ej: POS/2024/01/55)
   producto: string;
   categoria: string;
   vendedor: string;
