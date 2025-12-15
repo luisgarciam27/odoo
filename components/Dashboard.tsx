@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
@@ -414,6 +414,18 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     return Object.values(agrupado).sort((a, b) => a.fecha.localeCompare(b.fecha));
   }, [filteredData]);
 
+  // Comparativa por Sedes
+  const comparativaSedes = useMemo(() => {
+      const agg: Record<string, { name: string; ventas: number; margen: number }> = {};
+      filteredData.forEach(v => {
+          const sede = v.sede || 'Sin Sede';
+          if (!agg[sede]) agg[sede] = { name: sede, ventas: 0, margen: 0 };
+          agg[sede].ventas += v.total;
+          agg[sede].margen += v.margen;
+      });
+      return Object.values(agg).sort((a, b) => b.ventas - a.ventas);
+  }, [filteredData]);
+
   // Top Productos (Volumen)
   const topProductosVolumen = useMemo(() => {
       const agg: Record<string, number> = {};
@@ -537,19 +549,105 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const COLORS = ['#84cc16', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981'];
 
   const handleDownloadExcel = () => {
-    const dataToExport = reporteProductos.map(p => ({
-        'Producto': p.producto,
-        'Categoría': p.categoria,
-        'Unidades': p.cantidad,
-        'Costo Total': Number(p.costo.toFixed(2)),
-        'Venta Neta': Number(p.ventaNeta.toFixed(2)),
-        'Ganancia': Number(p.ganancia.toFixed(2)),
-        'Margen %': Number(p.margenPorcentaje.toFixed(2)) / 100
-    }));
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Detalle Productos");
-    XLSX.writeFile(wb, `Reporte_Ventas_${dateRange.start}_${dateRange.end}.xlsx`);
+    try {
+        // 1. Preparar Datos Generales
+        const titulo = [["REPORTE DETALLADO DE VENTAS Y RENTABILIDAD"]];
+        const fechaReporte = [["Fecha de Emisión:", new Date().toLocaleDateString()]];
+        const empresaInfo = [["Empresa:", session?.companyName || 'DEMO / LOCAL']];
+        const sedeInfo = [["Punto de Venta:", drillDownSede || filtros.sedeSeleccionada]];
+        const rangoInfo = [["Periodo:", `${dateRange.start} al ${dateRange.end}`]];
+        const espacio = [[""]];
+
+        // 2. Encabezados de Tabla
+        const headers = [["PRODUCTO", "CATEGORÍA", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "MARGEN %"]];
+
+        // 3. Cuerpo de Datos
+        const body = reporteProductos.map(p => [
+            p.producto,
+            p.categoria,
+            p.cantidad,
+            p.costo,      // Se aplicará formato numérico luego
+            p.ventaNeta,  // Se aplicará formato numérico luego
+            p.ganancia,   // Se aplicará formato numérico luego
+            p.margenPorcentaje / 100 // Para formato porcentaje (0.15 en vez de 15)
+        ]);
+
+        // 4. Calcular Totales
+        const totalUnidades = reporteProductos.reduce((sum, p) => sum + p.cantidad, 0);
+        const totalCosto = reporteProductos.reduce((sum, p) => sum + p.costo, 0);
+        const totalVenta = reporteProductos.reduce((sum, p) => sum + p.ventaNeta, 0);
+        const totalGanancia = reporteProductos.reduce((sum, p) => sum + p.ganancia, 0);
+        const margenTotal = totalVenta > 0 ? (totalGanancia / totalVenta) : 0;
+
+        const totalRow = [["TOTAL GENERAL", "", totalUnidades, totalCosto, totalVenta, totalGanancia, margenTotal]];
+
+        // 5. Unificar todo en una estructura de hoja
+        const data = [
+            ...titulo,
+            ...espacio,
+            ...empresaInfo,
+            ...sedeInfo,
+            ...rangoInfo,
+            ...espacio,
+            ...headers,
+            ...body,
+            ...totalRow
+        ];
+
+        // 6. Crear Hoja de Trabajo
+        const ws = XLSX.utils.aoa_to_sheet(data);
+
+        // 7. Estilizar Ancho de Columnas (Widths)
+        const wscols = [
+            { wch: 45 }, // Producto
+            { wch: 20 }, // Categoría
+            { wch: 12 }, // Unidades
+            { wch: 18 }, // Costo
+            { wch: 18 }, // Venta
+            { wch: 18 }, // Ganancia
+            { wch: 12 }  // Margen
+        ];
+        ws['!cols'] = wscols;
+
+        // 8. Fusionar Celdas del Título
+        ws['!merges'] = [
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } } // Título principal
+        ];
+
+        // 9. Aplicar Formatos Numéricos (Currency & Percent)
+        // El rango de datos empieza en la fila 8 (índice 7) -> headers en fila 7 (índice 6)
+        // Indices de columnas: C(2)=Cant, D(3)=Costo, E(4)=Venta, F(5)=Ganancia, G(6)=Margen
+        const range = XLSX.utils.decode_range(ws['!ref'] || "A1:A1");
+        
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                if (!ws[cellRef]) continue;
+
+                // Aplicar formatos a partir de la fila de datos (fila 8 en adelante)
+                if (R >= 7) { 
+                    if (C === 3 || C === 4 || C === 5) { // Costo, Venta, Ganancia
+                        ws[cellRef].z = '"S/" #,##0.00'; 
+                    }
+                    if (C === 6) { // Margen
+                        ws[cellRef].z = '0.00%';
+                    }
+                }
+            }
+        }
+
+        // 10. Generar Archivo
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Reporte Ventas");
+        
+        // Nombre del archivo dinámico
+        const fileName = `Reporte_Ventas_${filtros.sedeSeleccionada.replace(/\s+/g, '_')}_${dateRange.start}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+
+    } catch (error) {
+        console.error("Error exportando Excel:", error);
+        alert("Hubo un error al generar el archivo Excel.");
+    }
   };
 
   const isRentabilidad = view === 'rentabilidad';
@@ -771,6 +869,30 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                         </PieChart>
                     </ResponsiveContainer>
                 </div>
+            </div>
+        </div>
+
+        {/* COMPARATIVA POR PUNTO DE VENTA (SEDES) */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-brand-600"/> Comparativa por Punto de Venta (Venta vs Ganancia)
+            </h3>
+            <div className="h-[350px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={comparativaSedes} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="name" stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
+                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value/1000}k`} />
+                        <Tooltip 
+                            formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, '']}
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            cursor={{fill: '#f8fafc'}} 
+                        />
+                        <Legend wrapperStyle={{paddingTop: '20px'}} />
+                        <Bar dataKey="ventas" name="Venta Total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="margen" name="Ganancia" fill="#84cc16" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
             </div>
         </div>
 
