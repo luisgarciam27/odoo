@@ -34,7 +34,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
               <Server className="w-5 h-5 text-emerald-400" />
               Conexión Odoo XML-RPC
             </h2>
-            <p className="text-slate-400 text-xs mt-1">Configura el acceso a tu instancia ERP</p>
+            <p className="text-slate-400 text-xs mt-1 font-light">Configura el acceso a tu instancia ERP</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
             <X className="w-6 h-6" />
@@ -47,7 +47,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
             <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
               <p className="font-semibold mb-1">Requisitos de Conexión</p>
-              <p>Para conectar, genera una <strong>API Key</strong> en tu perfil de Odoo (Preferencias {'>'} Seguridad de la Cuenta). No uses tu contraseña de inicio de sesión habitual.</p>
+              <p className="font-light">Para conectar, genera una <strong>API Key</strong> en tu perfil de Odoo (Preferencias {'>'} Seguridad de la Cuenta). No uses tu contraseña de inicio de sesión habitual.</p>
             </div>
           </div>
 
@@ -107,7 +107,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                   API Key
-                  <span className="text-slate-400 font-normal ml-1 text-xs">(o Contraseña)</span>
+                  <span className="text-slate-400 font-normal ml-1 text-xs font-light">(o Contraseña)</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -145,7 +145,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose }) =>
         </div>
         
         <div className="bg-slate-50 px-6 py-3 border-t border-slate-200">
-           <a href="#" className="flex items-center gap-1 text-xs text-slate-500 hover:text-emerald-600">
+           <a href="#" className="flex items-center gap-1 text-xs text-slate-500 hover:text-emerald-600 font-light">
              <HelpCircle className="w-3 h-3" />
              ¿Dónde encuentro estos datos en mi Odoo?
            </a>

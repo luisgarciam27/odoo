@@ -148,7 +148,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <Lock className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Acceso Seguro</h1>
-            <p className="text-slate-400 mt-2 text-sm">Odoo Analytics &copy; 2025</p>
+            <p className="text-slate-400 mt-2 text-sm font-light">Odoo Analytics &copy; 2025</p>
           </div>
         </div>
 
@@ -238,7 +238,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   </button>
 
                   <div className="mt-8 text-center">
-                    <p className="text-[10px] text-slate-400 flex items-center justify-center gap-1.5 bg-slate-50 py-2 rounded-lg border border-slate-100">
+                    <p className="text-[10px] text-slate-400 flex items-center justify-center gap-1.5 bg-slate-50 py-2 rounded-lg border border-slate-100 font-light">
                         <ShieldCheck className="w-3 h-3 text-emerald-500" />
                         Conexión cifrada a IGP Master
                     </p>

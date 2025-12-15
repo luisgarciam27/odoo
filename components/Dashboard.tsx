@@ -560,7 +560,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                  view === 'ventas' ? 'Gestión de Ventas' :
                  view === 'reportes' ? 'Reportes Gráficos' : 'Dashboard General'}
               </h1>
-              <p className="text-slate-500 text-sm">
+              <p className="text-slate-500 text-sm font-light">
                   {session ? `Compañía: ${session.companyName || 'Todas'}` : 'Modo Demo'} | {dateRange.start} al {dateRange.end}
               </p>
            </div>
@@ -887,7 +887,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                    <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
                    {drillDownSede ? `Productos en ${drillDownSede}` : 'Detalle Global de Productos'}
                </h3>
-               <p className="text-xs text-slate-500">
+               <p className="text-xs text-slate-500 font-light">
                    {drillDownSede ? 'Mostrando únicamente items vendidos en la sede seleccionada.' : 'Desglose general por item, costo real y rentabilidad.'}
                </p>
             </div>

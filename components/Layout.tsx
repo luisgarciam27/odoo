@@ -28,7 +28,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
       }`}
     >
       <Icon className={`w-5 h-5 ${currentView === view ? 'text-emerald-400' : 'text-slate-500 group-hover:text-white'}`} />
-      <span className="font-medium text-sm">{label}</span>
+      <span className="font-condensed text-base tracking-wide">{label}</span>
     </button>
   );
 
@@ -42,19 +42,19 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
           </div>
           <div>
             <h2 className="font-bold text-lg leading-tight tracking-tight">Analytics</h2>
-            <p className="text-xs text-slate-400">for Odoo ERP</p>
+            <p className="text-xs text-slate-400 font-light">for Odoo ERP</p>
           </div>
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 px-3 mt-2">
+          <div className="font-condensed text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 px-3 mt-2">
             Principal
           </div>
           
           <NavItem view="general" icon={LayoutDashboard} label="Dashboard General" />
           <NavItem view="rentabilidad" icon={TrendingUp} label="Rentabilidad" />
 
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 px-3 mt-6">
+          <div className="font-condensed text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 px-3 mt-6">
             Gestión
           </div>
 
@@ -65,7 +65,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
         <div className="p-4 border-t border-slate-800">
           <button className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors mb-1">
             <Settings className="w-5 h-5" />
-            <span className="font-medium text-sm">Configuración</span>
+            <span className="font-condensed text-base tracking-wide">Configuración</span>
           </button>
           
           <button 
@@ -73,7 +73,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
             className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
           >
             <LogOut className="w-5 h-5" />
-            <span className="font-medium text-sm">Cerrar Sesión</span>
+            <span className="font-condensed text-base tracking-wide">Cerrar Sesión</span>
           </button>
         </div>
       </aside>
