@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, Loader2, AlertTriangle, KeyRound, ShieldCheck, Citrus, BarChart3, Zap, Lock } from 'lucide-react';
+import { ArrowRight, Loader2, AlertTriangle, KeyRound, ShieldCheck, Citrus } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { OdooSession } from '../types';
 
