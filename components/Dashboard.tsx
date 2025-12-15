@@ -13,14 +13,11 @@ const generarDatosVentas = (): Venta[] => {
   const sedes = ['Caja Principal', 'Barra 1', 'Tienda Centro', 'Kiosko Norte'];
   const companias = ['Mi Empresa S.A.C.', 'Sucursal Arequipa IRL'];
   const productos = [
-    { id: 1, nombre: 'Coca Cola 500ml', costo: 1.5, precio: 3.5 },
-    { id: 2, nombre: 'Menu Ejecutivo', costo: 8, precio: 15 },
-    { id: 3, nombre: 'Agua San Mateo', costo: 1, precio: 2.5 },
-    { id: 4, nombre: 'Sandwich de Pollo', costo: 3, precio: 8 },
-    { id: 5, nombre: 'Cafe Americano', costo: 1.2, precio: 5 },
-    { id: 6, nombre: 'Postre del Dia', costo: 2, precio: 6 },
-    { id: 7, nombre: 'Inka Cola 1L', costo: 2.5, precio: 5.5 },
-    { id: 8, nombre: 'Galletas Varias', costo: 0.8, precio: 2.0 }
+    { id: 1, nombre: 'Ticket #001 - Consumo General', costo: 15, precio: 35 },
+    { id: 2, nombre: 'Ticket #002 - Menu Ejecutivo', costo: 8, precio: 15 },
+    { id: 3, nombre: 'Ticket #003 - Servicios Varios', costo: 10, precio: 25 },
+    { id: 4, nombre: 'Ticket #004 - Venta Directa', costo: 30, precio: 80 },
+    { id: 5, nombre: 'Ticket #005 - Cafe y Postre', costo: 12, precio: 25 }
   ];
 
   const ventas: Venta[] = [];
@@ -28,23 +25,22 @@ const generarDatosVentas = (): Venta[] => {
   const fechaFin = new Date();
 
   for (let d = new Date(fechaInicio); d <= fechaFin; d.setDate(d.getDate() + 1)) {
-    const ventasPorDia = Math.floor(Math.random() * 10) + 5;
+    const ventasPorDia = Math.floor(Math.random() * 8) + 2;
     
     for (let i = 0; i < ventasPorDia; i++) {
       const producto = productos[Math.floor(Math.random() * productos.length)];
       const sede = sedes[Math.floor(Math.random() * sedes.length)];
       const compania = companias[Math.floor(Math.random() * companias.length)];
-      const cantidad = Math.floor(Math.random() * 2) + 1;
-      const total = producto.precio * cantidad;
-      const costo = producto.costo * cantidad;
+      const total = producto.precio;
+      const costo = producto.costo;
       const margen = total - costo;
       
       ventas.push({
         fecha: new Date(d),
-        sede, // En PoS esto es la "Caja" o "Punto de Venta"
+        sede, 
         compania,
         producto: producto.nombre,
-        cantidad,
+        cantidad: 1,
         total,
         costo,
         margen,
@@ -91,28 +87,28 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       setError(null);
       const client = new OdooClient(session.url, session.db, session.useProxy);
       
-      // CONFIGURACIÓN PARA PUNTO DE VENTA (PoS)
+      // CONFIGURACIÓN PARA PUNTO DE VENTA (PoS) - MODO PEDIDOS (Exactitud Total)
+      // Usamos 'pos.order' que es la tabla que el usuario ve en la pantalla "Pedidos".
+      // Esto garantiza que los montos cuadren con su vista.
+      const model = 'pos.order';
       
-      // Intento 1: Usar 'report.pos.order' (Análisis de PoS). 
-      // Es el mejor porque trae Productos + Configuración (Caja) en una sola vista.
-      const modelReport = 'report.pos.order';
-      const fieldsReport = ['date', 'config_id', 'product_id', 'company_id', 'price_total', 'product_qty', 'state'];
-      
-      // Intento 2 (Fallback): Usar 'pos.order' (Cabeceras de tickets).
-      // Si falla el reporte por permisos, usamos esto. Perdemos el detalle de productos, pero vemos totales por caja.
-      const modelFallback = 'pos.order';
-      const fieldsFallback = ['date_order', 'config_id', 'amount_total', 'company_id', 'state', 'partner_id'];
+      // Campos necesarios para KPI y Gráficos Generales
+      // Nota: No pedimos líneas para no saturar la petición. Mostraremos referencias de tickets.
+      const fields = ['date_order', 'config_id', 'amount_total', 'company_id', 'state', 'partner_id', 'pos_reference', 'name'];
 
-      // Filtro común
+      // Filtro ROBUSTO:
+      // 1. Fechas con hora completa para no perder el último día por UTC.
+      // 2. Estado: Todo lo que NO esté cancelado ni en borrador (si aplica).
       const domain = [
-        ['state', 'in', ['paid', 'done', 'invoiced']], // Estados válidos de PoS
-        ['date' /* se ajustará según modelo */, '>=', filtros.fechaInicio],
-        ['date' /* se ajustará según modelo */, '<=', `${filtros.fechaFin} 23:59:59`]
+        ['state', '!=', 'cancel'], 
+        ['state', '!=', 'draft'],
+        ['date_order', '>=', `${filtros.fechaInicio} 00:00:00`],
+        ['date_order', '<=', `${filtros.fechaFin} 23:59:59`]
       ];
 
       const options: any = {
-        limit: 1000, 
-        order: 'date desc' // O date_order desc
+        limit: 2000, // Aumentado para traer más historial
+        order: 'date_order desc'
       };
 
       try {
@@ -125,7 +121,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
              );
              if (userData && userData.length > 0) {
                  allowedCompanyIds = userData[0].company_ids || [];
-                 // Cargar nombres
+                 // Cargar nombres de compañías para el filtro
                  client.searchRead(session.uid, session.apiKey, 'res.company', [['id', 'in', allowedCompanyIds]], ['name'])
                     .then((comps: any[]) => setRealCompanies(comps.map(c => c.name))).catch(() => {});
              }
@@ -135,51 +131,27 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               options.context = { allowed_company_ids: allowedCompanyIds };
           }
 
-          let rawData: any[] = [];
-          let source = 'report';
-
-          try {
-             console.log("Intentando leer Análisis de PoS (report.pos.order)...");
-             // Ajustar dominio para reporte
-             const domainReport = [...domain];
-             domainReport[1] = ['date', '>=', filtros.fechaInicio];
-             domainReport[2] = ['date', '<=', `${filtros.fechaFin} 23:59:59`];
-             options.order = 'date desc';
-
-             rawData = await client.searchRead(session.uid, session.apiKey, modelReport, domainReport, fieldsReport, options);
-          } catch (reportErr) {
-             console.warn("Fallo leyendo reporte PoS, intentando cabeceras (pos.order)", reportErr);
-             source = 'order';
-             
-             // Ajustar dominio para pos.order (usa date_order en vez de date)
-             const domainOrder = [...domain];
-             domainOrder[1] = ['date_order', '>=', filtros.fechaInicio];
-             domainOrder[2] = ['date_order', '<=', `${filtros.fechaFin} 23:59:59`];
-             options.order = 'date_order desc';
-
-             rawData = await client.searchRead(session.uid, session.apiKey, modelFallback, domainOrder, fieldsFallback, options);
-          }
+          console.log("Consultando Pedidos PoS (pos.order)...", { domain });
+          
+          const rawData: any[] = await client.searchRead(session.uid, session.apiKey, model, domain, fields, options);
 
           if (!rawData) throw new Error("Respuesta vacía de Odoo.");
 
-          // Mapeo de datos (Unificando estructura)
+          // Mapeo de datos
           const mappedVentas: Venta[] = rawData.map((line: any) => {
-              // Campos dinámicos según el origen (Reporte vs Orden directa)
-              const dateRaw = source === 'report' ? line.date : line.date_order;
-              const total = source === 'report' ? (line.price_total || 0) : (line.amount_total || 0);
-              const cantidad = source === 'report' ? (line.product_qty || 1) : 1;
+              const total = line.amount_total || 0;
               
               // PoS Config (Caja/Sede)
-              const sede = Array.isArray(line.config_id) ? line.config_id[1] : 'Caja Desconocida';
+              const sede = Array.isArray(line.config_id) ? line.config_id[1] : 'Caja General';
               const compania = Array.isArray(line.company_id) ? line.company_id[1] : 'Empresa Principal';
               
-              // Producto
-              let producto = 'Venta PoS General';
-              if (source === 'report') {
-                  producto = Array.isArray(line.product_id) ? line.product_id[1] : 'Sin Nombre';
-              } else {
-                  // Si estamos en modo fallback (solo cabeceras), usamos el cliente o genérico
-                  producto = Array.isArray(line.partner_id) ? `Cliente: ${line.partner_id[1]}` : 'Ticket de Venta';
+              // Para 'Producto', usamos la referencia del ticket o el cliente, ya que estamos consultando cabeceras
+              // para asegurar que el monto total sea exacto.
+              let producto = line.pos_reference || line.name || 'Ticket';
+              if (Array.isArray(line.partner_id)) {
+                  producto = `${producto} - ${line.partner_id[1]}`;
+              } else if (line.partner_id) {
+                   producto = `${producto} - Cliente General`;
               }
 
               // Estimación de costo (70%)
@@ -187,11 +159,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               const margen = total - costo;
 
               return {
-                  fecha: new Date(dateRaw),
+                  fecha: new Date(line.date_order),
                   sede,
                   compania,
-                  producto,
-                  cantidad,
+                  producto, // Representa el Ticket/Pedido
+                  cantidad: 1, // 1 Ticket
                   total,
                   costo,
                   margen,
@@ -202,13 +174,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           setVentasData(mappedVentas);
 
           if (mappedVentas.length === 0) {
-            setError("Conexión exitosa. No se encontraron tickets de PoS en el rango seleccionado.");
+            setError("Conexión exitosa. No se encontraron pedidos en este rango de fechas.");
           }
 
       } catch (err: any) {
           console.error("Error crítico:", err);
           let errorMsg = err.message || "Error desconocido";
-          if (errorMsg.includes("Access")) errorMsg = "Error de Permisos: Tu usuario no tiene acceso al módulo Punto de Venta (PoS).";
+          if (errorMsg.includes("Access")) errorMsg = "Error de Permisos: Tu usuario no tiene acceso al modelo 'pos.order'.";
           setError(`Error: ${errorMsg}`);
           setVentasData([]); 
       } finally {
@@ -220,7 +192,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       fetchData();
   }, [session, filtros.fechaInicio, filtros.fechaFin]);
 
-  // --- MEMOS (Sin cambios lógicos, solo visuales) ---
+  // --- MEMOS ---
   const sedes = useMemo(() => ['Todas', ...Array.from(new Set(ventasData.map(v => v.sede)))], [ventasData]);
   const companias = useMemo(() => {
       if (realCompanies.length > 0) return ['Todas', ...realCompanies];
@@ -239,10 +211,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     const totalCostos = datosFiltrados.reduce((sum, v) => sum + v.costo, 0);
     const totalMargen = totalVentas - totalCostos;
     const margenPromedio = totalVentas > 0 ? ((totalMargen / totalVentas) * 100) : 0;
-    const unidadesVendidas = datosFiltrados.reduce((sum, v) => sum + v.cantidad, 0); // O Tickets si es fallback
+    const unidadesVendidas = datosFiltrados.length; // Cantidad de Tickets
     return {
-      totalVentas: totalVentas.toFixed(2),
-      totalMargen: totalMargen.toFixed(2),
+      totalVentas: totalVentas.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      totalMargen: totalMargen.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       margenPromedio: margenPromedio.toFixed(1),
       unidadesVendidas
     };
@@ -273,7 +245,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     const agrupado: Record<string, AgrupadoProducto> = {};
     datosFiltrados.forEach(v => {
       if (!agrupado[v.producto]) agrupado[v.producto] = { producto: v.producto, cantidad: 0, ventas: 0, margen: 0 };
-      agrupado[v.producto].cantidad += v.cantidad;
+      agrupado[v.producto].cantidad += 1;
       agrupado[v.producto].ventas += v.total;
       agrupado[v.producto].margen += v.margen;
     });
@@ -311,7 +283,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center">
               <div className="bg-white p-4 rounded-xl shadow-xl flex items-center gap-3 border border-slate-100">
                   <RefreshCw className="w-5 h-5 animate-spin text-emerald-600" />
-                  <span className="font-medium text-slate-700">Cargando datos de PoS...</span>
+                  <span className="font-medium text-slate-700">Cargando Pedidos PoS...</span>
               </div>
           </div>
       )}
@@ -451,7 +423,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             </div>
             <div>
               <p className="text-emerald-50 text-sm font-medium tracking-wide opacity-90">Ingresos Totales (Cajas)</p>
-              <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">${kpis.totalVentas}</h3>
+              <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">S/ {kpis.totalVentas}</h3>
             </div>
             <div className="mt-4 h-1 w-full bg-black/10 rounded-full overflow-hidden">
                <div className="h-full bg-white/40" style={{width: '100%'}}></div>
@@ -467,7 +439,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             </div>
             <div>
               <p className="text-slate-500 text-sm font-medium">Ganancia Est. (30%)</p>
-              <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">${kpis.totalMargen}</h3>
+              <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">S/ {kpis.totalMargen}</h3>
             </div>
             <p className="text-xs text-slate-400 mt-auto pt-4">Margen operativo estimado</p>
           </div>
@@ -479,10 +451,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
               </div>
             </div>
             <div>
-              <p className="text-slate-500 text-sm font-medium">Items / Tickets</p>
+              <p className="text-slate-500 text-sm font-medium">Transacciones</p>
               <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3>
             </div>
-            <p className="text-xs text-slate-400 mt-auto pt-4">Volumen transaccional</p>
+            <p className="text-xs text-slate-400 mt-auto pt-4">Pedidos / Tickets</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-orange-300 transition-colors">
@@ -525,10 +497,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     axisLine={false}
                     tickLine={false}
                     dx={-10}
-                    tickFormatter={(value) => `$${value/1000}k`}
+                    tickFormatter={(value) => `S/ ${value/1000}k`}
                   />
                   <Tooltip 
-                    formatter={(value: number) => [`$${Number(value).toFixed(2)}`, 'Ventas']}
+                    formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']}
                     labelFormatter={(label) => new Date(label).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
@@ -568,7 +540,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value: number) => `$${Number(value).toFixed(2)}`} 
+                    formatter={(value: number) => `S/ ${Number(value).toFixed(2)}`} 
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
                   <Legend 
@@ -589,7 +561,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         {/* Top productos */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-slate-800">Top Productos Vendidos (PoS)</h3>
+            <h3 className="text-lg font-bold text-slate-800">Top Tickets / Clientes</h3>
             <div className="flex gap-4 text-xs font-medium">
                <div className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm bg-blue-500"></span> Total Ventas</div>
             </div>
@@ -610,7 +582,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                 />
                 <Tooltip 
                   cursor={{fill: '#f8fafc'}}
-                  formatter={(value: number) => [`$${Number(value).toFixed(2)}`, 'Ventas']}
+                  formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']}
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
                 <Bar dataKey="ventas" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} name="ventas" />
@@ -622,7 +594,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         {/* Tabla de productos */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 overflow-hidden">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-slate-800">Detalle de Productos</h3>
+            <h3 className="text-lg font-bold text-slate-800">Detalle de Transacciones</h3>
             <button className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors">
               Descargar CSV
             </button>
@@ -631,9 +603,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-slate-500 uppercase bg-slate-50">
                 <tr>
-                  <th className="px-6 py-3 font-semibold rounded-l-lg">Producto</th>
-                  <th className="px-6 py-3 font-semibold text-right">Cantidad</th>
-                  <th className="px-6 py-3 font-semibold text-right">Ventas Totales</th>
+                  <th className="px-6 py-3 font-semibold rounded-l-lg">Ticket / Cliente</th>
+                  <th className="px-6 py-3 font-semibold text-right">Items</th>
+                  <th className="px-6 py-3 font-semibold text-right">Monto Total</th>
                   <th className="px-6 py-3 font-semibold text-right rounded-r-lg">Origen</th>
                 </tr>
               </thead>
@@ -642,7 +614,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                   <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-4 font-medium text-slate-800 group-hover:text-blue-600 transition-colors">{prod.producto}</td>
                     <td className="px-6 py-4 text-right text-slate-600">{prod.cantidad}</td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-900">${prod.ventas.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-900">S/ {prod.ventas.toFixed(2)}</td>
                     <td className="px-6 py-4 text-right text-xs text-slate-500">Punto de Venta</td>
                   </tr>
                 ))}
