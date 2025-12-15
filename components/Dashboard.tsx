@@ -4,7 +4,7 @@ import {
 } from 'recharts';
 import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
-import OdooConfigModal from './OdooConfigModal';
+import OdooConfigModal, { ConnectionConfig } from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
 // @ts-ignore
 import * as XLSX from 'xlsx';
@@ -626,7 +626,20 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   // --- RENDER ---
   return (
     <div className="p-4 md:p-6 lg:p-8 font-sans w-full relative pb-20 text-slate-700">
-      <OdooConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} />
+      <OdooConfigModal 
+        isOpen={isConfigOpen} 
+        onClose={() => setIsConfigOpen(false)} 
+        initialConfig={{
+            url: session?.url || '',
+            db: session?.db || '',
+            username: session?.username || '',
+            apiKey: session?.apiKey || ''
+        }}
+        onSave={(config: ConnectionConfig) => {
+            console.log("Config updated", config);
+            setIsConfigOpen(false);
+        }}
+      />
       
       {loading && (
           <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-50 flex flex-col items-center justify-center h-screen fixed transition-all duration-300">
@@ -1037,8 +1050,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                     </div>
                 </div>
             </div>
+          </>
+        )}
 
-            {/* TABLA DE DETALLE */}
+        {/* TABLA DE DETALLE - Visible en General y en Comparativa (solo si hay DrillDown) */}
+        {(view !== 'comparativa' || drillDownSede) && (
             <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 overflow-hidden animate-in fade-in slide-in-from-bottom-12 duration-1000">
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                 <div>
@@ -1131,7 +1147,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 </div>
             )}
             </div>
-          </>
         )}
 
       </div>
