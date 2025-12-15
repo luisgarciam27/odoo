@@ -585,6 +585,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         const data = [
             ...titulo,
             ...espacio,
+            ...fechaReporte,
             ...empresaInfo,
             ...sedeInfo,
             ...rangoInfo,
@@ -615,7 +616,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         ];
 
         // 9. Aplicar Formatos Numéricos (Currency & Percent)
-        // El rango de datos empieza en la fila 8 (índice 7) -> headers en fila 7 (índice 6)
+        // El rango de datos empieza en la fila 9 (índice 8) -> headers en fila 8 (índice 7)
         // Indices de columnas: C(2)=Cant, D(3)=Costo, E(4)=Venta, F(5)=Ganancia, G(6)=Margen
         const range = XLSX.utils.decode_range(ws['!ref'] || "A1:A1");
         
@@ -624,8 +625,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
                 if (!ws[cellRef]) continue;
 
-                // Aplicar formatos a partir de la fila de datos (fila 8 en adelante)
-                if (R >= 7) { 
+                // Aplicar formatos a partir de la fila de datos (fila 9 en adelante)
+                // Indices de fila aumentados en 1 por la inclusión de fechaReporte
+                if (R >= 8) { 
                     if (C === 3 || C === 4 || C === 5) { // Costo, Venta, Ganancia
                         ws[cellRef].z = '"S/" #,##0.00'; 
                     }
