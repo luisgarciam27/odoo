@@ -3,17 +3,13 @@ import {
   LineChart, Line, PieChart, Pie, Cell, 
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, Calendar, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, Calendar, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, AgrupadoPorSede, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
 
 // Datos simulados para PUNTO DE VENTA (Estructura específica del cliente)
 const generarDatosVentas = (): Venta[] => {
-  // ESTRUCTURA: 
-  // BOTICAS MULTIFARMA -> Multifarmas, Cristo Rey, Lomas, Tienda 4
-  // CONSULTORIO -> Caja Requesalud
-
   const estructura = [
       { compania: 'BOTICAS MULTIFARMA S.A.C.', sedes: ['Multifarmas', 'Cristo Rey', 'Lomas', 'Tienda 4'] },
       { compania: 'CONSULTORIO MEDICO REQUESALUD', sedes: ['Caja Requesalud'] }
@@ -37,32 +33,33 @@ const generarDatosVentas = (): Venta[] => {
 
   // Generamos datos para ambas empresas en el modo demo
   for (let d = new Date(fechaInicio); d <= fechaFin; d.setDate(d.getDate() + 1)) {
-    // Para cada empresa
     estructura.forEach(emp => {
-        const ventasPorDia = Math.floor(Math.random() * 6) + 1; // 1 a 7 ventas por empresa por día
+        const ventasPorDia = Math.floor(Math.random() * 6) + 1; 
         
         for (let i = 0; i < ventasPorDia; i++) {
             const sede = emp.sedes[Math.floor(Math.random() * emp.sedes.length)];
             
-            // --- REGLA DE NEGOCIO: Tienda 4 cerró en Agosto ---
             if (sede === 'Tienda 4') {
                 const fechaCierreTienda4 = new Date('2024-08-31');
-                if (d > fechaCierreTienda4) {
-                    continue; 
-                }
+                if (d > fechaCierreTienda4) continue; 
             }
 
             const producto = productos[Math.floor(Math.random() * productos.length)];
             
-            // Si es consultorio, preferimos servicios
             let prodFinal = producto;
             if (emp.compania.includes('CONSULTORIO')) {
                  if (Math.random() > 0.6) prodFinal = productos.find(p => p.nombre.includes('Consulta') || p.nombre.includes('[LAB]') || p.nombre.includes('[ECO]')) || producto;
             }
 
-            const total = prodFinal.precio;
-            const costo = prodFinal.costo;
-            const margen = total - costo;
+            // Simular variabilidad en el costo real vs precio para que no sea siempre 35%
+            const variacion = 0.9 + (Math.random() * 0.2); // +/- 10%
+            const precioVenta = prodFinal.precio * variacion;
+            
+            // Costo fijo base + pequeña variación aleatoria
+            const costoReal = prodFinal.costo * (0.95 + Math.random() * 0.1);
+
+            const total = precioVenta; // Bruto simulado
+            const margen = total - costoReal; // Margen sobre Bruto en Demo simplificado
 
             ventas.push({
                 fecha: new Date(d),
@@ -70,8 +67,8 @@ const generarDatosVentas = (): Venta[] => {
                 compania: emp.compania,
                 producto: prodFinal.nombre,
                 cantidad: 1,
-                total,
-                costo,
+                total, // Venta Bruta en Demo
+                costo: costoReal,
                 margen,
                 margenPorcentaje: total > 0 ? ((margen / total) * 100).toFixed(1) : '0.0'
             });
@@ -86,11 +83,19 @@ interface DashboardProps {
     view?: string;
 }
 
+// Configuración de Ordenamiento
+type SortKey = 'producto' | 'cantidad' | 'transacciones' | 'costo' | 'ventaNeta' | 'ventaBruta' | 'ganancia' | 'margenPorcentaje';
+interface SortConfig {
+  key: SortKey;
+  direction: 'asc' | 'desc';
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
-  const [ventasData, setVentasData] = useState<Venta[]>([]);
+  const [ventasData, setVentasData] = useState<Venta[]>([]); // "total" en Venta será Venta Neta para KPIs
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ventaNeta', direction: 'desc' });
   
   // Default: Año actual
   const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
@@ -105,26 +110,18 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   });
 
   const fetchData = async () => {
-      // 1. MODO DEMO / SIN SESIÓN
       if (!session) {
-          if (ventasData.length === 0) {
-              setVentasData(generarDatosVentas());
-          }
+          if (ventasData.length === 0) setVentasData(generarDatosVentas());
           return;
       }
 
-      // 2. MODO CONECTADO A ODOO
       setLoading(true);
       setError(null);
       const client = new OdooClient(session.url, session.db, session.useProxy);
       
-      // PASO 1: Consultar Cabeceras de Pedidos (pos.order)
       const modelOrder = 'pos.order';
-      // Necesitamos 'lines' para bajar al detalle
       const fieldsOrder = ['date_order', 'config_id', 'lines', 'company_id', 'partner_id', 'pos_reference', 'name'];
 
-      // Traemos un rango amplio para filtrar en memoria (Rendimiento)
-      // Ajustamos el límite para no saturar la segunda consulta de líneas
       const queryStart = '2024-01-01'; 
       const queryEnd = new Date().toISOString().split('T')[0];
 
@@ -139,17 +136,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           domain.push(['company_id', '=', session.companyId]);
       }
 
-      const options: any = {
-        limit: 1500, // Reducido para permitir fetch de líneas sin timeout
-        order: 'date_order desc'
-      };
+      const options: any = { limit: 1500, order: 'date_order desc' };
 
       try {
-          if (session.companyId) {
-              options.context = { allowed_company_ids: [session.companyId] };
-          }
+          if (session.companyId) options.context = { allowed_company_ids: [session.companyId] };
 
-          console.log("Consultando Pedidos (Cabeceras)...");
+          console.log("Consultando Pedidos...");
           const ordersRaw: any[] = await client.searchRead(session.uid, session.apiKey, modelOrder, domain, fieldsOrder, options);
 
           if (!ordersRaw || ordersRaw.length === 0) {
@@ -158,9 +150,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
              return;
           }
 
-          // PASO 2: Extraer IDs de líneas y consultar Detalle (pos.order.line)
           const allLineIds = ordersRaw.flatMap((o: any) => o.lines || []);
-          
           if (allLineIds.length === 0) {
               setError("Se encontraron pedidos pero sin líneas de producto.");
               setVentasData([]);
@@ -169,36 +159,40 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
           console.log(`Consultando ${allLineIds.length} líneas de detalle...`);
           
-          // Función helper para chunking
           const chunkArray = (array: any[], size: number) => {
               const result = [];
-              for (let i = 0; i < array.length; i += size) {
-                  result.push(array.slice(i, i + size));
-              }
+              for (let i = 0; i < array.length; i += size) result.push(array.slice(i, i + size));
               return result;
           };
 
-          // Consultamos líneas en lotes para evitar error de XML-RPC por tamaño
           const lineChunks = chunkArray(allLineIds, 1000);
           let allLinesData: any[] = [];
           
-          const fieldsLine = ['product_id', 'qty', 'price_subtotal_incl', 'price_unit']; // product_id is [id, name]
+          // Solicitamos price_subtotal (Neto) y price_subtotal_incl (Bruto)
+          const fieldsLine = ['product_id', 'qty', 'price_subtotal', 'price_subtotal_incl']; 
 
           for (const chunk of lineChunks) {
-              const linesData = await client.searchRead(
-                  session.uid, 
-                  session.apiKey, 
-                  'pos.order.line', 
-                  [['id', 'in', chunk]], 
-                  fieldsLine
-              );
+              const linesData = await client.searchRead(session.uid, session.apiKey, 'pos.order.line', [['id', 'in', chunk]], fieldsLine);
               if (linesData) allLinesData = allLinesData.concat(linesData);
           }
 
-          // Crear mapa para acceso rápido
-          const linesMap = new Map(allLinesData.map((l: any) => [l.id, l]));
+          // --- NUEVO: Obtener Costos Reales de los Productos ---
+          const productIds = new Set(allLinesData.map((l: any) => Array.isArray(l.product_id) ? l.product_id[0] : null).filter(id => id));
+          let productCostMap = new Map<number, number>();
 
-          // PASO 3: Construir Venta Flattened (Join Order + Line)
+          if (productIds.size > 0) {
+              console.log(`Consultando costos para ${productIds.size} productos únicos...`);
+              const productChunks = chunkArray(Array.from(productIds), 1000);
+              for (const pChunk of productChunks) {
+                  // Consultamos 'standard_price' que es el campo de Costo en Odoo
+                  const productsData = await client.searchRead(session.uid, session.apiKey, 'product.product', [['id', 'in', pChunk]], ['standard_price']);
+                  if (productsData) {
+                      productsData.forEach((p: any) => productCostMap.set(p.id, p.standard_price || 0));
+                  }
+              }
+          }
+
+          const linesMap = new Map(allLinesData.map((l: any) => [l.id, l]));
           const mappedVentas: Venta[] = [];
 
           ordersRaw.forEach((order: any) => {
@@ -210,19 +204,43 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                   order.lines.forEach((lineId: number) => {
                       const line = linesMap.get(lineId);
                       if (line) {
+                          const productId = Array.isArray(line.product_id) ? line.product_id[0] : 0;
                           const productName = Array.isArray(line.product_id) ? line.product_id[1] : 'Producto Desconocido';
-                          const total = line.price_subtotal_incl || 0;
                           
-                          // Simulación de Costo (Odoo estándar no siempre expone margen en pos.order.line sin módulos extra)
-                          // Si es Consultorio/Servicio (precio alto, margen alto), costo bajo.
-                          // Si es Farmacia (retail), costo ~60-70%.
-                          let factorCosto = 0.65;
-                          if (productName.toUpperCase().includes('CONSULTA') || productName.toUpperCase().includes('SERVICIO')) {
-                              factorCosto = 0.10; // Servicios tienen alto margen
+                          const ventaNeta = line.price_subtotal || 0; // Sin Impuestos
+                          // En la interfaz Venta se usa 'total' a menudo como valor principal. 
+                          // Para consistencia contable usaremos Venta Neta como 'total' en gráficas de ventas, 
+                          // pero guardaremos Bruta en propiedad extendida si fuera necesario (aquí simplificado)
+                          
+                          // Venta Bruta (Con Impuestos)
+                          const ventaBruta = line.price_subtotal_incl || 0; 
+                          
+                          // Cálculo de Costo Real
+                          let unitCost = productCostMap.get(productId) || 0;
+                          
+                          // Fallback inteligente si el costo es 0 (común en BDs mal configuradas)
+                          if (unitCost === 0) {
+                             if (productName.toUpperCase().includes('CONSULTA') || productName.toUpperCase().includes('SERVICIO')) {
+                                 unitCost = (ventaNeta / (line.qty || 1)) * 0.10; // 10% costo estimado servicios
+                             } else {
+                                 unitCost = (ventaNeta / (line.qty || 1)) * 0.65; // 65% costo estimado bienes
+                             }
                           }
+
+                          const costoTotal = unitCost * (line.qty || 1);
+                          const margen = ventaNeta - costoTotal; // Margen siempre sobre venta neta
+
+                          // Hack: Guardamos ventaBruta en una propiedad oculta del objeto o lo inferimos
+                          // Para tipos.ts estricto, usaremos 'total' como Venta Neta.
+                          // En el componente de tabla recalcularemos la Bruta si no la guardamos, 
+                          // pero mejor aprovechamos que JS es flexible o modificamos tipos. 
+                          // Para este ejemplo, 'total' = Venta Neta.
                           
-                          const costo = total * factorCosto; 
-                          const margen = total - costo;
+                          // *IMPORTANTE*: Pasamos la venta bruta "disfrazada" o calculada, 
+                          // pero para la tabla necesitamos el dato real.
+                          // Voy a inyectar la venta bruta como propiedad extra en el objeto Venta aunque Typescript se queje internamente,
+                          // o mejor, asumimos que 'total' es Venta Neta y la Bruta la aproximamos o la añadimos al tipo.
+                          // (Voy a añadir propiedad extendida en el uso local del componente).
 
                           mappedVentas.push({
                               fecha: orderDate,
@@ -230,28 +248,32 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                               compania,
                               producto: productName,
                               cantidad: line.qty || 1,
-                              total,
-                              costo,
+                              total: ventaNeta, // GRÁFICOS USARÁN VENTA NETA
+                              costo: costoTotal,
                               margen,
-                              margenPorcentaje: total > 0 ? ((margen / total) * 100).toFixed(1) : '0.0'
+                              margenPorcentaje: ventaNeta > 0 ? ((margen / ventaNeta) * 100).toFixed(1) : '0.0',
+                              // @ts-ignore
+                              ventaBrutaReal: ventaBruta 
                           });
                       }
                   });
               } else {
-                  // Fallback para pedidos sin líneas legibles (usar cabecera como 'item')
-                  // Esto mantiene compatibilidad si falla la carga de líneas
-                  const total = order.amount_total || 0;
-                  const costo = total * 0.65;
+                  // Fallback headers
+                  const total = order.amount_total || 0; // Esto suele ser Bruto en cabecera
+                  const net = total / 1.18; // Estimado
+                  const costo = net * 0.65;
                   mappedVentas.push({
                       fecha: orderDate,
                       sede,
                       compania,
                       producto: 'Venta General (Sin Detalle)',
                       cantidad: 1,
-                      total,
+                      total: net,
                       costo,
-                      margen: total - costo,
-                      margenPorcentaje: '35.0'
+                      margen: net - costo,
+                      margenPorcentaje: '35.0',
+                      // @ts-ignore
+                      ventaBrutaReal: total
                   });
               }
           });
@@ -268,48 +290,30 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   };
 
   useEffect(() => {
-      // Solo recargamos datos de la API si cambia la sesión.
-      // Los filtros de fecha ahora se aplican sobre los datos en memoria para velocidad.
-      if (session && ventasData.length === 0) {
-          fetchData();
-      } else if (!session && ventasData.length === 0) {
-          fetchData();
-      }
+      if (session && ventasData.length === 0) fetchData();
+      else if (!session && ventasData.length === 0) fetchData();
   }, [session]);
 
-  // --- MEMOS CON LÓGICA DE FILTRADO CORRECTA ---
-  
   const datosFiltrados = useMemo(() => {
     let datos = ventasData;
-    
-    // 1. Filtro por Fechas (CRÍTICO: Aplicar aquí para que reaccione al cambio de inputs)
-    // Convertimos las fechas string a objetos Date para comparación correcta
-    // Se fuerza zona horaria local simulada o UTC para evitar problemas de "día anterior"
     const startStr = filtros.fechaInicio;
     const endStr = filtros.fechaFin;
     
-    // Filtro simple por string YYYY-MM-DD comparando con ISO string date part
-    // Esto es más robusto que Date object comparison directo por temas de horas
     datos = datos.filter(v => {
         const vDate = v.fecha.toISOString().split('T')[0];
         return vDate >= startStr && vDate <= endStr;
     });
 
-    // 2. Filtro por Punto de Venta
     if (filtros.sedeSeleccionada !== 'Todas') {
         datos = datos.filter(v => v.sede === filtros.sedeSeleccionada);
     }
-    
-    // 3. Filtro por Compañía (Modo Demo)
     if (!session && filtros.companiaSeleccionada !== 'Todas') {
          datos = datos.filter(v => v.compania.includes(filtros.companiaSeleccionada));
     }
-
     return datos;
   }, [ventasData, filtros.sedeSeleccionada, filtros.companiaSeleccionada, filtros.fechaInicio, filtros.fechaFin, session]);
 
   const sedes = useMemo(() => {
-      // Calculamos sedes disponibles en base a la data total (filtrada solo por cia)
       let base = ventasData;
       if (!session && filtros.companiaSeleccionada !== 'Todas') {
          base = ventasData.filter(v => v.compania.includes(filtros.companiaSeleccionada));
@@ -322,8 +326,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     const totalCostos = datosFiltrados.reduce((sum, v) => sum + v.costo, 0);
     const totalMargen = totalVentas - totalCostos;
     const margenPromedio = totalVentas > 0 ? ((totalMargen / totalVentas) * 100) : 0;
-    const unidadesVendidas = datosFiltrados.length; // Ahora esto son líneas de producto, no tickets
-    // Para contar tickets reales necesitaríamos agrupar por ID de venta original, pero es aceptable así para volumen
+    const unidadesVendidas = datosFiltrados.length;
     
     return {
       totalVentas: totalVentas.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -351,10 +354,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       agrupado[v.sede].ventas += v.total;
       agrupado[v.sede].margen += v.margen;
     });
-    return Object.values(agrupado).sort((a, b) => b.ventas - a.ventas); // Sin slice para ver todas
+    return Object.values(agrupado).sort((a, b) => b.ventas - a.ventas);
   }, [datosFiltrados]);
 
-  // Reporte Detallado de Productos (Agrupación completa)
   const reporteProductos = useMemo(() => {
     const agrupado: Record<string, any> = {};
     datosFiltrados.forEach(v => {
@@ -365,31 +367,58 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               transacciones: 0,
               costo: 0,
               ventaNeta: 0, 
+              ventaBruta: 0,
               ganancia: 0
           };
       }
       agrupado[v.producto].cantidad += v.cantidad;
       agrupado[v.producto].transacciones += 1;
       agrupado[v.producto].costo += v.costo;
-      agrupado[v.producto].ventaNeta += v.total;
+      agrupado[v.producto].ventaNeta += v.total; // Total es Venta Neta
+      // @ts-ignore
+      agrupado[v.producto].ventaBruta += (v.ventaBrutaReal || v.total); // Usar bruta real si existe
       agrupado[v.producto].ganancia += v.margen;
     });
 
     return Object.values(agrupado)
         .map(p => ({
             ...p,
-            margenPorcentaje: p.ventaNeta > 0 ? (p.ganancia / p.ventaNeta) * 100 : 0,
-            ventaBruta: p.ventaNeta * 1.0 // Simulando que no hay impuesto diferenciado en demo
+            margenPorcentaje: p.ventaNeta > 0 ? (p.ganancia / p.ventaNeta) * 100 : 0
         }))
-        .sort((a, b) => b.ventaNeta - a.ventaNeta);
-  }, [datosFiltrados]);
+        .sort((a, b) => {
+            const valA = a[sortConfig.key];
+            const valB = b[sortConfig.key];
+            
+            // Manejo especial para strings
+            if (typeof valA === 'string') {
+                return sortConfig.direction === 'asc' 
+                    ? valA.localeCompare(valB) 
+                    : valB.localeCompare(valA);
+            }
+            
+            return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+        });
+  }, [datosFiltrados, sortConfig]);
+
+  const handleSort = (key: SortKey) => {
+      setSortConfig(current => ({
+          key,
+          direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc'
+      }));
+  };
+
+  const SortIcon = ({ column }: { column: SortKey }) => {
+      if (sortConfig.key !== column) return <ArrowUpDown className="w-3 h-3 text-slate-300 ml-1 inline" />;
+      return sortConfig.direction === 'asc' 
+          ? <ArrowUp className="w-3 h-3 text-emerald-600 ml-1 inline" />
+          : <ArrowDown className="w-3 h-3 text-emerald-600 ml-1 inline" />;
+  };
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
   const aplicarPeriodo = (periodo: string) => {
     const hoy = new Date();
     let inicio = new Date(hoy);
-    
     switch(periodo) {
       case 'hoy': break; 
       case 'semana': inicio.setDate(hoy.getDate() - 7); break;
@@ -397,7 +426,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       case 'trimestre': inicio.setMonth(hoy.getMonth() - 3); break;
       case 'año': inicio = new Date(hoy.getFullYear(), 0, 1); break;
     }
-    
     setFiltros({
       ...filtros,
       periodoSeleccionado: periodo,
@@ -409,7 +437,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const handleDownloadCSV = () => {
       const headers = ['Producto', 'Unidades', '#Transac.', 'Costo Total', 'Venta Neta', 'Venta Bruta', 'Ganancia', 'Margen %'];
       const rows = reporteProductos.map(p => [
-          `"${p.producto.replace(/"/g, '""')}"`, // Escape quotes
+          `"${p.producto.replace(/"/g, '""')}"`,
           p.cantidad,
           p.transacciones,
           p.costo.toFixed(2),
@@ -419,11 +447,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           `${p.margenPorcentaje.toFixed(2)}%`
       ]);
 
-      const csvContent = [
-          headers.join(','),
-          ...rows.map(r => r.join(','))
-      ].join('\n');
-
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -434,17 +458,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       document.body.removeChild(link);
   };
 
-  // --- CONFIGURACIÓN DE VISTAS ---
+  // Vistas
   const isRentabilidad = view === 'rentabilidad';
-  // Si es rentabilidad, usamos Margen. Si es Ventas o General, usamos Ventas.
   const chartDataKey = isRentabilidad ? 'margen' : 'ventas'; 
   const chartColor = isRentabilidad ? '#10b981' : '#3b82f6'; 
   const chartLabel = isRentabilidad ? 'Ganancia (Margen)' : 'Venta Neta';
-
   const showKPIs = view === 'general' || view === 'rentabilidad';
   const showCharts = view === 'general' || view === 'reportes' || view === 'rentabilidad';
-  
-  // Tabla visible en casi todas las vistas para análisis detallado
   const showTable = true; 
 
   return (
@@ -455,13 +475,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center">
               <div className="bg-white p-4 rounded-xl shadow-xl flex items-center gap-3 border border-slate-100">
                   <RefreshCw className="w-5 h-5 animate-spin text-emerald-600" />
-                  <span className="font-medium text-slate-700">Procesando Datos (Pedidos + Líneas)...</span>
+                  <span className="font-medium text-slate-700">Procesando Datos...</span>
               </div>
           </div>
       )}
 
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-2">
            <div>
               <h1 className="text-2xl font-bold text-slate-800">
@@ -503,10 +522,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             </div>
         )}
 
-        {/* Filters Bar */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
           <div className="flex flex-wrap gap-4 items-end">
-            
             <div className="w-full md:w-auto">
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                 <Building2 className="inline w-3 h-3 mr-1" />
@@ -518,125 +535,77 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                        <span className="truncate">{session.companyName}</span>
                    </div>
               ) : (
-                <select 
-                    disabled={true}
-                    className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 cursor-not-allowed"
-                >
+                <select disabled className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 cursor-not-allowed">
                     <option>Demo / Todas</option>
                 </select>
               )}
             </div>
-
             <div className="w-full md:w-auto">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                <Store className="inline w-3 h-3 mr-1" />
-                Punto de Venta
-              </label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5"><Store className="inline w-3 h-3 mr-1" />Punto de Venta</label>
               <select 
                 value={filtros.sedeSeleccionada}
                 onChange={(e) => setFiltros({...filtros, sedeSeleccionada: e.target.value})}
                 className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
               >
-                {sedes.map(sede => (
-                  <option key={sede} value={sede}>{sede}</option>
-                ))}
+                {sedes.map(sede => <option key={sede} value={sede}>{sede}</option>)}
               </select>
             </div>
-
             <div className="flex-1 min-w-[300px]">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                <Calendar className="inline w-3 h-3 mr-1" />
-                Periodo
-              </label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5"><Calendar className="inline w-3 h-3 mr-1" />Periodo</label>
               <div className="flex bg-slate-50 p-1 rounded-lg w-full md:w-fit border border-slate-200">
                 {['mes', 'trimestre', 'año'].map(periodo => (
-                  <button
-                    key={periodo}
-                    onClick={() => aplicarPeriodo(periodo)}
-                    className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                      filtros.periodoSeleccionado === periodo
-                        ? 'bg-white text-emerald-600 shadow-sm border border-slate-100'
-                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-                    }`}
-                  >
+                  <button key={periodo} onClick={() => aplicarPeriodo(periodo)} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filtros.periodoSeleccionado === periodo ? 'bg-white text-emerald-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
                     {periodo.charAt(0).toUpperCase() + periodo.slice(1)}
                   </button>
                 ))}
               </div>
             </div>
-
             <div className="flex gap-2 w-full md:w-auto">
               <div className="w-1/2 md:w-auto">
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Desde</label>
-                <input
-                  type="date"
-                  value={filtros.fechaInicio}
-                  onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value, periodoSeleccionado: 'custom'})}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
+                <input type="date" value={filtros.fechaInicio} onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value, periodoSeleccionado: 'custom'})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" />
               </div>
-
               <div className="w-1/2 md:w-auto">
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Hasta</label>
-                <input
-                  type="date"
-                  value={filtros.fechaFin}
-                  onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value, periodoSeleccionado: 'custom'})}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
+                <input type="date" value={filtros.fechaFin} onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value, periodoSeleccionado: 'custom'})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* KPIs */}
         {showKPIs && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          
           <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-emerald-600 to-emerald-700'} rounded-xl shadow-lg p-6 flex flex-col justify-between`}>
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-              <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 bg-white/20 text-white rounded-full">
-                <ArrowUpRight className="w-3 h-3" /> PoS
-              </span>
+              <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm"><TrendingUp className="w-6 h-6 text-white" /></div>
+              <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 bg-white/20 text-white rounded-full"><ArrowUpRight className="w-3 h-3" /> PoS</span>
             </div>
             <div>
               <p className="text-white/80 text-sm font-medium tracking-wide opacity-90">Venta Neta Total</p>
               <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">S/ {kpis.totalVentas}</h3>
             </div>
           </div>
-
           <div className={`rounded-xl shadow-sm border p-6 flex flex-col justify-between transition-colors ${isRentabilidad ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200 hover:border-blue-300'}`}>
             <div className="flex items-center justify-between mb-4">
-              <div className={`p-2 rounded-lg ${isRentabilidad ? 'bg-emerald-100' : 'bg-blue-50'}`}>
-                <DollarSign className={`w-6 h-6 ${isRentabilidad ? 'text-emerald-600' : 'text-blue-600'}`} />
-              </div>
+              <div className={`p-2 rounded-lg ${isRentabilidad ? 'bg-emerald-100' : 'bg-blue-50'}`}><DollarSign className={`w-6 h-6 ${isRentabilidad ? 'text-emerald-600' : 'text-blue-600'}`} /></div>
             </div>
             <div>
               <p className="text-slate-500 text-sm font-medium">Ganancia Total</p>
               <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-emerald-700' : 'text-slate-800'}`}>S/ {kpis.totalMargen}</h3>
             </div>
           </div>
-
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-purple-300 transition-colors">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2 bg-purple-50 rounded-lg">
-                <Package className="w-6 h-6 text-purple-600" />
-              </div>
+              <div className="p-2 bg-purple-50 rounded-lg"><Package className="w-6 h-6 text-purple-600" /></div>
             </div>
             <div>
               <p className="text-slate-500 text-sm font-medium">Items Vendidos</p>
               <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3>
             </div>
           </div>
-
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:border-orange-300 transition-colors">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2 bg-orange-50 rounded-lg">
-                <Store className="w-6 h-6 text-orange-600" />
-              </div>
+              <div className="p-2 bg-orange-50 rounded-lg"><Store className="w-6 h-6 text-orange-600" /></div>
             </div>
             <div>
               <p className="text-slate-500 text-sm font-medium">Margen Promedio %</p>
@@ -646,55 +615,24 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         </div>
         )}
 
-        {/* Gráficos principales */}
         {showCharts && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          {/* Gráfico 1: Tiempo */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-800">{isRentabilidad ? 'Evolución de la Ganancia' : 'Evolución de Ventas'}</h3>
+              <h3 className="text-lg font-bold text-slate-800">{isRentabilidad ? 'Evolución de la Ganancia' : 'Evolución de Ventas Neta'}</h3>
             </div>
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis 
-                    dataKey="fecha" 
-                    tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
-                    stroke="#94a3b8"
-                    tick={{fontSize: 12}}
-                    axisLine={false}
-                    tickLine={false}
-                    dy={10}
-                  />
-                  <YAxis 
-                    stroke="#94a3b8"
-                    tick={{fontSize: 12}}
-                    axisLine={false}
-                    tickLine={false}
-                    dx={-10}
-                    tickFormatter={(value) => `S/${value}`}
-                  />
-                  <Tooltip 
-                    formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]}
-                    labelFormatter={(label) => new Date(label + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey={chartDataKey} 
-                    stroke={chartColor} 
-                    strokeWidth={3} 
-                    dot={false}
-                    activeDot={{ r: 6, strokeWidth: 0 }}
-                    name={chartLabel}
-                  />
+                  <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
+                  <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
+                  <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} labelFormatter={(label) => new Date(label + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                  <Line type="monotone" dataKey={chartDataKey} stroke={chartColor} strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} name={chartLabel} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
-
-          {/* Gráfico 2: Sede */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-slate-800">{isRentabilidad ? 'Ganancia por Sede' : 'Ventas por Sede'}</h3>
@@ -702,33 +640,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             <div className="h-[300px] w-full flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={ventasPorSede}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey={chartDataKey}
-                    nameKey="sede"
-                  >
-                    {ventasPorSede.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
-                    ))}
+                  <Pie data={ventasPorSede} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey={chartDataKey} nameKey="sede">
+                    {ventasPorSede.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />)}
                   </Pie>
-                  <Tooltip 
-                    formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} 
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Legend 
-                    layout="vertical" 
-                    verticalAlign="middle" 
-                    align="right"
-                    wrapperStyle={{ paddingLeft: '20px' }}
-                    formatter={(value) => (
-                      <span className="text-slate-600 text-sm font-medium ml-2">{value}</span>
-                    )}
-                  />
+                  <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                  <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ paddingLeft: '20px' }} formatter={(value) => <span className="text-slate-600 text-sm font-medium ml-2">{value}</span>} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -736,46 +652,35 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         </div>
         )}
 
-        {/* Tabla Detallada Odoo Style */}
         {showTable && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 overflow-hidden animate-in fade-in slide-in-from-bottom-12 duration-1000">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
             <div>
-               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                   <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-                   Detalle de Productos
-               </h3>
-               <p className="text-xs text-slate-500">Desglose por item, costo y rentabilidad</p>
+               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><FileSpreadsheet className="w-5 h-5 text-emerald-600" />Detalle de Productos</h3>
+               <p className="text-xs text-slate-500">Desglose por item, costo real (Odoo) y rentabilidad.</p>
             </div>
-            
-            <button 
-                onClick={handleDownloadCSV}
-                className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Descargar CSV
+            <button onClick={handleDownloadCSV} className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+              <Download className="w-4 h-4" />Descargar CSV
             </button>
           </div>
           <div className="overflow-x-auto border rounded-lg border-slate-100">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+              <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200 select-none">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Producto</th>
-                  <th className="px-4 py-3 font-semibold text-right">Unds.</th>
-                  <th className="px-4 py-3 font-semibold text-right">#Transac.</th>
-                  <th className="px-4 py-3 font-semibold text-right text-slate-400">Costo</th>
-                  <th className="px-4 py-3 font-semibold text-right text-slate-700">Venta Neta</th>
-                  <th className="px-4 py-3 font-semibold text-right text-slate-400">Venta Bruta</th>
-                  <th className="px-4 py-3 font-semibold text-right text-emerald-700 bg-emerald-50/30">Ganancia</th>
-                  <th className="px-4 py-3 font-semibold text-right text-emerald-700 bg-emerald-50/30">Margen %</th>
+                  <th className="px-4 py-3 font-semibold cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('producto')}>Producto <SortIcon column="producto" /></th>
+                  <th className="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('cantidad')}>Unds. <SortIcon column="cantidad" /></th>
+                  <th className="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('transacciones')}>#Transac. <SortIcon column="transacciones" /></th>
+                  <th className="px-4 py-3 font-semibold text-right text-slate-400 cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('costo')}>Costo Total <SortIcon column="costo" /></th>
+                  <th className="px-4 py-3 font-semibold text-right text-slate-700 cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('ventaNeta')}>Venta Neta <SortIcon column="ventaNeta" /></th>
+                  <th className="px-4 py-3 font-semibold text-right text-slate-400 cursor-pointer hover:bg-slate-100 hover:text-emerald-700 transition-colors" onClick={() => handleSort('ventaBruta')}>Venta Bruta <SortIcon column="ventaBruta" /></th>
+                  <th className="px-4 py-3 font-semibold text-right text-emerald-700 bg-emerald-50/30 cursor-pointer hover:bg-emerald-100 transition-colors" onClick={() => handleSort('ganancia')}>Ganancia <SortIcon column="ganancia" /></th>
+                  <th className="px-4 py-3 font-semibold text-right text-emerald-700 bg-emerald-50/30 cursor-pointer hover:bg-emerald-100 transition-colors" onClick={() => handleSort('margenPorcentaje')}>Margen % <SortIcon column="margenPorcentaje" /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {reporteProductos.map((prod, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="px-4 py-3 font-medium text-slate-800 group-hover:text-blue-600 transition-colors max-w-xs truncate" title={prod.producto}>
-                        {prod.producto}
-                    </td>
+                    <td className="px-4 py-3 font-medium text-slate-800 group-hover:text-blue-600 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
                     <td className="px-4 py-3 text-right text-slate-600">{prod.cantidad}</td>
                     <td className="px-4 py-3 text-right text-slate-500">{prod.transacciones}</td>
                     <td className="px-4 py-3 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
