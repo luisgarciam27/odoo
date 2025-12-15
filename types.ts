@@ -9,8 +9,10 @@ export interface Producto {
 export interface Venta {
   fecha: Date;
   sede: string;
-  compania: string; // Nuevo campo
+  compania: string;
   producto: string;
+  categoria: string; // Nuevo: Para análisis por familia
+  vendedor: string;  // Nuevo: Para análisis de desempeño
   cantidad: number;
   total: number;
   costo: number;
@@ -20,7 +22,7 @@ export interface Venta {
 
 export interface Filtros {
   sedeSeleccionada: string;
-  companiaSeleccionada: string; // Nuevo filtro
+  companiaSeleccionada: string;
   periodoSeleccionado: string;
   fechaInicio: string;
   fechaFin: string;
@@ -28,9 +30,13 @@ export interface Filtros {
 
 export interface KPI {
   totalVentas: string;
+  variacionVentas: number; // Nuevo: % vs periodo anterior
   totalMargen: string;
+  variacionMargen: number; // Nuevo: % vs periodo anterior
   margenPromedio: string;
   unidadesVendidas: number;
+  variacionUnidades: number; // Nuevo: % vs periodo anterior
+  ticketPromedio: string;
 }
 
 export interface AgrupadoPorDia {
