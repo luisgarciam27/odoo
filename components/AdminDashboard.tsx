@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClients, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare } from 'lucide-react';
+import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 
 interface AdminDashboardProps {
@@ -127,7 +127,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 companyId: foundCompany ? foundCompany.id : 'NO ENCONTRADO',
                 companyName: foundCompany ? foundCompany.name : 'NO ENCONTRADO',
                 allCompanies: companies,
-                whatsappNumbers: client.whatsappNumbers || 'No configurado'
+                whatsappNumbers: client.whatsappNumbers || 'No configurado',
+                clientConfig: client // Guardamos config para generar el JSON
             });
 
         } catch (error: any) {
@@ -143,7 +144,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-        alert(`Copiado: ${text}`);
+        alert(`Copiado al portapapeles`);
+    };
+
+    // Generar JSON para n8n
+    const generateN8nJson = () => {
+        if (!testResult || testResult.status !== 'success') return '';
+        
+        const jsonObject = {
+            json: {
+                empresa: testResult.clientConfig.code,
+                url: testResult.clientConfig.url,
+                db: testResult.clientConfig.db,
+                apiKey: testResult.clientConfig.apiKey,
+                company_id: testResult.companyId === 'NO ENCONTRADO' ? 0 : testResult.companyId,
+                whatsapp: testResult.clientConfig.whatsappNumbers || "51900000000"
+            }
+        };
+        
+        return JSON.stringify(jsonObject, null, 2); // Indentación de 2 espacios
     };
 
     return (
@@ -233,7 +252,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                                 <button 
                                                     onClick={() => handleTestConnection(client)} 
                                                     className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors relative" 
-                                                    title="Probar Conexión y Ver IDs para n8n"
+                                                    title="Probar Conexión, Ver IDs y Generar JSON para n8n"
                                                     disabled={testingClient === client.code}
                                                 >
                                                     {testingClient === client.code ? <Activity className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
@@ -262,22 +281,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             {/* Modal de Resultado de Test (IDs para n8n) */}
             {testResult && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-                        <div className={`px-6 py-4 flex justify-between items-center ${testResult.status === 'success' ? 'bg-emerald-50 border-b border-emerald-100' : 'bg-red-50 border-b border-red-100'}`}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className={`px-6 py-4 flex justify-between items-center shrink-0 ${testResult.status === 'success' ? 'bg-emerald-50 border-b border-emerald-100' : 'bg-red-50 border-b border-red-100'}`}>
                             <h3 className={`font-bold text-lg flex items-center gap-2 ${testResult.status === 'success' ? 'text-emerald-800' : 'text-red-800'}`}>
                                 {testResult.status === 'success' ? <CheckCircle className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5"/>}
-                                {testResult.status === 'success' ? 'Datos Técnicos para n8n' : 'Error de Conexión'}
+                                {testResult.status === 'success' ? 'Datos Técnicos & n8n' : 'Error de Conexión'}
                             </h3>
                             <button onClick={() => setTestResult(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
                         </div>
                         
-                        <div className="p-6">
+                        <div className="p-6 overflow-y-auto">
                             {testResult.status === 'success' ? (
-                                <div className="space-y-4">
-                                    <p className="text-sm text-slate-500 mb-4">
-                                        Copia estos valores en tus nodos de n8n para configurar las automatizaciones.
-                                    </p>
-                                    
+                                <div className="space-y-6">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 relative group">
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">User ID (UID)</p>
@@ -291,20 +306,43 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                         </div>
                                     </div>
 
-                                    {/* Link Dashboard */}
-                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 relative group">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Link Dashboard (Para Mensaje)</p>
-                                        <p className="font-mono text-sm text-brand-600 truncate pr-6">{DASHBOARD_URL}</p>
-                                        <button onClick={() => copyToClipboard(DASHBOARD_URL)} className="absolute top-2 right-2 p-1 text-slate-300 hover:text-brand-500"><Copy className="w-4 h-4"/></button>
+                                    {/* Link Dashboard & WhatsApp */}
+                                    <div className="grid grid-cols-1 gap-3">
+                                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 relative group">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Link Dashboard</p>
+                                            <p className="font-mono text-xs text-brand-600 truncate pr-6">{DASHBOARD_URL}</p>
+                                            <button onClick={() => copyToClipboard(DASHBOARD_URL)} className="absolute top-2 right-2 p-1 text-slate-300 hover:text-brand-500"><Copy className="w-4 h-4"/></button>
+                                        </div>
+                                         <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 relative">
+                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-1">
+                                                <MessageSquare className="w-3 h-3"/> WhatsApp Configurado
+                                            </p>
+                                            <p className="font-mono text-sm font-bold text-emerald-800 mt-1">{testResult.whatsappNumbers}</p>
+                                            <button onClick={() => copyToClipboard(testResult.whatsappNumbers)} className="absolute top-2 right-2 p-1 text-emerald-400 hover:text-emerald-700"><Copy className="w-4 h-4"/></button>
+                                        </div>
                                     </div>
 
-                                    {/* WhatsApp */}
-                                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 relative">
-                                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-1">
-                                            <MessageSquare className="w-3 h-3"/> WhatsApp de Envío
+                                    {/* SECCIÓN JSON N8N */}
+                                    <div className="border-t border-slate-100 pt-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2">
+                                                <FileJson className="w-4 h-4 text-brand-500"/> Configuración para n8n
+                                            </h4>
+                                            <button 
+                                                onClick={() => copyToClipboard(generateN8nJson())} 
+                                                className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded font-bold uppercase transition-colors flex items-center gap-1"
+                                            >
+                                                <Copy className="w-3 h-3"/> Copiar JSON
+                                            </button>
+                                        </div>
+                                        <div className="bg-slate-900 rounded-xl p-3 relative group overflow-hidden">
+                                            <pre className="text-[10px] text-emerald-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                                                {generateN8nJson()}
+                                            </pre>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 mt-2">
+                                            Copia este bloque y pégalo dentro del array del nodo <strong>"Code - Configuración Maestra"</strong> en tu flujo de n8n.
                                         </p>
-                                        <p className="font-mono text-sm font-bold text-emerald-800 mt-1">{testResult.whatsappNumbers}</p>
-                                        <button onClick={() => copyToClipboard(testResult.whatsappNumbers)} className="absolute top-2 right-2 p-1 text-emerald-400 hover:text-emerald-700"><Copy className="w-4 h-4"/></button>
                                     </div>
 
                                     {testResult.companyId === 'NO ENCONTRADO' && (
@@ -326,7 +364,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                             )}
                         </div>
                         
-                        <div className="bg-slate-50 px-6 py-4 flex justify-end">
+                        <div className="bg-slate-50 px-6 py-4 flex justify-end shrink-0">
                             <button onClick={() => setTestResult(null)} className="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm hover:bg-slate-900">Cerrar</button>
                         </div>
                     </div>
