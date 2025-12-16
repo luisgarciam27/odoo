@@ -198,7 +198,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       const options: any = { limit: 5000, order: 'date_order desc' }; 
 
       try {
-          if (session.companyId) options.context = { allowed_company_ids: [session.companyId] };
+          // --- CONTEXTO DE COMPAÑÍA CRÍTICO ---
+          // Definimos el contexto y lo pasamos a TODAS las llamadas (Ordenes, Líneas, Productos)
+          // Si no se pasa el contexto al leer 'product.product', Odoo devuelve el costo de la compañía por defecto (a veces 0).
+          const context = session.companyId ? { allowed_company_ids: [session.companyId] } : {};
+          if (session.companyId) options.context = context;
+
           const ordersRaw: any[] = await client.searchRead(session.uid, session.apiKey, modelOrder, domain, fieldsOrder, options);
 
           if (!ordersRaw || ordersRaw.length === 0) {
@@ -222,13 +227,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               return result;
           };
 
+          // Opciones auxiliares para llamadas secundarias que incluyen el contexto
+          const subOptions = { context };
+
           // --- FETCH ORDER LINES ---
           const lineChunks = chunkArray(allLineIds, 1000);
           let allLinesData: any[] = [];
           const fieldsLine = ['product_id', 'qty', 'price_subtotal', 'price_subtotal_incl']; 
 
           for (const chunk of lineChunks) {
-              const linesData = await client.searchRead(session.uid, session.apiKey, 'pos.order.line', [['id', 'in', chunk]], fieldsLine);
+              const linesData = await client.searchRead(session.uid, session.apiKey, 'pos.order.line', [['id', 'in', chunk]], fieldsLine, subOptions);
               if (linesData) allLinesData = allLinesData.concat(linesData);
           }
 
@@ -239,7 +247,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           if (productIds.size > 0) {
               const productChunks = chunkArray(Array.from(productIds), 1000);
               for (const pChunk of productChunks) {
-                  const productsData = await client.searchRead(session.uid, session.apiKey, 'product.product', [['id', 'in', pChunk]], ['standard_price', 'categ_id']);
+                  // IMPORTANTE: Pasamos subOptions (con el contexto) para obtener el standard_price correcto de esta compañía
+                  const productsData = await client.searchRead(session.uid, session.apiKey, 'product.product', [['id', 'in', pChunk]], ['standard_price', 'categ_id'], subOptions);
                   if (productsData) {
                       productsData.forEach((p: any) => {
                           productMap.set(p.id, {
@@ -256,7 +265,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           if (allPaymentIds.length > 0) {
               const paymentChunks = chunkArray(allPaymentIds, 1000);
               for (const payChunk of paymentChunks) {
-                  const paymentsData = await client.searchRead(session.uid, session.apiKey, 'pos.payment', [['id', 'in', payChunk]], ['payment_method_id', 'pos_order_id']);
+                  const paymentsData = await client.searchRead(session.uid, session.apiKey, 'pos.payment', [['id', 'in', payChunk]], ['payment_method_id', 'pos_order_id'], subOptions);
                   if (paymentsData) {
                       paymentsData.forEach((p: any) => {
                           if (p.pos_order_id && p.payment_method_id) {
@@ -291,8 +300,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                           const ventaNeta = line.price_subtotal || 0; 
                           const prodInfo = productMap.get(productId) || { cost: 0, cat: 'Varios' };
                           const unitCost = prodInfo.cost; 
-                          // SE ELIMINÓ LA ESTIMACIÓN DEL 65%. 
-                          // Ahora el costo es el que viene de Odoo (incluso si es 0).
+                          // Costo directo desde Odoo (ahora con contexto corregido)
 
                           const costoTotal = unitCost * (line.qty || 1);
                           const margen = ventaNeta - costoTotal; 
