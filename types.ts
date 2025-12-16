@@ -82,4 +82,5 @@ export interface ClientConfig {
   username: string;
   apiKey: string;
   companyFilter: string;
+  whatsappNumbers?: string; // Lista de números separados por coma
 }

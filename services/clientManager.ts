@@ -1,7 +1,7 @@
 import { ClientConfig } from '../types';
 
 // Actualizamos la versión para forzar la recarga de los datos por defecto en el navegador del usuario
-const CLIENTS_STORAGE_KEY = 'LEMON_BI_CLIENTS_V2';
+const CLIENTS_STORAGE_KEY = 'LEMON_BI_CLIENTS_V4';
 const ADMIN_PWD_KEY = 'LEMON_BI_ADMIN_PWD';
 const DEFAULT_ADMIN_PWD = 'Luis2021.';
 
@@ -12,8 +12,8 @@ const DEFAULT_CLIENTS: ClientConfig[] = [
         db: 'igp_master',
         username: 'soporte@facturaclic.pe',
         apiKey: '6761eabe769db8795b3817000bd649cad0970d0f',
-        // Actualizado con el nombre real encontrado en Odoo
-        companyFilter: 'SAN MARTIN DE THOURS'
+        companyFilter: 'SAN MARTIN DE THOURS',
+        whatsappNumbers: '51900000000'
     },
     {
         code: 'MULTIFARMA',
@@ -21,7 +21,8 @@ const DEFAULT_CLIENTS: ClientConfig[] = [
         db: 'igp_master',
         username: 'soporte@facturaclic.pe',
         apiKey: '6761eabe769db8795b3817000bd649cad0970d0f',
-        companyFilter: 'MULTIFARMA'
+        companyFilter: 'MULTIFARMA',
+        whatsappNumbers: ''
     },
     {
         code: 'FEETCARE',
@@ -29,7 +30,8 @@ const DEFAULT_CLIENTS: ClientConfig[] = [
         db: 'vida_master',
         username: 'soporte@facturaclic.pe',
         apiKey: 'ad5d72efa974bd60712bbb24542717ffbce9e75d',
-        companyFilter: 'FEET CARE'
+        companyFilter: 'FEET CARE',
+        whatsappNumbers: ''
     },
     {
         code: 'MARIPEYA',
@@ -37,7 +39,8 @@ const DEFAULT_CLIENTS: ClientConfig[] = [
         db: 'vida_master',
         username: 'soporte@facturaclic.pe',
         apiKey: 'ad5d72efa974bd60712bbb24542717ffbce9e75d',
-        companyFilter: 'MARIPEYA'
+        companyFilter: 'MARIPEYA',
+        whatsappNumbers: ''
     }
 ];
 

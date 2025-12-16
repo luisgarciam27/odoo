@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClients, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff } from 'lucide-react';
+import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, ExternalLink } from 'lucide-react';
+import { OdooClient } from '../services/odoo';
 
 interface AdminDashboardProps {
     onLogout: () => void;
@@ -13,9 +14,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
     
+    // Test Connection State
+    const [testingClient, setTestingClient] = useState<string | null>(null);
+    const [testResult, setTestResult] = useState<any | null>(null);
+
     // Form States
     const [currentClient, setCurrentClient] = useState<ClientConfig>({
-        code: '', url: '', db: '', username: '', apiKey: '', companyFilter: ''
+        code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: ''
     });
     const [originalCode, setOriginalCode] = useState<string | null>(null);
 
@@ -23,6 +28,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [pwdMessage, setPwdMessage] = useState('');
+    
+    const DASHBOARD_URL = "https://odoo-lemon.vercel.app/";
 
     useEffect(() => {
         setClients(getClients());
@@ -65,7 +72,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     };
 
     const resetForm = () => {
-        setCurrentClient({ code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '' });
+        setCurrentClient({ code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: '' });
         setOriginalCode(null);
     };
 
@@ -93,10 +100,56 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         setShowApiKey(prev => ({ ...prev, [code]: !prev[code] }));
     };
 
+    // --- NEW: Test Connection & Get IDs for n8n ---
+    const handleTestConnection = async (client: ClientConfig) => {
+        setTestingClient(client.code);
+        setTestResult(null);
+
+        try {
+            const odoo = new OdooClient(client.url, client.db, true); // useProxy = true
+            const uid = await odoo.authenticate(client.username, client.apiKey);
+            
+            // Buscar datos de compañia para obtener el ID numérico
+            const companies = await odoo.searchRead(uid, client.apiKey, 'res.company', [], ['name']);
+            
+            let foundCompany = null;
+            if (client.companyFilter === 'ALL') {
+                foundCompany = companies[0];
+            } else {
+                foundCompany = companies.find((c: any) => 
+                    c.name.toUpperCase().includes(client.companyFilter.toUpperCase())
+                );
+            }
+
+            setTestResult({
+                status: 'success',
+                uid: uid,
+                companyId: foundCompany ? foundCompany.id : 'NO ENCONTRADO',
+                companyName: foundCompany ? foundCompany.name : 'NO ENCONTRADO',
+                allCompanies: companies,
+                whatsappNumbers: client.whatsappNumbers || 'No configurado'
+            });
+
+        } catch (error: any) {
+            console.error(error);
+            setTestResult({
+                status: 'error',
+                message: error.message || "Error desconocido al conectar."
+            });
+        } finally {
+            setTestingClient(null);
+        }
+    };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        alert(`Copiado: ${text}`);
+    };
+
     return (
         <div className="min-h-screen bg-slate-100 font-sans text-slate-800">
             {/* Navbar */}
-            <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-lg">
+            <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-lg sticky top-0 z-20">
                 <div className="flex items-center gap-3">
                     <div className="bg-brand-500 p-2 rounded-lg"><Shield className="w-5 h-5 text-white" /></div>
                     <div>
@@ -119,7 +172,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 <div className="flex justify-between items-end mb-6">
                     <div>
                         <h2 className="text-2xl font-bold text-slate-800">Directorio de Clientes</h2>
-                        <p className="text-slate-500 text-sm mt-1">Administra las credenciales y accesos de las empresas conectadas.</p>
+                        <p className="text-slate-500 text-sm mt-1">Administra las credenciales y obtén datos técnicos para n8n.</p>
                     </div>
                     <button 
                         onClick={() => { resetForm(); setIsEditing(true); }}
@@ -138,8 +191,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                     <th className="px-6 py-4">Código (Acceso)</th>
                                     <th className="px-6 py-4">Filtro Compañía</th>
                                     <th className="px-6 py-4">URL Servidor</th>
-                                    <th className="px-6 py-4">Base de Datos</th>
-                                    <th className="px-6 py-4">Usuario</th>
+                                    <th className="px-6 py-4">WhatsApp Envío</th>
+                                    <th className="px-6 py-4">Usuario Técnico</th>
                                     <th className="px-6 py-4">Acciones</th>
                                 </tr>
                             </thead>
@@ -153,7 +206,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                         </td>
                                         <td className="px-6 py-4 font-medium text-brand-700">{client.companyFilter}</td>
                                         <td className="px-6 py-4 text-xs font-mono text-slate-500 truncate max-w-[150px]" title={client.url}>{client.url}</td>
-                                        <td className="px-6 py-4 text-slate-700">{client.db}</td>
+                                        <td className="px-6 py-4">
+                                            {client.whatsappNumbers ? (
+                                                <span className="flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded font-medium truncate max-w-[120px]">
+                                                    <MessageSquare className="w-3 h-3" /> {client.whatsappNumbers}
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs text-slate-300 italic">No config.</span>
+                                            )}
+                                        </td>
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col gap-1">
                                                 <span className="text-xs">{client.username}</span>
@@ -169,6 +230,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">
+                                                <button 
+                                                    onClick={() => handleTestConnection(client)} 
+                                                    className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors relative" 
+                                                    title="Probar Conexión y Ver IDs para n8n"
+                                                    disabled={testingClient === client.code}
+                                                >
+                                                    {testingClient === client.code ? <Activity className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                                                </button>
                                                 <button onClick={() => handleEdit(client)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors" title="Editar">
                                                     <Edit className="w-4 h-4" />
                                                 </button>
@@ -189,6 +258,80 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Modal de Resultado de Test (IDs para n8n) */}
+            {testResult && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+                        <div className={`px-6 py-4 flex justify-between items-center ${testResult.status === 'success' ? 'bg-emerald-50 border-b border-emerald-100' : 'bg-red-50 border-b border-red-100'}`}>
+                            <h3 className={`font-bold text-lg flex items-center gap-2 ${testResult.status === 'success' ? 'text-emerald-800' : 'text-red-800'}`}>
+                                {testResult.status === 'success' ? <CheckCircle className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5"/>}
+                                {testResult.status === 'success' ? 'Datos Técnicos para n8n' : 'Error de Conexión'}
+                            </h3>
+                            <button onClick={() => setTestResult(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
+                        </div>
+                        
+                        <div className="p-6">
+                            {testResult.status === 'success' ? (
+                                <div className="space-y-4">
+                                    <p className="text-sm text-slate-500 mb-4">
+                                        Copia estos valores en tus nodos de n8n para configurar las automatizaciones.
+                                    </p>
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 relative group">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">User ID (UID)</p>
+                                            <p className="font-mono text-xl font-bold text-slate-800">{testResult.uid}</p>
+                                            <button onClick={() => copyToClipboard(String(testResult.uid))} className="absolute top-2 right-2 p-1 text-slate-300 hover:text-brand-500"><Copy className="w-4 h-4"/></button>
+                                        </div>
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 relative group">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Company ID</p>
+                                            <p className="font-mono text-xl font-bold text-brand-600">{testResult.companyId}</p>
+                                            <button onClick={() => copyToClipboard(String(testResult.companyId))} className="absolute top-2 right-2 p-1 text-slate-300 hover:text-brand-500"><Copy className="w-4 h-4"/></button>
+                                        </div>
+                                    </div>
+
+                                    {/* Link Dashboard */}
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 relative group">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Link Dashboard (Para Mensaje)</p>
+                                        <p className="font-mono text-sm text-brand-600 truncate pr-6">{DASHBOARD_URL}</p>
+                                        <button onClick={() => copyToClipboard(DASHBOARD_URL)} className="absolute top-2 right-2 p-1 text-slate-300 hover:text-brand-500"><Copy className="w-4 h-4"/></button>
+                                    </div>
+
+                                    {/* WhatsApp */}
+                                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 relative">
+                                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-1">
+                                            <MessageSquare className="w-3 h-3"/> WhatsApp de Envío
+                                        </p>
+                                        <p className="font-mono text-sm font-bold text-emerald-800 mt-1">{testResult.whatsappNumbers}</p>
+                                        <button onClick={() => copyToClipboard(testResult.whatsappNumbers)} className="absolute top-2 right-2 p-1 text-emerald-400 hover:text-emerald-700"><Copy className="w-4 h-4"/></button>
+                                    </div>
+
+                                    {testResult.companyId === 'NO ENCONTRADO' && (
+                                        <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800">
+                                            <strong>Advertencia:</strong> No se encontró una compañía que coincida con el filtro. Revisa la lista de disponibles:
+                                            <ul className="mt-1 list-disc list-inside">
+                                                {testResult.allCompanies.map((c: any) => (
+                                                    <li key={c.id}>{c.name} (ID: {c.id})</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="text-center py-4">
+                                    <p className="text-red-600 font-medium mb-2">{testResult.message}</p>
+                                    <p className="text-sm text-slate-500">Verifica la URL, Base de Datos, Usuario o API Key.</p>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="bg-slate-50 px-6 py-4 flex justify-end">
+                            <button onClick={() => setTestResult(null)} className="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm hover:bg-slate-900">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal Edit/Create */}
             {isEditing && (
@@ -224,6 +367,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                         onChange={e => setCurrentClient({...currentClient, companyFilter: e.target.value})}
                                         required
                                         placeholder="Ej: Inversiones SAC"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-emerald-600 uppercase mb-1">Números WhatsApp (Alertas)</label>
+                                <div className="relative">
+                                    <MessageSquare className="absolute left-3 top-2.5 w-4 h-4 text-emerald-500" />
+                                    <input 
+                                        type="text" 
+                                        className="w-full pl-9 p-2.5 border border-emerald-200 bg-emerald-50/30 rounded-xl text-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none placeholder-emerald-800/30"
+                                        value={currentClient.whatsappNumbers || ''}
+                                        onChange={e => setCurrentClient({...currentClient, whatsappNumbers: e.target.value})}
+                                        placeholder="51999999, 51888888"
                                     />
                                 </div>
                             </div>
