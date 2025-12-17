@@ -1,221 +1,232 @@
-export const N8N_WORKFLOW_TEMPLATE = {
+// CONFIGURACIÓN COMÚN
+const SUPABASE_URL = "https://ogopzhmsjnotuntfimpx.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nb3B6aG1zam5vdHVudGZpbXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MjcwNjksImV4cCI6MjA4MTUwMzA2OX0.z9rcjc9ToplMYhLKQQl0iuKYc87hm1JAN2O1yfv3lmE";
+
+// --- FLUJO 1: REPORTE DIARIO DE CAJA ---
+export const DAILY_WORKFLOW_JSON = {
+  "name": "LemonBI - Reporte Diario (Cierres)",
   "nodes": [
     {
       "parameters": {
         "rule": {
-          "interval": [
-            {
-              "field": "cronExpression",
-              "expression": "0 8 * * *"
-            }
-          ]
+          "interval": [{ "field": "cronExpression", "expression": "0 6 * * *" }]
         }
       },
-      "name": "Schedule Trigger - 8:00 AM",
+      "name": "Schedule - 6:00 AM",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [
-        -380,
-        -60
-      ],
-      "id": "trigger-node"
+      "position": [-380, -60]
     },
     {
       "parameters": {
-        "url": "https://ogopzhmsjnotuntfimpx.supabase.co/rest/v1/empresas?select=*&estado=eq.true",
+        "url": `${SUPABASE_URL}/rest/v1/empresas?select=*&estado=eq.true`,
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nb3B6aG1zam5vdHVudGZpbXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MjcwNjksImV4cCI6MjA4MTUwMzA2OX0.z9rcjc9ToplMYhLKQQl0iuKYc87hm1JAN2O1yfv3lmE"
-            },
-            {
-              "name": "Authorization",
-              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nb3B6aG1zam5vdHVudGZpbXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MjcwNjksImV4cCI6MjA4MTUwMzA2OX0.z9rcjc9ToplMYhLKQQl0iuKYc87hm1JAN2O1yfv3lmE"
-            }
+            { "name": "apikey", "value": SUPABASE_KEY },
+            { "name": "Authorization", "value": `Bearer ${SUPABASE_KEY}` }
           ]
-        },
-        "options": {}
+        }
       },
-      "name": "GET Empresas - Supabase",
+      "name": "GET Empresas Activas",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [
-        -180,
-        -60
-      ],
-      "id": "supabase-get-node",
-      "notes": "Obtiene empresas activas"
+      "position": [-180, -60]
     },
     {
-      "parameters": {
-        "options": {}
-      },
+      "parameters": {},
       "name": "Split In Batches",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [
-        20,
-        -60
-      ],
-      "id": "split-node",
-      "notes": "Procesa 1 empresa a la vez"
+      "position": [20, -60]
     },
     {
       "parameters": {
-        "jsCode": "// ============================================\n// GENERAR XML PARA CONSULTA ODOO (CORREGIDO)\n// ============================================\n\nconst data = $input.first().json;\n\n// Mapeo desde Supabase (snake_case) a variables\nconst empresaName = data.codigo_acceso;\nconst url = data.odoo_url;\nconst db = data.odoo_db;\nconst apiKey = data.odoo_api_key;\n// Buscamos ID de compañía. Si es 'ALL' o texto, este flujo asume que ya tenemos el ID numérico\n// Si no, deberías agregar lógica para buscar el ID primero. \n// Para simplificar, asumiremos que odoo_company_id ya está en la DB o se busca por nombre.\n// En este ejemplo, usaremos filtro_compania como string para buscar ID si fuera necesario,\n// PERO lo ideal es guardar el ID numérico en supabase. \n// Asumiremos que el admin ya configuró un ID si lo tiene, o usaremos 1 por defecto.\n// NOTA: Para producción, agrega una columna 'odoo_company_id_int' en Supabase.\nconst companyId = 1; \n\nconst targetPhone = data.whatsapp_numeros;\n\n// FIX: Forzar zona horaria Perú/Lima para obtener 'Ayer' correctamente\nconst date = new Date();\ndate.setDate(date.getDate() - 1);\nconst options = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };\nconst formatter = new Intl.DateTimeFormat('en-CA', options);\nconst yesterdayStr = formatter.format(date);\n\nconsole.log(`Procesando: ${empresaName} para fecha ${yesterdayStr}`);\n\nconst xml = `<?xml version=\"1.0\"?>\n<methodCall>\n  <methodName>execute_kw</methodName>\n  <params>\n    <param><value><string>${db}</string></value></param>\n    <param><value><int>2</int></value></param>\n    <param><value><string>${apiKey}</string></value></param>\n    <param><value><string>pos.session</string></value></param>\n    <param><value><string>search_read</string></value></param>\n    <param>\n      <value><array><data>\n        <value><array><data>\n            <value><string>stop_at</string></value>\n            <value><string>&gt;=</string></value>\n            <value><string>${yesterdayStr} 00:00:00</string></value>\n        </data></array></value>\n        <value><array><data>\n            <value><string>stop_at</string></value>\n            <value><string>&lt;=</string></value>\n            <value><string>${yesterdayStr} 23:59:59</string></value>\n        </data></array></value>\n        <value><array><data>\n            <value><string>state</string></value>\n            <value><string>=</string></value>\n            <value><string>closed</string></value>\n        </data></array></value>\n      </data></array></value>\n    </param>\n    <param>\n      <value><struct>\n        <member>\n          <name>fields</name>\n          <value><array><data>\n            <value><string>id</string></value>\n            <value><string>config_id</string></value>\n            <value><string>name</string></value>\n            <value><string>user_id</string></value>\n            <value><string>start_at</string></value>\n            <value><string>stop_at</string></value>\n            <value><string>total_payments_amount</string></value>\n            <value><string>cash_register_balance_end_real</string></value>\n            <value><string>cash_register_difference</string></value>\n          </data></array></value>\n        </member>\n      </struct></value>\n    </param>\n  </params>\n</methodCall>`;\n\nreturn {\n  json: {\n    xmlBody: xml,\n    url: url,\n    empresaName: empresaName,\n    targetPhone: targetPhone,\n    fechaConsulta: yesterdayStr,\n    empresaIdSupabase: data.id\n  }\n};"
+        "jsCode": `
+const data = $input.first().json;
+const empresaName = data.codigo_acceso;
+const url = data.odoo_url;
+const db = data.odoo_db;
+const apiKey = data.odoo_api_key;
+const targetPhone = data.whatsapp_numeros;
+
+// FECHA: AYER
+const date = new Date();
+date.setDate(date.getDate() - 1);
+const options = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };
+const formatter = new Intl.DateTimeFormat('en-CA', options);
+const yesterdayStr = formatter.format(date);
+
+// XML-RPC para buscar sesiones cerradas ayer
+const xml = \`<?xml version="1.0"?>
+<methodCall>
+  <methodName>execute_kw</methodName>
+  <params>
+    <param><value><string>\${db}</string></value></param>
+    <param><value><int>2</int></value></param>
+    <param><value><string>\${apiKey}</string></value></param>
+    <param><value><string>pos.session</string></value></param>
+    <param><value><string>search_read</string></value></param>
+    <param>
+      <value><array><data>
+        <value><array><data>
+            <value><string>stop_at</string></value>
+            <value><string>&gt;=</string></value>
+            <value><string>\${yesterdayStr} 00:00:00</string></value>
+        </data></array></value>
+        <value><array><data>
+            <value><string>stop_at</string></value>
+            <value><string>&lt;=</string></value>
+            <value><string>\${yesterdayStr} 23:59:59</string></value>
+        </data></array></value>
+        <value><array><data>
+            <value><string>state</string></value>
+            <value><string>=</string></value>
+            <value><string>closed</string></value>
+        </data></array></value>
+      </data></array></value>
+    </param>
+    <param>
+      <value><struct>
+        <member>
+          <name>fields</name>
+          <value><array><data>
+            <value><string>config_id</string></value>
+            <value><string>user_id</string></value>
+            <value><string>total_payments_amount</string></value>
+            <value><string>cash_register_difference</string></value>
+          </data></array></value>
+        </member>
+      </struct></value>
+    </param>
+  </params>
+</methodCall>\`;
+
+return {
+  json: { xmlBody: xml, url, empresaName, targetPhone, fechaConsulta: yesterdayStr, empresaIdSupabase: data.id }
+};
+        `
       },
-      "name": "Code - Generar XML",
+      "name": "Code - Configura Query",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        240,
-        -60
-      ],
-      "id": "xml-gen-node"
+      "position": [240, -60]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{ $json.url }}/xmlrpc/2/object",
         "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "text/xml"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "string",
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "text/xml" }] },
         "body": "={{ $json.xmlBody }}",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          },
-          "timeout": 30000
-        }
+        "options": { "timeout": 30000 }
       },
-      "name": "HTTP Request - Odoo",
+      "name": "HTTP - Odoo",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        460,
-        -60
-      ],
-      "id": "http-odoo-node",
+      "position": [460, -60],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// ============================================\n// FORMATEAR REPORTE (CORREGIDO)\n// ============================================\n\nfunction cleanOdooValue(val) {\n  if (!val) return null;\n  if (val.string !== undefined) return val.string;\n  if (val.double !== undefined) return parseFloat(val.double);\n  if (val.int !== undefined) return parseInt(val.int);\n  if (val.boolean !== undefined) return val.boolean === '1' || val.boolean === 'true';\n  if (val.array && val.array.data && val.array.data.value) {\n    const inner = val.array.data.value;\n    if (Array.isArray(inner) && inner.length === 2) return cleanOdooValue(inner[1]);\n  }\n  return val;\n}\n\n// Verificar si hubo error en el nodo HTTP anterior\nif ($input.first().error) {\n  const inputData = $('Code - Generar XML').first().json;\n  return [{\n    json: {\n      message: `❌ *Error de Conexión en ${inputData.empresaName}*\\nNo se pudo conectar al servidor Odoo.`,\n      phone: inputData.targetPhone,\n      hasData: true,\n      saveToSupabase: false\n    }\n  }];\n}\n\nconst responseData = $input.first().json;\nconst inputData = $('Code - Generar XML').first().json;\nconst empresaNombre = inputData.empresaName;\nconst targetPhone = inputData.targetPhone;\nconst fechaConsulta = inputData.fechaConsulta;\nconst empresaIdSupabase = inputData.empresaIdSupabase;\n\nconst rawParams = responseData.methodResponse?.params?.param?.value?.array?.data?.value;\n\nif (!rawParams || (Array.isArray(rawParams) && rawParams.length === 0)) {\n  return [{\n    json: {\n      message: `⚠️ *${empresaNombre}*\\n📅 ${fechaConsulta}\\nℹ️ No se registraron cierres de caja ayer.`,\n      phone: targetPhone,\n      hasData: false,\n      saveToSupabase: false\n    }\n  }];\n}\n\nconst sessions = Array.isArray(rawParams) ? rawParams : [rawParams];\nlet msg = `📊 *REPORTE CIERRE DE CAJA*\\n🏢 ${empresaNombre}\\n📅 ${fechaConsulta}\\n━━━━━━━━━━━━━━━━━━━━\\n\\n`;\nlet totalEmpresa = 0;\nlet totalSesiones = 0;\nlet totalDiferencias = 0;\n\nsessions.forEach((session) => {\n  try {\n    const struct = session.struct?.member;\n    if (!struct) return;\n    \n    const getField = (fieldName) => {\n      const field = struct.find(m => m.name === fieldName);\n      return field ? cleanOdooValue(field.value) : null;\n    };\n    \n    const tienda = getField('config_id') || 'Caja';\n    const cajero = getField('user_id') || 'N/A';\n    const venta = parseFloat(getField('total_payments_amount') || 0);\n    const diferencia = parseFloat(getField('cash_register_difference') || 0);\n    \n    totalEmpresa += venta;\n    totalSesiones++;\n    totalDiferencias += diferencia;\n    \n    msg += `🏪 *${tienda}* (${cajero})\\n`;\n    msg += `💰 Venta: S/ ${venta.toFixed(2)}\\n`;\n    \n    if (Math.abs(diferencia) > 0.01) {\n      const emoji = diferencia > 0 ? '🟢' : '🔴';\n      msg += `${emoji} Dif: S/ ${diferencia.toFixed(2)}\\n`;\n    } else {\n      msg += `✅ Cuadre perfecto\\n`;\n    }\n    msg += `──────────────\\n`;\n  } catch (e) {}\n});\n\nmsg += `\\n💰 *TOTAL: S/ ${totalEmpresa.toFixed(2)}*\\n`;\nif (Math.abs(totalDiferencias) > 0.01) msg += `⚠️ Dif. Total: S/ ${totalDiferencias.toFixed(2)}`;\n\nreturn [{\n  json: {\n    message: msg,\n    phone: targetPhone,\n    hasData: true,\n    saveToSupabase: true,\n    dbPayload: {\n        empresa_id: empresaIdSupabase,\n        fecha_reporte: fechaConsulta,\n        total_ventas: totalEmpresa,\n        total_diferencia: totalDiferencias,\n        detalle_json: sessions,\n        enviado_whatsapp: true\n    }\n  }\n}];"
+        "jsCode": `
+function cleanOdooValue(val) {
+  if (!val) return null;
+  if (val.string !== undefined) return val.string;
+  if (val.double !== undefined) return parseFloat(val.double);
+  if (Array.isArray(val.array?.data?.value) && val.array.data.value.length === 2) return cleanOdooValue(val.array.data.value[1]);
+  return val;
+}
+
+if ($input.first().error) {
+  return [{ json: { message: "Error conectando a Odoo", hasData: false, saveToSupabase: false } }];
+}
+
+const responseData = $input.first().json;
+const meta = $('Code - Configura Query').first().json;
+const rawParams = responseData.methodResponse?.params?.param?.value?.array?.data?.value;
+
+if (!rawParams || (Array.isArray(rawParams) && rawParams.length === 0)) {
+  return [{ json: { message: \`⚠️ *\${meta.empresaName}*\\n📅 \${meta.fechaConsulta}\\nℹ️ Sin cierres registrados.\`, phone: meta.targetPhone, hasData: false, saveToSupabase: false } }];
+}
+
+const sessions = Array.isArray(rawParams) ? rawParams : [rawParams];
+let totalVenta = 0;
+let totalDif = 0;
+let msg = \`📊 *REPORTE DIARIO*\\n🏢 \${meta.empresaName}\\n📅 \${meta.fechaConsulta}\\n\\n\`;
+
+sessions.forEach(s => {
+    const struct = s.struct?.member || [];
+    const getVal = (name) => {
+        const field = struct.find(m => m.name === name);
+        return field ? cleanOdooValue(field.value) : 0;
+    };
+    
+    const tienda = getVal('config_id');
+    const venta = parseFloat(getVal('total_payments_amount') || 0);
+    const dif = parseFloat(getVal('cash_register_difference') || 0);
+    
+    totalVenta += venta;
+    totalDif += dif;
+    
+    msg += \`🏪 *\${tienda}*\\n💰 Venta: S/ \${venta.toFixed(2)}\\n\`;
+    if(Math.abs(dif)>0.01) msg += \`🔴 Dif: S/ \${dif.toFixed(2)}\\n\`;
+    msg += \`----------------\\n\`;
+});
+
+msg += \`\\n🏆 *TOTAL: S/ \${totalVenta.toFixed(2)}*\`;
+msg += \`\\n\\n🔎 *Ver Detalle y Rentabilidad:*\\n👉 https://odoo-lemon.vercel.app/\`;
+
+return [{
+  json: {
+    message: msg,
+    phone: meta.targetPhone,
+    hasData: true,
+    saveToSupabase: true,
+    dbPayload: {
+        empresa_id: meta.empresaIdSupabase,
+        fecha_reporte: meta.fechaConsulta,
+        total_ventas: totalVenta,
+        total_diferencia: totalDif,
+        enviado_whatsapp: true
+    }
+  }
+}];
+        `
       },
       "name": "Code - Formatear",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        680,
-        -60
-      ],
-      "id": "format-node"
+      "position": [680, -60]
     },
     {
       "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.saveToSupabase }}",
-              "value2": true
-            }
-          ]
-        },
-        "options": {}
+        "conditions": { "boolean": [{ "value1": "={{ $json.saveToSupabase }}", "value2": true }] }
       },
-      "name": "IF - Guardar DB",
+      "name": "Guardar?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [
-        900,
-        -160
-      ],
-      "id": "if-db-node"
+      "position": [900, -60]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ogopzhmsjnotuntfimpx.supabase.co/rest/v1/reportes_cierre",
+        "url": `${SUPABASE_URL}/rest/v1/reportes_cierre`,
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nb3B6aG1zam5vdHVudGZpbXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MjcwNjksImV4cCI6MjA4MTUwMzA2OX0.z9rcjc9ToplMYhLKQQl0iuKYc87hm1JAN2O1yfv3lmE"
-            },
-            {
-              "name": "Authorization",
-              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nb3B6aG1zam5vdHVudGZpbXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MjcwNjksImV4cCI6MjA4MTUwMzA2OX0.z9rcjc9ToplMYhLKQQl0iuKYc87hm1JAN2O1yfv3lmE"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Prefer",
-              "value": "return=minimal"
-            }
+            { "name": "apikey", "value": SUPABASE_KEY },
+            { "name": "Authorization", "value": `Bearer ${SUPABASE_KEY}` },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
           ]
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ $json.dbPayload }}",
-        "options": {}
+        "body": "={{ $json.dbPayload }}"
       },
-      "name": "POST Reporte - Supabase",
+      "name": "Supabase Save",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [
-        1100,
-        -160
-      ],
-      "id": "supabase-post-node"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.hasData }}",
-              "value2": true
-            }
-          ]
-        },
-        "options": {}
-      },
-      "name": "IF - Enviar WA",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        900,
-        60
-      ],
-      "id": "if-wa-node"
-    },
-    {
-      "parameters": {
-        "amount": 5
-      },
-      "name": "Wait",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        1100,
-        60
-      ],
-      "id": "wait-node"
+      "position": [1150, -150]
     },
     {
       "parameters": {
@@ -223,147 +234,240 @@ export const N8N_WORKFLOW_TEMPLATE = {
         "url": "https://api.red51.site/message/sendText/chatbot",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "evolutionApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ {\n    \"number\": $json.phone,\n    \"text\": $json.message\n  } }}",
-        "options": {}
+        "body": "={{ {\"number\": $json.phone, \"text\": $json.message} }}"
       },
-      "name": "HTTP - WhatsApp",
+      "name": "WhatsApp",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        1300,
-        60
-      ],
-      "id": "whatsapp-node",
-      "credentials": {
-        "evolutionApi": {
-          "id": "ckynLYdXPqMmVdMh",
-          "name": "Evolution account"
-        }
-      }
+      "position": [1150, 50],
+      "credentials": { "evolutionApi": { "id": "ckynLYdXPqMmVdMh", "name": "Evolution account" } }
     }
   ],
   "connections": {
-    "Schedule Trigger - 8:00 AM": {
+    "Schedule - 6:00 AM": { "main": [[{ "node": "GET Empresas Activas", "type": "main", "index": 0 }]] },
+    "GET Empresas Activas": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
+    "Split In Batches": { "main": [[{ "node": "Code - Configura Query", "type": "main", "index": 0 }]] },
+    "Code - Configura Query": { "main": [[{ "node": "HTTP - Odoo", "type": "main", "index": 0 }]] },
+    "HTTP - Odoo": { "main": [[{ "node": "Code - Formatear", "type": "main", "index": 0 }]] },
+    "Code - Formatear": { "main": [[{ "node": "Guardar?", "type": "main", "index": 0 }]] },
+    "Guardar?": {
       "main": [
-        [
-          {
-            "node": "GET Empresas - Supabase",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Supabase Save", "type": "main", "index": 0 }, { "node": "WhatsApp", "type": "main", "index": 0 }]
       ]
     },
-    "GET Empresas - Supabase": {
-      "main": [
-        [
-          {
-            "node": "Split In Batches",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Supabase Save": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
+    "WhatsApp": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] }
+  }
+};
+
+// --- FLUJO 2: REPORTE MENSUAL (RENTABILIDAD) ---
+export const MONTHLY_WORKFLOW_JSON = {
+  "name": "LemonBI - Reporte Mensual (Rentabilidad)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 6 1 * *" }]
+        }
+      },
+      "name": "Schedule - 1ro Mes 6:00 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [-380, -60]
     },
-    "Split In Batches": {
-      "main": [
-        [
-          {
-            "node": "Code - Generar XML",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    {
+      "parameters": {
+        "url": `${SUPABASE_URL}/rest/v1/empresas?select=*&estado=eq.true`,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": SUPABASE_KEY },
+            { "name": "Authorization", "value": `Bearer ${SUPABASE_KEY}` }
+          ]
+        }
+      },
+      "name": "GET Empresas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-180, -60]
     },
-    "Code - Generar XML": {
-      "main": [
-        [
-          {
-            "node": "HTTP Request - Odoo",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    {
+      "parameters": {},
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [20, -60]
     },
-    "HTTP Request - Odoo": {
-      "main": [
-        [
-          {
-            "node": "Code - Formatear",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    {
+      "parameters": {
+        "jsCode": `
+const data = $input.first().json;
+const empresaName = data.codigo_acceso;
+
+// CALCULAR MES ANTERIOR
+const date = new Date();
+date.setDate(1); // Ir al 1ro del mes actual
+date.setHours(-1); // Ir a la ultima hora del mes anterior
+
+const year = date.getFullYear();
+const month = date.getMonth() + 1; // Mes 1-12
+const lastDay = date.getDate();
+
+const startStr = \`\${year}-\${String(month).padStart(2,'0')}-01\`;
+const endStr = \`\${year}-\${String(month).padStart(2,'0')}-\${lastDay}\`;
+
+// Query para obtener TOTAL VENDIDO (pos.order)
+const xml = \`<?xml version="1.0"?>
+<methodCall>
+  <methodName>execute_kw</methodName>
+  <params>
+    <param><value><string>\${data.odoo_db}</string></value></param>
+    <param><value><int>2</int></value></param>
+    <param><value><string>\${data.odoo_api_key}</string></value></param>
+    <param><value><string>pos.order</string></value></param>
+    <param><value><string>search_read</string></value></param>
+    <param>
+      <value><array><data>
+        <value><array><data>
+            <value><string>date_order</string></value>
+            <value><string>&gt;=</string></value>
+            <value><string>\${startStr} 00:00:00</string></value>
+        </data></array></value>
+        <value><array><data>
+            <value><string>date_order</string></value>
+            <value><string>&lt;=</string></value>
+            <value><string>\${endStr} 23:59:59</string></value>
+        </data></array></value>
+        <value><array><data>
+            <value><string>state</string></value>
+            <value><string>!=</string></value>
+            <value><string>cancel</string></value>
+        </data></array></value>
+      </data></array></value>
+    </param>
+    <param>
+      <value><struct>
+        <member>
+            <name>fields</name>
+            <value><array><data>
+                <value><string>amount_total</string></value>
+            </data></array></value>
+        </member>
+      </struct></value>
+    </param>
+  </params>
+</methodCall>\`;
+
+return {
+  json: { 
+    xmlBody: xml, 
+    url: data.odoo_url, 
+    empresaName, 
+    targetPhone: data.whatsapp_numeros, 
+    periodo: \`\${month}/\${year}\`
+  }
+};
+        `
+      },
+      "name": "Code - Fechas y Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, -60]
     },
-    "Code - Formatear": {
-      "main": [
-        [
-          {
-            "node": "IF - Guardar DB",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "IF - Enviar WA",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}/xmlrpc/2/object",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "text/xml" }] },
+        "body": "={{ $json.xmlBody }}",
+        "options": { "timeout": 60000 }
+      },
+      "name": "HTTP - Odoo Mensual",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, -60],
+      "onError": "continueRegularOutput"
     },
-    "IF - Guardar DB": {
-      "main": [
-        [
-          {
-            "node": "POST Reporte - Supabase",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "POST Reporte - Supabase": {
-      "main": [
-        []
-      ]
-    },
-    "IF - Enviar WA": {
-      "main": [
-        [
-          {
-            "node": "Wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait": {
-      "main": [
-        [
-          {
-            "node": "HTTP - WhatsApp",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "HTTP - WhatsApp": {
-      "main": [
-        [
-          {
-            "node": "Split In Batches",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    {
+      "parameters": {
+        "jsCode": `
+if ($input.first().error) return [{json: {send: false}}];
+
+const responseData = $input.first().json;
+const meta = $('Code - Fechas y Query').first().json;
+
+// Parsear XML-RPC response
+const rawParams = responseData.methodResponse?.params?.param?.value?.array?.data?.value;
+if (!rawParams) return [{json: {send: false}}];
+
+const orders = Array.isArray(rawParams) ? rawParams : [rawParams];
+let totalVendido = 0;
+
+orders.forEach(o => {
+    const struct = o.struct?.member || [];
+    const val = struct.find(m => m.name === 'amount_total');
+    if(val) {
+       if(val.value.double) totalVendido += parseFloat(val.value.double);
+       else if(val.value.string) totalVendido += parseFloat(val.value.string);
     }
+});
+
+const msg = \`📈 *REPORTE MENSUAL LEMON BI*\\n🏢 \${meta.empresaName}\\n📅 Periodo: \${meta.periodo}\\n\\n💰 *Ventas Totales: S/ \${totalVendido.toFixed(2)}*\\n\\n💡 *¿Quieres ver tu Rentabilidad Real?*\\nHemos calculado tus márgenes, costos y productos estrella. Ingresa aquí:\\n👉 https://odoo-lemon.vercel.app/\`;
+
+return [{
+    json: {
+        message: msg,
+        phone: meta.targetPhone,
+        send: true
+    }
+}];
+        `
+      },
+      "name": "Code - Mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, -60]
+    },
+    {
+      "parameters": {
+        "conditions": { "boolean": [{ "value1": "={{ $json.send }}", "value2": true }] }
+      },
+      "name": "Enviar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, -60]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.red51.site/message/sendText/chatbot",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "evolutionApi",
+        "body": "={{ {\"number\": $json.phone, \"text\": $json.message} }}"
+      },
+      "name": "WhatsApp Mensual",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1150, -60],
+      "credentials": { "evolutionApi": { "id": "ckynLYdXPqMmVdMh", "name": "Evolution account" } }
+    },
+    {
+      "parameters": {},
+      "name": "Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1350, -60]
+    }
+  ],
+  "connections": {
+    "Schedule - 1ro Mes 6:00 AM": { "main": [[{ "node": "GET Empresas", "type": "main", "index": 0 }]] },
+    "GET Empresas": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
+    "Split In Batches": { "main": [[{ "node": "Code - Fechas y Query", "type": "main", "index": 0 }]] },
+    "Code - Fechas y Query": { "main": [[{ "node": "HTTP - Odoo Mensual", "type": "main", "index": 0 }]] },
+    "HTTP - Odoo Mensual": { "main": [[{ "node": "Code - Mensaje", "type": "main", "index": 0 }]] },
+    "Code - Mensaje": { "main": [[{ "node": "Enviar?", "type": "main", "index": 0 }]] },
+    "Enviar?": { "main": [[{ "node": "WhatsApp Mensual", "type": "main", "index": 0 }]] },
+    "WhatsApp Mensual": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] }
   }
 };

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow, RefreshCw, Database } from 'lucide-react';
+import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow, RefreshCw, Database, Calendar } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
-import { N8N_WORKFLOW_TEMPLATE } from '../services/n8nTemplate';
+import { DAILY_WORKFLOW_JSON, MONTHLY_WORKFLOW_JSON } from '../services/n8nTemplate';
 
 interface AdminDashboardProps {
     onLogout: () => void;
@@ -156,10 +156,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         alert(`Copiado al portapapeles`);
     };
 
-    // Copiar Flujo Maestro
-    const copyWorkflowTemplate = () => {
-        const template = JSON.stringify(N8N_WORKFLOW_TEMPLATE, null, 2);
-        copyToClipboard(template);
+    // Copiar Flujo
+    const copyWorkflow = (type: 'daily' | 'monthly') => {
+        const json = type === 'daily' ? DAILY_WORKFLOW_JSON : MONTHLY_WORKFLOW_JSON;
+        copyToClipboard(JSON.stringify(json, null, 2));
     };
 
     return (
@@ -340,16 +340,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                         
                                         <div className="bg-brand-50 border border-brand-100 p-3 rounded-lg mb-3">
                                             <p className="text-xs text-brand-800">
-                                                <strong>¡Nuevo!</strong> Ahora n8n se conecta directo a Supabase. Solo necesitas copiar el <strong>Flujo n8n</strong> una vez. Las credenciales de esta empresa ya están en la nube.
+                                                Copia los flujos para importarlos en n8n. Ya incluyen las credenciales de Supabase.
                                             </p>
                                         </div>
 
-                                        <div className="flex gap-2">
+                                        <div className="grid grid-cols-1 gap-2">
                                             <button 
-                                                onClick={copyWorkflowTemplate} 
-                                                className="w-full text-[11px] bg-brand-600 hover:bg-brand-700 text-white px-3 py-2.5 rounded-lg font-bold uppercase transition-colors flex items-center justify-center gap-2"
+                                                onClick={() => copyWorkflow('daily')}
+                                                className="w-full text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2.5 rounded-lg font-bold uppercase transition-colors flex items-center justify-center gap-2"
                                             >
-                                                <Workflow className="w-3 h-3"/> Copiar Flujo Maestro n8n (Supabase)
+                                                <Workflow className="w-3 h-3"/> Copiar Flujo Diario (Cierre Caja)
+                                            </button>
+                                            <button 
+                                                onClick={() => copyWorkflow('monthly')}
+                                                className="w-full text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-3 py-2.5 rounded-lg font-bold uppercase transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Calendar className="w-3 h-3"/> Copiar Flujo Mensual (Rentabilidad)
                                             </button>
                                         </div>
                                     </div>
