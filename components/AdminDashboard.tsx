@@ -193,31 +193,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
         try {
             const odoo = new OdooClient(client.url, client.db, true);
-            // Reutilizamos el UID si está disponible, o re-autenticamos si fuera necesario, 
-            // pero ya tenemos el UID validado en testResult.uid
             const uid = testResult.uid;
 
             // Logica equivalente a n8n para "Ayer"
             const date = new Date();
             date.setDate(date.getDate() - 1);
-            // Formato YYYY-MM-DD
             const yesterdayStr = date.toLocaleDateString('en-CA'); 
 
-            // Filtro Odoo
+            // 1. Obtener Sesiones
             const domain: any[] = [
                 ['stop_at', '>=', `${yesterdayStr} 00:00:00`],
                 ['stop_at', '<=', `${yesterdayStr} 23:59:59`],
                 ['state', '=', 'closed']
             ];
 
-            // --- CORRECCIÓN CRÍTICA: Filtrar por Company ID si existe ---
             if (testResult.companyId && testResult.companyId !== 'NO ENCONTRADO') {
                 domain.push(['company_id', '=', testResult.companyId]);
             }
 
-            const fields = ['config_id', 'total_payments_amount', 'cash_register_difference'];
-            
-            const sessions = await odoo.searchRead(uid, client.apiKey, 'pos.session', domain, fields);
+            const sessionFields = ['config_id', 'total_payments_amount', 'cash_register_difference'];
+            const sessions = await odoo.searchRead(uid, client.apiKey, 'pos.session', domain, sessionFields);
 
             let totalVenta = 0;
             let msg = `📊 *REPORTE DIARIO (SIMULACRO)*\n🏢 ${client.code}\n📅 ${yesterdayStr}\n\n`;
@@ -225,8 +220,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             if (!sessions || sessions.length === 0) {
                 msg += "ℹ️ Sin cierres registrados para la fecha.";
             } else {
+                // 2. Obtener Pagos de esas sesiones
+                const sessionIds = sessions.map((s: any) => s.id);
+                // Buscamos pagos donde session_id esté en la lista de sesiones encontradas
+                const paymentFields = ['session_id', 'amount', 'payment_method_id'];
+                const payments = await odoo.searchRead(
+                    uid, 
+                    client.apiKey, 
+                    'pos.payment', 
+                    [['session_id', 'in', sessionIds]], 
+                    paymentFields
+                );
+
                 sessions.forEach((s: any) => {
-                    // Odoo returns [id, name] for Many2one fields
                     const tienda = Array.isArray(s.config_id) ? s.config_id[1] : 'Tienda Desconocida';
                     const venta = s.total_payments_amount || 0;
                     const dif = s.cash_register_difference || 0;
@@ -234,6 +240,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     totalVenta += venta;
                     
                     msg += `🏪 *${tienda}*\n💰 Venta: S/ ${venta.toFixed(2)}\n`;
+                    
+                    // Procesar Pagos de esta sesión
+                    if (payments && payments.length > 0) {
+                        const sessionPayments = payments.filter((p: any) => {
+                            const pSessionId = Array.isArray(p.session_id) ? p.session_id[0] : p.session_id;
+                            return pSessionId === s.id;
+                        });
+
+                        // Agrupar por método
+                        const methods: Record<string, {count: number, total: number}> = {};
+                        sessionPayments.forEach((p: any) => {
+                            const methodName = Array.isArray(p.payment_method_id) ? p.payment_method_id[1] : 'Desconocido';
+                            if (!methods[methodName]) methods[methodName] = { count: 0, total: 0 };
+                            methods[methodName].count += 1;
+                            methods[methodName].total += (p.amount || 0);
+                        });
+
+                        // Agregar al mensaje
+                        Object.entries(methods).forEach(([name, data]) => {
+                             msg += `   ${name} (${data.count})\tS/ ${data.total.toFixed(2)}\n`;
+                        });
+                    }
+
                     if(Math.abs(dif) > 0.01) msg += `🔴 Dif: S/ ${dif.toFixed(2)}\n`;
                     msg += `----------------\n`;
                 });
