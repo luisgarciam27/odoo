@@ -96,9 +96,3 @@ export const deleteClient = async (code: string): Promise<boolean> => {
     }
     return true;
 };
-
-// Esta función ya no se usa para guardar localmente la lista completa,
-// se mantiene por compatibilidad si algo falla, pero está vacía.
-export const saveClients = (clients: ClientConfig[]) => {
-    // Deprecated in favor of direct DB calls
-};

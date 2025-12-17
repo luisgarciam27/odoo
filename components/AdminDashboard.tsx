@@ -156,22 +156,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         alert(`Copiado al portapapeles`);
     };
 
-    // Generar JSON Manual (Backup)
-    const generateN8nJson = () => {
-        if (!testResult || testResult.status !== 'success') return '';
-        const jsonObject = {
-            json: {
-                empresa: testResult.clientConfig.code,
-                url: testResult.clientConfig.url,
-                db: testResult.clientConfig.db,
-                apiKey: testResult.clientConfig.apiKey,
-                company_id: testResult.companyId === 'NO ENCONTRADO' ? 0 : testResult.companyId,
-                whatsapp: testResult.clientConfig.whatsappNumbers || "51900000000"
-            }
-        };
-        return JSON.stringify(jsonObject, null, 2); 
-    };
-
     // Copiar Flujo Maestro
     const copyWorkflowTemplate = () => {
         const template = JSON.stringify(N8N_WORKFLOW_TEMPLATE, null, 2);
@@ -503,6 +487,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                             </div>
                         </form>
                     </div>
+                </div>
+            )}
+
+            {/* Modal Password */}
+            {isPasswordModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 p-6">
+                        <h3 className="font-bold text-lg text-slate-800 mb-4">Cambiar Contraseña Admin</h3>
+                        <form onSubmit={handleChangePassword} className="space-y-4">
+                            <input 
+                                type="password" 
+                                placeholder="Nueva Contraseña"
+                                className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:border-brand-500"
+                                value={newPassword}
+                                onChange={e => setNewPassword(e.target.value)}
+                                required
+                            />
+                            <input 
+                                type="password" 
+                                placeholder="Confirmar Contraseña"
+                                className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:border-brand-500"
+                                value={confirmPassword}
+                                onChange={e => setConfirmPassword(e.target.value)}
+                                required
+                            />
+                            {pwdMessage && <p className={`text-xs font-bold ${pwdMessage.includes('correctamente') ? 'text-green-600' : 'text-red-500'}`}>{pwdMessage}</p>}
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => setIsPasswordModalOpen(false)} className="flex-1 py-2 text-slate-500 font-medium">Cancelar</button>
+                                <button type="submit" className="flex-1 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900">Actualizar</button>
+                            </div>
+                        </form>
+                     </div>
                 </div>
             )}
         </div>
