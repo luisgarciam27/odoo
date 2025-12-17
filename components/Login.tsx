@@ -36,19 +36,18 @@ const Login: React.FC<LoginProps> = ({ onLogin, onAdminLogin }) => {
         return;
     }
 
-    // --- MODO CLIENTE NORMAL ---
+    // --- MODO CLIENTE NORMAL (Async Supabase Check) ---
     const code = accessCode.trim().toUpperCase();
-    const clientConfig = getClientByCode(code);
+    
+    try {
+        const clientConfig = await getClientByCode(code);
 
-    if (!clientConfig) {
-        setTimeout(() => {
+        if (!clientConfig) {
             setError("Código de sucursal no encontrado.");
             setIsLoading(false);
-        }, 800);
-        return;
-    }
+            return;
+        }
 
-    try {
         setStatusMessage(`Conectando con servidor...`);
         
         const client = new OdooClient(clientConfig.url, clientConfig.db, true); 
@@ -182,7 +181,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onAdminLogin }) => {
         </div>
 
         <div className="mt-12 text-[10px] text-slate-400 font-mono relative z-10 flex flex-col gap-1">
-            <p>&copy; 2025 LEMON BI Analytics v2.2</p>
+            <p>&copy; 2025 LEMON BI Analytics v2.3 (Supabase)</p>
             <p className="opacity-70">Desarrollado por <span className="font-bold text-slate-500">GAORSYSTEM PERU</span></p>
         </div>
       </div>

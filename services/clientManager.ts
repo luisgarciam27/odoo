@@ -1,75 +1,9 @@
+import { supabase } from './supabaseClient';
 import { ClientConfig } from '../types';
 
-// Actualizamos la versión para forzar la recarga de los datos por defecto en el navegador del usuario
-const CLIENTS_STORAGE_KEY = 'LEMON_BI_CLIENTS_V4';
+// --- GESTIÓN DE ADMIN (PASSWORD LOCAL) ---
 const ADMIN_PWD_KEY = 'LEMON_BI_ADMIN_PWD';
 const DEFAULT_ADMIN_PWD = 'Luis2021.';
-
-const DEFAULT_CLIENTS: ClientConfig[] = [
-    {
-        code: 'REQUESALUD',
-        url: 'https://igp.facturaclic.pe/',
-        db: 'igp_master',
-        username: 'soporte@facturaclic.pe',
-        apiKey: '6761eabe769db8795b3817000bd649cad0970d0f',
-        companyFilter: 'SAN MARTIN DE THOURS',
-        whatsappNumbers: '51900000000'
-    },
-    {
-        code: 'MULTIFARMA',
-        url: 'https://igp.facturaclic.pe/',
-        db: 'igp_master',
-        username: 'soporte@facturaclic.pe',
-        apiKey: '6761eabe769db8795b3817000bd649cad0970d0f',
-        companyFilter: 'MULTIFARMA',
-        whatsappNumbers: ''
-    },
-    {
-        code: 'FEETCARE',
-        url: 'https://vida.facturaclic.pe/',
-        db: 'vida_master',
-        username: 'soporte@facturaclic.pe',
-        apiKey: 'ad5d72efa974bd60712bbb24542717ffbce9e75d',
-        companyFilter: 'FEET CARE',
-        whatsappNumbers: ''
-    },
-    {
-        code: 'MARIPEYA',
-        url: 'https://vida.facturaclic.pe/',
-        db: 'vida_master',
-        username: 'soporte@facturaclic.pe',
-        apiKey: 'ad5d72efa974bd60712bbb24542717ffbce9e75d',
-        companyFilter: 'MARIPEYA',
-        whatsappNumbers: ''
-    }
-];
-
-// --- GESTIÓN DE CLIENTES ---
-
-export const getClients = (): ClientConfig[] => {
-    const stored = localStorage.getItem(CLIENTS_STORAGE_KEY);
-    if (!stored) {
-        // Si no hay datos (o cambió la versión key), guardamos los defaults y los retornamos
-        localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(DEFAULT_CLIENTS));
-        return DEFAULT_CLIENTS;
-    }
-    try {
-        return JSON.parse(stored);
-    } catch (e) {
-        return DEFAULT_CLIENTS;
-    }
-};
-
-export const saveClients = (clients: ClientConfig[]) => {
-    localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(clients));
-};
-
-export const getClientByCode = (code: string): ClientConfig | undefined => {
-    const clients = getClients();
-    return clients.find(c => c.code.toUpperCase() === code.toUpperCase());
-};
-
-// --- GESTIÓN DE ADMIN ---
 
 export const verifyAdminPassword = (password: string): boolean => {
     const storedPwd = localStorage.getItem(ADMIN_PWD_KEY) || DEFAULT_ADMIN_PWD;
@@ -78,4 +12,93 @@ export const verifyAdminPassword = (password: string): boolean => {
 
 export const changeAdminPassword = (newPassword: string) => {
     localStorage.setItem(ADMIN_PWD_KEY, newPassword);
+};
+
+// --- GESTIÓN DE CLIENTES (SUPABASE) ---
+
+export const getClients = async (): Promise<ClientConfig[]> => {
+    const { data, error } = await supabase
+        .from('empresas')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching clients from Supabase:', error);
+        return [];
+    }
+
+    return data.map((row: any) => ({
+        code: row.codigo_acceso,
+        url: row.odoo_url,
+        db: row.odoo_db,
+        username: row.odoo_username,
+        apiKey: row.odoo_api_key,
+        companyFilter: row.filtro_compania,
+        whatsappNumbers: row.whatsapp_numeros
+    }));
+};
+
+export const getClientByCode = async (code: string): Promise<ClientConfig | null> => {
+    const { data, error } = await supabase
+        .from('empresas')
+        .select('*')
+        .eq('codigo_acceso', code)
+        .single();
+    
+    if (error || !data) return null;
+
+    return {
+        code: data.codigo_acceso,
+        url: data.odoo_url,
+        db: data.odoo_db,
+        username: data.odoo_username,
+        apiKey: data.odoo_api_key,
+        companyFilter: data.filtro_compania,
+        whatsappNumbers: data.whatsapp_numeros
+    };
+};
+
+export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<{ success: boolean; message?: string }> => {
+    const payload = {
+        codigo_acceso: client.code,
+        odoo_url: client.url,
+        odoo_db: client.db,
+        odoo_username: client.username,
+        odoo_api_key: client.apiKey,
+        filtro_compania: client.companyFilter,
+        whatsapp_numeros: client.whatsappNumbers
+    };
+
+    try {
+        if (isNew) {
+            // Check duplicados
+            const existing = await getClientByCode(client.code);
+            if (existing) return { success: false, message: 'El código de empresa ya existe.' };
+
+            const { error } = await supabase.from('empresas').insert([payload]);
+            if (error) throw error;
+        } else {
+            const { error } = await supabase.from('empresas').update(payload).eq('codigo_acceso', client.code);
+            if (error) throw error;
+        }
+        return { success: true };
+    } catch (error: any) {
+        console.error('Error saving client:', error);
+        return { success: false, message: error.message || 'Error al guardar en base de datos.' };
+    }
+};
+
+export const deleteClient = async (code: string): Promise<boolean> => {
+    const { error } = await supabase.from('empresas').delete().eq('codigo_acceso', code);
+    if (error) {
+        console.error('Error deleting client:', error);
+        return false;
+    }
+    return true;
+};
+
+// Esta función ya no se usa para guardar localmente la lista completa,
+// se mantiene por compatibilidad si algo falla, pero está vacía.
+export const saveClients = (clients: ClientConfig[]) => {
+    // Deprecated in favor of direct DB calls
 };

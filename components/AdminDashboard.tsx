@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getClients, saveClients, changeAdminPassword } from '../services/clientManager';
+import { getClients, saveClient, deleteClient, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow } from 'lucide-react';
+import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow, RefreshCw, Database } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { N8N_WORKFLOW_TEMPLATE } from '../services/n8nTemplate';
 
@@ -11,6 +11,7 @@ interface AdminDashboardProps {
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const [clients, setClients] = useState<ClientConfig[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
@@ -32,37 +33,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     
     const DASHBOARD_URL = "https://odoo-lemon.vercel.app/";
 
-    useEffect(() => {
-        setClients(getClients());
-    }, []);
-
-    const handleSaveClient = (e: React.FormEvent) => {
-        e.preventDefault();
-        let updatedClients = [...clients];
-
-        if (originalCode) {
-            // Edit existing
-            updatedClients = updatedClients.map(c => c.code === originalCode ? currentClient : c);
-        } else {
-            // Add new (check for duplicate code)
-            if (updatedClients.some(c => c.code === currentClient.code)) {
-                alert("El código de empresa ya existe.");
-                return;
-            }
-            updatedClients.push(currentClient);
-        }
-
-        saveClients(updatedClients);
-        setClients(updatedClients);
-        setIsEditing(false);
-        resetForm();
+    const loadClients = async () => {
+        setIsLoading(true);
+        const data = await getClients();
+        setClients(data);
+        setIsLoading(false);
     };
 
-    const handleDelete = (code: string) => {
-        if (confirm(`¿Estás seguro de eliminar al cliente ${code}?`)) {
-            const updated = clients.filter(c => c.code !== code);
-            saveClients(updated);
-            setClients(updated);
+    useEffect(() => {
+        loadClients();
+    }, []);
+
+    const handleSaveClient = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+
+        const isNew = !originalCode;
+        const result = await saveClient(currentClient, isNew);
+
+        if (result.success) {
+            await loadClients();
+            setIsEditing(false);
+            resetForm();
+        } else {
+            alert(result.message || "Error al guardar el cliente.");
+        }
+        setIsLoading(false);
+    };
+
+    const handleDelete = async (code: string) => {
+        if (confirm(`¿Estás seguro de eliminar al cliente ${code}? Esta acción no se puede deshacer.`)) {
+            setIsLoading(true);
+            const success = await deleteClient(code);
+            if (success) {
+                await loadClients();
+            } else {
+                alert("Error al eliminar el cliente.");
+            }
+            setIsLoading(false);
         }
     };
 
@@ -101,7 +109,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         setShowApiKey(prev => ({ ...prev, [code]: !prev[code] }));
     };
 
-    // --- NEW: Test Connection & Get IDs for n8n ---
+    // --- Test Connection ---
     const handleTestConnection = async (client: ClientConfig) => {
         setTestingClient(client.code);
         setTestResult(null);
@@ -129,7 +137,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 companyName: foundCompany ? foundCompany.name : 'NO ENCONTRADO',
                 allCompanies: companies,
                 whatsappNumbers: client.whatsappNumbers || 'No configurado',
-                clientConfig: client // Guardamos config para generar el JSON
+                clientConfig: client 
             });
 
         } catch (error: any) {
@@ -148,10 +156,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         alert(`Copiado al portapapeles`);
     };
 
-    // Generar JSON para Configuración de Empresa
+    // Generar JSON Manual (Backup)
     const generateN8nJson = () => {
         if (!testResult || testResult.status !== 'success') return '';
-        
         const jsonObject = {
             json: {
                 empresa: testResult.clientConfig.code,
@@ -162,11 +169,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 whatsapp: testResult.clientConfig.whatsappNumbers || "51900000000"
             }
         };
-        
         return JSON.stringify(jsonObject, null, 2); 
     };
 
-    // Copiar Flujo Maestro Completo
+    // Copiar Flujo Maestro
     const copyWorkflowTemplate = () => {
         const template = JSON.stringify(N8N_WORKFLOW_TEMPLATE, null, 2);
         copyToClipboard(template);
@@ -180,7 +186,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     <div className="bg-brand-500 p-2 rounded-lg"><Shield className="w-5 h-5 text-white" /></div>
                     <div>
                         <h1 className="font-bold text-lg tracking-wide">LEMON BI <span className="text-brand-400">ADMIN</span></h1>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-widest">Panel de Superadministrador</p>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                           <Database className="w-3 h-3 text-emerald-500" /> Supabase Cloud Connected
+                        </p>
                     </div>
                 </div>
                 <div className="flex gap-3">
@@ -198,18 +206,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 <div className="flex justify-between items-end mb-6">
                     <div>
                         <h2 className="text-2xl font-bold text-slate-800">Directorio de Clientes</h2>
-                        <p className="text-slate-500 text-sm mt-1">Administra las credenciales y obtén datos técnicos para n8n.</p>
+                        <p className="text-slate-500 text-sm mt-1">Gestión centralizada en Supabase. Los cambios se reflejan inmediatamente.</p>
                     </div>
-                    <button 
-                        onClick={() => { resetForm(); setIsEditing(true); }}
-                        className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md flex items-center gap-2 transition-all active:scale-95"
-                    >
-                        <Plus className="w-5 h-5" /> Nuevo Cliente
-                    </button>
+                    <div className="flex gap-3">
+                        <button onClick={loadClients} className="p-2.5 bg-white text-slate-600 rounded-xl shadow border border-slate-200 hover:bg-slate-50 transition-all">
+                            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin text-brand-500' : ''}`} />
+                        </button>
+                        <button 
+                            onClick={() => { resetForm(); setIsEditing(true); }}
+                            className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md flex items-center gap-2 transition-all active:scale-95"
+                        >
+                            <Plus className="w-5 h-5" /> Nuevo Cliente
+                        </button>
+                    </div>
                 </div>
 
                 {/* Table */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative min-h-[200px]">
+                    {isLoading && clients.length === 0 && (
+                        <div className="absolute inset-0 z-10 bg-white/80 flex items-center justify-center">
+                            <Activity className="w-8 h-8 text-brand-500 animate-spin" />
+                        </div>
+                    )}
+                    
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left text-slate-600">
                             <thead className="bg-slate-50 text-xs text-slate-500 uppercase font-bold border-b border-slate-200">
@@ -274,9 +293,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                         </td>
                                     </tr>
                                 ))}
-                                {clients.length === 0 && (
+                                {clients.length === 0 && !isLoading && (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-8 text-center text-slate-400">No hay clientes registrados.</td>
+                                        <td colSpan={6} className="px-6 py-8 text-center text-slate-400">No hay clientes registrados en la base de datos.</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -285,7 +304,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 </div>
             </div>
 
-            {/* Modal de Resultado de Test (IDs para n8n) */}
+            {/* Modal de Resultado de Test */}
             {testResult && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
@@ -335,25 +354,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                             <FileJson className="w-4 h-4 text-brand-500"/> Integración con n8n
                                         </h4>
                                         
-                                        <div className="flex gap-2">
-                                            <button 
-                                                onClick={() => copyToClipboard(generateN8nJson())} 
-                                                className="flex-1 text-[11px] bg-slate-900 hover:bg-slate-800 text-white px-3 py-2.5 rounded-lg font-bold uppercase transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                <Copy className="w-3 h-3"/> Copiar Config
-                                            </button>
-                                            <button 
-                                                onClick={copyWorkflowTemplate} 
-                                                className="flex-1 text-[11px] bg-brand-600 hover:bg-brand-700 text-white px-3 py-2.5 rounded-lg font-bold uppercase transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                <Workflow className="w-3 h-3"/> Copiar Flujo n8n
-                                            </button>
+                                        <div className="bg-brand-50 border border-brand-100 p-3 rounded-lg mb-3">
+                                            <p className="text-xs text-brand-800">
+                                                <strong>¡Nuevo!</strong> Ahora n8n se conecta directo a Supabase. Solo necesitas copiar el <strong>Flujo n8n</strong> una vez. Las credenciales de esta empresa ya están en la nube.
+                                            </p>
                                         </div>
 
-                                        <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
-                                            <strong>Config:</strong> Pégalo dentro del nodo "Configuración Maestra".<br/>
-                                            <strong>Flujo n8n:</strong> Pégalo (Ctrl+V) en el lienzo de n8n para crear todo el flujo corregido.
-                                        </p>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={copyWorkflowTemplate} 
+                                                className="w-full text-[11px] bg-brand-600 hover:bg-brand-700 text-white px-3 py-2.5 rounded-lg font-bold uppercase transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Workflow className="w-3 h-3"/> Copiar Flujo Maestro n8n (Supabase)
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {testResult.companyId === 'NO ENCONTRADO' && (
@@ -399,10 +413,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                     value={currentClient.code}
                                     onChange={e => setCurrentClient({...currentClient, code: e.target.value.toUpperCase()})}
                                     required
-                                    disabled={!!originalCode} // Cannot change code on edit to avoid breaking keys
+                                    disabled={!!originalCode} 
                                     placeholder="EJ: NUEVAEMPRESA"
                                 />
-                                <p className="text-[10px] text-slate-400 mt-1">Este es el código que el usuario ingresará en el login.</p>
                             </div>
 
                             <div>
@@ -483,45 +496,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                             </div>
 
                             <div className="col-span-1 md:col-span-2 pt-4 flex gap-3">
-                                <button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-3 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50">Cancelar</button>
-                                <button type="submit" className="flex-1 py-3 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-md flex items-center justify-center gap-2">
-                                    <Save className="w-4 h-4" /> Guardar Cliente
+                                <button type="button" disabled={isLoading} onClick={() => setIsEditing(false)} className="flex-1 py-3 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50">Cancelar</button>
+                                <button type="submit" disabled={isLoading} className="flex-1 py-3 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-md flex items-center justify-center gap-2">
+                                    {isLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4" />} Guardar Cliente
                                 </button>
                             </div>
                         </form>
                     </div>
-                </div>
-            )}
-
-            {/* Modal Password */}
-            {isPasswordModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 p-6">
-                        <h3 className="font-bold text-lg text-slate-800 mb-4">Cambiar Contraseña Admin</h3>
-                        <form onSubmit={handleChangePassword} className="space-y-4">
-                            <input 
-                                type="password" 
-                                placeholder="Nueva Contraseña"
-                                className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:border-brand-500"
-                                value={newPassword}
-                                onChange={e => setNewPassword(e.target.value)}
-                                required
-                            />
-                            <input 
-                                type="password" 
-                                placeholder="Confirmar Contraseña"
-                                className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:border-brand-500"
-                                value={confirmPassword}
-                                onChange={e => setConfirmPassword(e.target.value)}
-                                required
-                            />
-                            {pwdMessage && <p className={`text-xs font-bold ${pwdMessage.includes('correctamente') ? 'text-green-600' : 'text-red-500'}`}>{pwdMessage}</p>}
-                            <div className="flex gap-2">
-                                <button type="button" onClick={() => setIsPasswordModalOpen(false)} className="flex-1 py-2 text-slate-500 font-medium">Cancelar</button>
-                                <button type="submit" className="flex-1 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900">Actualizar</button>
-                            </div>
-                        </form>
-                     </div>
                 </div>
             )}
         </div>
