@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, X, LogOut, Key, Shield, Activity, RefreshCw, Smartphone, Copy, Workflow } from 'lucide-react';
+import { Trash2, Edit, Plus, X, LogOut, Key, Shield, Activity, RefreshCw, Smartphone, Copy, Workflow, Send } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { DAILY_WORKFLOW_JSON, MONTHLY_WORKFLOW_JSON } from '../services/n8nTemplate';
 
@@ -23,6 +23,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     // Simulation State
     const [isSimulating, setIsSimulating] = useState(false);
     const [simulationResult, setSimulationResult] = useState<string | null>(null);
+    const [isSendingTest, setIsSendingTest] = useState(false);
 
     // Form States
     const [currentClient, setCurrentClient] = useState<ClientConfig>({
@@ -114,7 +115,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 companyId: found ? found.id : 'NO ENCONTRADO',
                 companyName: found ? found.name : 'NO ENCONTRADO',
                 allCompanies: companies,
-                whatsappNumbers: client.whatsappNumbers || 'No config.',
+                whatsappNumbers: client.whatsappNumbers || '',
                 clientConfig: client 
             });
         } catch (error: any) {
@@ -134,37 +135,61 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             const yesterdayStr = date.toLocaleDateString('en-CA');
             const domain: any[] = [['stop_at', '>=', `${yesterdayStr} 00:00:00`], ['stop_at', '<=', `${yesterdayStr} 23:59:59`], ['state', '=', 'closed']];
             if (testResult.companyId !== 'NO ENCONTRADO') domain.push(['company_id', '=', testResult.companyId]);
-            const sessions = await odoo.searchRead(testResult.uid, client.apiKey, 'pos.session', domain, ['config_id', 'total_payments_amount', 'cash_register_difference']);
+            const sessions = await odoo.searchRead(testResult.uid, client.apiKey, 'pos.session', domain, ['config_id', 'cash_register_balance_end_real']);
             
             let totalVenta = 0;
-            let msg = `📊 *SIMULACRO REPORTE*\n🏢 ${client.code}\n📅 ${yesterdayStr}\n\n`;
+            let msg = `📊 *REPORTE DIARIO - LEMONBI*\n🏢 *${client.code}*\n📅 ${yesterdayStr}\n\n`;
             
             if (!sessions || sessions.length === 0) {
-                msg += "ℹ️ Sin cierres registrados.";
+                msg += "⚠️ No se registraron ventas cerradas para esta fecha.";
             } else {
-                const sessionIds = sessions.map((s: any) => s.id);
-                const payments = await odoo.searchRead(testResult.uid, client.apiKey, 'pos.payment', [['session_id', 'in', sessionIds]], ['session_id', 'amount', 'payment_method_id']);
                 sessions.forEach((s: any) => {
                     const tienda = Array.isArray(s.config_id) ? s.config_id[1] : 'Tienda';
-                    const venta = s.total_payments_amount || 0;
+                    const venta = s.cash_register_balance_end_real || 0;
                     totalVenta += venta;
-                    msg += `🏪 *${tienda}*\n💰 Venta: S/ ${venta.toFixed(2)}\n`;
-                    const sPayments = payments.filter((p: any) => (Array.isArray(p.session_id) ? p.session_id[0] : p.session_id) === s.id);
-                    const methods: any = {};
-                    sPayments.forEach((p: any) => {
-                        const name = Array.isArray(p.payment_method_id) ? p.payment_method_id[1] : 'Pago';
-                        if (!methods[name]) methods[name] = { total: 0, count: 0 };
-                        methods[name].total += p.amount; methods[name].count++;
-                    });
-                    Object.entries(methods).forEach(([name, data]: any) => { msg += `   ${name} (${data.count})\tS/ ${data.total.toFixed(2)}\n`; });
-                    if(Math.abs(s.cash_register_difference) > 0.01) msg += `🔴 Dif: S/ ${s.cash_register_difference.toFixed(2)}\n`;
-                    msg += `----------------\n`;
+                    msg += `• ${tienda}: S/ ${venta.toFixed(2)}\n`;
                 });
-                msg += `\n🏆 *TOTAL: S/ ${totalVenta.toFixed(2)}*\n\n🔎 *Ver:* ${DASHBOARD_URL}`;
+                msg += `\n💰 *Total Ventas:* S/ ${totalVenta.toFixed(2)}\n`;
+                msg += `🔢 *Sesiones:* ${sessions.length}\n`;
             }
             setSimulationResult(msg);
         } catch (e: any) { setSimulationResult("Error: " + e.message); }
         finally { setIsSimulating(false); }
+    };
+
+    const handleSendTestWhatsApp = async () => {
+        if (!simulationResult || !testResult?.whatsappNumbers) {
+            alert("Primero simula un reporte y asegúrate de tener números configurados.");
+            return;
+        }
+
+        setIsSendingTest(true);
+        const numbers = testResult.whatsappNumbers.split(',').map((n: string) => n.trim());
+        let errors = 0;
+
+        try {
+            for (const num of numbers) {
+                const response = await fetch('https://api.red51.site/message/sendText/chatbot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        number: num,
+                        text: simulationResult
+                    })
+                });
+                if (!response.ok) errors++;
+            }
+
+            if (errors === 0) {
+                alert("✅ Mensaje enviado con éxito a " + numbers.length + " número(s).");
+            } else {
+                alert("⚠️ Se enviaron los mensajes pero hubo " + errors + " error(es).");
+            }
+        } catch (e) {
+            alert("❌ Error al conectar con la API de WhatsApp.");
+        } finally {
+            setIsSendingTest(false);
+        }
     };
 
     const copyToClipboard = (text: string) => { navigator.clipboard.writeText(text); alert("Copiado"); };
@@ -258,8 +283,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                     </button>
                                     {simulationResult && (
                                         <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 relative">
-                                            <div className="bg-white rounded p-3 text-xs font-mono whitespace-pre-wrap">{simulationResult}</div>
-                                            <button onClick={() => copyToClipboard(simulationResult)} className="absolute top-6 right-6 p-1 bg-white shadow-sm border rounded hover:text-brand-600"><Copy className="w-3 h-3"/></button>
+                                            <div className="bg-white rounded p-3 text-xs font-mono whitespace-pre-wrap mb-4">{simulationResult}</div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => copyToClipboard(simulationResult)} className="flex-1 p-2 bg-white shadow-sm border rounded hover:text-brand-600 text-xs font-bold flex items-center justify-center gap-1">
+                                                    <Copy className="w-3 h-3"/> Copiar Texto
+                                                </button>
+                                                <button 
+                                                    onClick={handleSendTestWhatsApp} 
+                                                    disabled={isSendingTest}
+                                                    className="flex-1 p-2 bg-emerald-500 text-white shadow-sm rounded hover:bg-emerald-600 text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                                                >
+                                                    {isSendingTest ? <RefreshCw className="w-3 h-3 animate-spin"/> : <Send className="w-3 h-3"/>} 
+                                                    Enviar Prueba Real
+                                                </button>
+                                            </div>
+                                            <p className="text-[9px] text-emerald-600 mt-2 text-center uppercase font-bold tracking-widest">Se enviará a: {testResult.whatsappNumbers || 'Ninguno'}</p>
                                         </div>
                                     )}
                                     <div className="border-t pt-4">
@@ -286,7 +324,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                         <form onSubmit={handleSaveClient} className="grid grid-cols-2 gap-4">
                             <div className="col-span-2"><label className="text-xs font-bold text-slate-400">Código Acceso</label><input type="text" className="w-full p-2 bg-slate-50 border rounded uppercase font-bold" value={currentClient.code} onChange={e => setCurrentClient({...currentClient, code: e.target.value.toUpperCase()})} required disabled={!!originalCode}/></div>
                             <div><label className="text-xs font-bold text-slate-400">Filtro Compañía Odoo</label><input type="text" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.companyFilter} onChange={e => setCurrentClient({...currentClient, companyFilter: e.target.value})} required/></div>
-                            <div><label className="text-xs font-bold text-slate-400">WhatsApp (Números)</label><input type="text" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.whatsappNumbers} onChange={e => setCurrentClient({...currentClient, whatsappNumbers: e.target.value})}/></div>
+                            <div><label className="text-xs font-bold text-slate-400">WhatsApp (Números)</label><input type="text" placeholder="Ej: 51987654321, 51900111222" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.whatsappNumbers} onChange={e => setCurrentClient({...currentClient, whatsappNumbers: e.target.value})}/></div>
                             <div className="col-span-2 border-t pt-2 mt-2"><label className="text-[10px] font-bold text-slate-400">Credenciales Odoo</label></div>
                             <div className="col-span-2"><input type="url" placeholder="URL Odoo" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.url} onChange={e => setCurrentClient({...currentClient, url: e.target.value})} required/></div>
                             <input type="text" placeholder="DB" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.db} onChange={e => setCurrentClient({...currentClient, db: e.target.value})} required/>
