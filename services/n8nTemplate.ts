@@ -3,7 +3,7 @@
 // Estos objetos se usan para generar el JSON que el usuario copia desde el Admin Dashboard.
 
 export const DAILY_WORKFLOW_JSON = {
-  "name": "LemonBI - Reporte Diario (Full Pro)",
+  "name": "LemonBI - Reporte Diario (Multi-Company)",
   "nodes": [
     {
       "parameters": {
@@ -49,7 +49,7 @@ export const DAILY_WORKFLOW_JSON = {
     },
     {
       "parameters": {
-        "jsCode": "const data = $input.first().json;\nconst date = new Date();\ndate.setDate(date.getDate() - 1);\nconst options = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };\nconst formatter = new Intl.DateTimeFormat('en-CA', options);\nconst yesterdayStr = formatter.format(date);\nconst displayFormatter = new Intl.DateTimeFormat('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: 'long', year: 'numeric' });\n\nconst rawUrl = data.odoo_url || '';\nconst cleanUrl = rawUrl.trim().replace(/^=+/, '').replace(/\\/+$/, '');\n\nreturn {\n  json: {\n    empresa_id: data.id,\n    url: cleanUrl,\n    db: data.odoo_db,\n    apiKey: data.odoo_api_key,\n    empresaName: data.codigo_acceso,\n    targetPhone: data.whatsapp_numeros,\n    fecha: yesterdayStr,\n    fechaDisplay: displayFormatter.format(date),\n    timestamp: new Date().toISOString()\n  }\n};"
+        "jsCode": "const data = $input.first().json;\nconst date = new Date();\ndate.setDate(date.getDate() - 1);\nconst options = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };\nconst formatter = new Intl.DateTimeFormat('en-CA', options);\nconst yesterdayStr = formatter.format(date);\nconst displayFormatter = new Intl.DateTimeFormat('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: 'long', year: 'numeric' });\n\nconst rawUrl = data.odoo_url || '';\nconst cleanUrl = rawUrl.trim().replace(/^=+/, '').replace(/\\/+$/, '');\n\nreturn {\n  json: {\n    empresa_id: data.id,\n    url: cleanUrl,\n    db: data.odoo_db,\n    apiKey: data.odoo_api_key,\n    empresaName: data.codigo_acceso,\n    companyFilter: data.filtro_compania || 'ALL',\n    targetPhone: data.whatsapp_numeros,\n    fecha: yesterdayStr,\n    fechaDisplay: displayFormatter.format(date),\n    timestamp: new Date().toISOString()\n  }\n};"
       },
       "name": "Config y Validación",
       "type": "n8n-nodes-base.code",
@@ -68,13 +68,42 @@ export const DAILY_WORKFLOW_JSON = {
         },
         "sendBody": true,
         "contentType": "raw",
-        "body": "={{ '<?xml version=\"1.0\"?><methodCall><methodName>execute_kw</methodName><params><param><value><string>' + $json.db + '</string></value></param><param><value><int>2</int></value></param><param><value><string>' + $json.apiKey + '</string></value></param><param><value><string>pos.session</string></value></param><param><value><string>search_read</string></value></param><param><value><array><data><value><array><data><value><string>stop_at</string></value><value><string>&gt;=</string></value><value><string>' + $json.fecha + ' 00:00:00</string></value></data></array></value><value><array><data><value><array><data><value><string>stop_at</string></value><value><string>&lt;=</string></value><value><string>' + $json.fecha + ' 23:59:59</string></value></data></array></value><value><array><data><value><string>state</string></value><value><string>=</string></value><value><string>closed</string></value></data></array></value></data></array></value></param><param><value><struct><member><name>fields</name><value><array><data><value><string>name</string></value><value><string>cash_register_balance_end_real</string></value><value><string>cash_register_total_entry_encoding</string></value></data></array></value></member></struct></value></param></params></methodCall>' }}",
+        "body": "={{ '<?xml version=\"1.0\"?><methodCall><methodName>execute_kw</methodName><params><param><value><string>' + $json.db + '</string></value></param><param><value><int>2</int></value></param><param><value><string>' + $json.apiKey + '</string></value></param><param><value><string>res.company</string></value></param><param><value><string>search_read</string></value></param><param><value><array><data><value><array><data><value><string>name</string></value><value><string>ilike</string></value><value><string>' + ($json.companyFilter === 'ALL' ? '' : $json.companyFilter) + '</string></value></data></array></value></data></array></value></param><param><value><struct><member><name>fields</name><value><array><data><value><string>id</string></value><value><string>name</string></value></data></array></value></member><member><name>limit</name><value><int>1</int></value></member></struct></value></param></params></methodCall>' }}",
+        "options": {}
+      },
+      "name": "HTTP - Get Company ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-920, 750]
+    },
+    {
+      "parameters": {
+        "jsCode": "const odooResponse = $input.first().json.body || '';\nconst idMatch = odooResponse.match(/<name>id<\\/name>[\\s\\S]*?<int>(\\d+)/);\nconst companyId = idMatch ? parseInt(idMatch[1]) : null;\nreturn { json: { companyId } };"
+      },
+      "name": "Parse Company ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-700, 750]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node[\"Config y Validación\"].json.url }}/xmlrpc/2/object",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "text/xml" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "body": "={{ '<?xml version=\"1.0\"?><methodCall><methodName>execute_kw</methodName><params><param><value><string>' + $node[\"Config y Validación\"].json.db + '</string></value></param><param><value><int>2</int></value></param><param><value><string>' + $node[\"Config y Validación\"].json.apiKey + '</string></value></param><param><value><string>pos.session</string></value></param><param><value><string>search_read</string></value></param><param><value><array><data><value><array><data><value><string>stop_at</string></value><value><string>&gt;=</string></value><value><string>' + $node[\"Config y Validación\"].json.fecha + ' 00:00:00</string></value></data></array></value><value><array><data><value><array><data><value><string>stop_at</string></value><value><string>&lt;=</string></value><value><string>' + $node[\"Config y Validación\"].json.fecha + ' 23:59:59</string></value></data></array></value><value><array><data><value><string>state</string></value><value><string>=</string></value><value><string>closed</string></value></data></array></value>' + ($node[\"Parse Company ID\"].json.companyId ? '<value><array><data><value><string>company_id</string></value><value><string>=</string></value><value><int>' + $node[\"Parse Company ID\"].json.companyId + '</int></value></data></array></value>' : '') + '</data></array></value></param><param><value><struct><member><name>fields</name><value><array><data><value><string>name</string></value><value><string>cash_register_balance_end_real</string></value></data></array></value></member></struct></value></param></params></methodCall>' }}",
         "options": {}
       },
       "name": "HTTP - Get Sessions Odoo",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-920, 750]
+      "position": [-480, 750]
     },
     {
       "parameters": {
@@ -83,7 +112,7 @@ export const DAILY_WORKFLOW_JSON = {
       "name": "Parse Respuesta Odoo",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-700, 750]
+      "position": [-260, 750]
     },
     {
       "parameters": {
@@ -92,7 +121,7 @@ export const DAILY_WORKFLOW_JSON = {
       "name": "Formatear Mensaje",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-480, 750]
+      "position": [-40, 750]
     },
     {
       "parameters": {
@@ -106,7 +135,7 @@ export const DAILY_WORKFLOW_JSON = {
       "name": "Enviar WhatsApp",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-260, 750]
+      "position": [180, 750]
     },
     {
       "parameters": {
@@ -128,14 +157,16 @@ export const DAILY_WORKFLOW_JSON = {
       "name": "Log en Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-40, 750]
+      "position": [400, 750]
     }
   ],
   "connections": {
     "Schedule - 6:00 AM": { "main": [[{ "node": "GET Empresas Activas", "type": "main", "index": 0 }]] },
     "GET Empresas Activas": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
     "Split In Batches": { "main": [[{ "node": "Config y Validación", "type": "main", "index": 0 }]] },
-    "Config y Validación": { "main": [[{ "node": "HTTP - Get Sessions Odoo", "type": "main", "index": 0 }]] },
+    "Config y Validación": { "main": [[{ "node": "HTTP - Get Company ID", "type": "main", "index": 0 }]] },
+    "HTTP - Get Company ID": { "main": [[{ "node": "Parse Company ID", "type": "main", "index": 0 }]] },
+    "Parse Company ID": { "main": [[{ "node": "HTTP - Get Sessions Odoo", "type": "main", "index": 0 }]] },
     "HTTP - Get Sessions Odoo": { "main": [[{ "node": "Parse Respuesta Odoo", "type": "main", "index": 0 }]] },
     "Parse Respuesta Odoo": { "main": [[{ "node": "Formatear Mensaje", "type": "main", "index": 0 }]] },
     "Formatear Mensaje": { "main": [[{ "node": "Enviar WhatsApp", "type": "main", "index": 0 }]] },
