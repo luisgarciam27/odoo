@@ -122,7 +122,7 @@ export const DAILY_WORKFLOW_JSON = {
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {\n  \"empresa_id\": $json.empresa_id,\n  \"fecha_reporte\": $json.fecha,\n  \"total_ventas\": parseFloat($json.totalVentas)\n} }}",
+        "jsonBody": "={{ {\n  \"empresa_id\": $node[\"Parse Respuesta Odoo\"].json.empresa_id,\n  \"fecha_reporte\": $node[\"Parse Respuesta Odoo\"].json.fecha,\n  \"total_ventas\": parseFloat($node[\"Parse Respuesta Odoo\"].json.totalVentas)\n} }}",
         "options": {}
       },
       "name": "Log en Supabase",
