@@ -3,9 +3,9 @@
 const SUPABASE_URL = "https://ogopzhmsjnotuntfimpx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nb3B6aG1zam5vdHVudGZpbXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MjcwNjksImV4cCI6MjA4MTUwMzA2OX0.z9rcjc9ToplMYhLKQQl0iuKYc87hm1JAN2O1yfv3lmE";
 
-// --- FLUJO 1: REPORTE DIARIO DE CAJA ---
+// --- FLUJO 1: REPORTE DIARIO DE CAJA (CORREGIDO) ---
 export const DAILY_WORKFLOW_JSON = {
-  "name": "LemonBI - Reporte Diario (Cierres & Pagos)",
+  "name": "LemonBI - Reporte Diario (Final Corregido)",
   "nodes": [
     {
       "parameters": {
@@ -59,10 +59,9 @@ const options = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', d
 const formatter = new Intl.DateTimeFormat('en-CA', options);
 const yesterdayStr = formatter.format(date);
 
-// Construir Filtro de Compañía si existe (CAMBIO 1)
+// Filtro de Compañía
 let companyFilterXml = '';
 if (companyFilter && companyFilter !== 'ALL') {
-    // Usamos 'ilike' en company_id.name para filtrar por el nombre configurado
     companyFilterXml = \`<value><array><data>
         <value><string>company_id.name</string></value>
         <value><string>ilike</string></value>
@@ -70,7 +69,6 @@ if (companyFilter && companyFilter !== 'ALL') {
     </data></array></value>\`;
 }
 
-// XML-RPC para buscar sesiones cerradas ayer
 const xml = \`<?xml version="1.0"?>
 <methodCall>
   <methodName>execute_kw</methodName>
@@ -106,7 +104,6 @@ const xml = \`<?xml version="1.0"?>
           <name>fields</name>
           <value><array><data>
             <value><string>config_id</string></value>
-            <value><string>user_id</string></value>
             <value><string>total_payments_amount</string></value>
             <value><string>cash_register_difference</string></value>
           </data></array></value>
@@ -149,50 +146,38 @@ function cleanOdooValue(val) {
   if (val.string !== undefined) return val.string;
   if (val.double !== undefined) return parseFloat(val.double);
   if (val.int !== undefined) return parseInt(val.int);
-  if (Array.isArray(val.array?.data?.value) && val.array.data.value.length === 2) return val.array.data.value; // Retorna [id, name]
+  if (Array.isArray(val.array?.data?.value) && val.array.data.value.length === 2) return val.array.data.value;
   return val;
-}
-
-if ($input.first().error) {
-    return [{ json: { hasData: false, error: true } }];
 }
 
 const responseData = $input.first().json;
 const rawParams = responseData.methodResponse?.params?.param?.value?.array?.data?.value;
 const meta = $('Code - Configura Query Sessions').first().json;
 
-if (!rawParams || (Array.isArray(rawParams) && rawParams.length === 0)) {
-   return [{ json: { hasData: false, meta } }];
+let sessions = [];
+let sessionIds = [];
+
+if (rawParams && (Array.isArray(rawParams) && rawParams.length > 0)) {
+    const rawSessions = Array.isArray(rawParams) ? rawParams : [rawParams];
+    rawSessions.forEach(s => {
+        const struct = s.struct?.member || [];
+        const getVal = (name) => {
+            const field = struct.find(m => m.name === name);
+            return field ? cleanOdooValue(field.value) : null;
+        };
+        const id = getVal('id');
+        const tienda = getVal('config_id');
+        const venta = getVal('total_payments_amount') || 0;
+        const dif = getVal('cash_register_difference') || 0;
+        if (id) {
+            sessions.push({ id, tienda: Array.isArray(tienda) ? tienda[1] : 'Tienda', venta, dif });
+            sessionIds.push(id);
+        }
+    });
 }
 
-// Procesar Sesiones
-const rawSessions = Array.isArray(rawParams) ? rawParams : [rawParams];
-const sessions = [];
-const sessionIds = [];
-
-rawSessions.forEach(s => {
-    const struct = s.struct?.member || [];
-    const getVal = (name) => {
-        const field = struct.find(m => m.name === name);
-        return field ? cleanOdooValue(field.value) : null;
-    };
-    const id = getVal('id');
-    const tienda = getVal('config_id');
-    const venta = getVal('total_payments_amount') || 0;
-    const dif = getVal('cash_register_difference') || 0;
-    
-    if (id) {
-        sessions.push({ id, tienda: Array.isArray(tienda) ? tienda[1] : 'Tienda', venta, dif });
-        sessionIds.push(id);
-    }
-});
-
-// Construir XML para consultar Pagos (pos.payment) (CAMBIO 2)
-// Filtrar por session_id IN [ids]
-let idsXml = '';
-sessionIds.forEach(id => {
-    idsXml += \`<value><int>\${id}</int></value>\`;
-});
+// Dummy ID para evitar error HTTP si no hay sesiones
+let idsXml = sessionIds.length > 0 ? sessionIds.map(id => \`<value><int>\${id}</int></value>\`).join('') : '<value><int>0</int></value>';
 
 const xmlPayments = \`<?xml version="1.0"?>
 <methodCall>
@@ -203,31 +188,12 @@ const xmlPayments = \`<?xml version="1.0"?>
     <param><value><string>\${meta.apiKey}</string></value></param>
     <param><value><string>pos.payment</string></value></param>
     <param><value><string>search_read</string></value></param>
-    <param>
-      <value><array><data>
-        <value><array><data>
-            <value><string>session_id</string></value>
-            <value><string>in</string></value>
-            <value><array><data>\${idsXml}</data></array></value>
-        </data></array></value>
-      </data></array></value>
-    </param>
-    <param>
-      <value><struct>
-        <member>
-          <name>fields</name>
-          <value><array><data>
-            <value><string>session_id</string></value>
-            <value><string>amount</string></value>
-            <value><string>payment_method_id</string></value>
-          </data></array></value>
-        </member>
-      </struct></value>
-    </param>
+    <param><value><array><data><value><array><data><value><string>session_id</string></value><value><string>in</string></value><value><array><data>\${idsXml}</data></array></value></data></array></value></data></array></value></param>
+    <param><value><struct><member><name>fields</name><value><array><data><value><string>session_id</string></value><value><string>amount</string></value><value><string>payment_method_id</string></value></data></array></value></member></struct></value></param>
   </params>
 </methodCall>\`;
 
-return [{ json: { hasData: true, meta, sessions, xmlPayments } }];
+return [{ json: { hasData: sessionIds.length > 0, meta, sessions, xmlPayments } }];
         `
       },
       "name": "Code - Prep Payments",
@@ -258,20 +224,19 @@ function cleanOdooValue(val) {
   if (val.string !== undefined) return val.string;
   if (val.double !== undefined) return parseFloat(val.double);
   if (val.int !== undefined) return parseInt(val.int);
-  if (Array.isArray(val.array?.data?.value) && val.array.data.value.length === 2) return val.array.data.value; // Retorna [id, name]
+  if (Array.isArray(val.array?.data?.value) && val.array.data.value.length === 2) return val.array.data.value;
   return val;
 }
 
 const prepData = $('Code - Prep Payments').first().json;
+const responseData = $input.first().json;
 
 if (!prepData.hasData) {
-     return [{ json: { message: \`⚠️ *\${prepData.meta.empresaName}*\\n📅 \${prepData.meta.fechaConsulta}\\nℹ️ Sin cierres registrados.\`, phone: prepData.meta.targetPhone, hasData: false, saveToSupabase: false } }];
+     return [{ json: { message: \`⚠️ *\${prepData.meta.empresaName}*\\n📅 \${prepData.meta.fechaConsulta}\\nℹ️ Sin cierres registrados.\`, phone: prepData.meta.targetPhone, saveToSupabase: false } }];
 }
 
-const responseData = $input.first().json;
 const rawParams = responseData.methodResponse?.params?.param?.value?.array?.data?.value;
 const payments = [];
-
 if (rawParams) {
     const rawList = Array.isArray(rawParams) ? rawParams : [rawParams];
     rawList.forEach(p => {
@@ -282,64 +247,40 @@ if (rawParams) {
         };
         const sessionIdRaw = getVal('session_id');
         const methodRaw = getVal('payment_method_id');
-        const amount = getVal('amount') || 0;
-
         payments.push({
             sessionId: Array.isArray(sessionIdRaw) ? sessionIdRaw[0] : sessionIdRaw,
             method: Array.isArray(methodRaw) ? methodRaw[1] : 'Desconocido',
-            amount
+            amount: getVal('amount') || 0
         });
     });
 }
 
-// Construir Mensaje
 const meta = prepData.meta;
 const sessions = prepData.sessions;
-let totalVenta = 0;
-let totalDif = 0;
+let totalVenta = 0, totalDif = 0;
 let msg = \`📊 *REPORTE DIARIO*\\n🏢 \${meta.empresaName}\\n📅 \${meta.fechaConsulta}\\n\\n\`;
 
 sessions.forEach(s => {
-    totalVenta += s.venta;
-    totalDif += s.dif;
-    
+    totalVenta += s.venta; totalDif += s.dif;
     msg += \`🏪 *\${s.tienda}*\\n💰 Venta: S/ \${s.venta.toFixed(2)}\\n\`;
-    
-    // Agrupar Pagos y Agregar al Mensaje (CAMBIO 2)
     const sessionPayments = payments.filter(p => p.sessionId === s.id);
     const methods = {};
     sessionPayments.forEach(p => {
         if(!methods[p.method]) methods[p.method] = {count: 0, total: 0};
-        methods[p.method].count++;
-        methods[p.method].total += p.amount;
+        methods[p.method].count++; methods[p.method].total += p.amount;
     });
-
-    Object.entries(methods).forEach(([name, data]) => {
-         msg += \`   \${name} (\${data.count})\\tS/ \${data.total.toFixed(2)}\\n\`;
-    });
-
+    Object.entries(methods).forEach(([name, data]) => { msg += \`   \${name} (\${data.count})\\tS/ \${data.total.toFixed(2)}\\n\`; });
     if(Math.abs(s.dif)>0.01) msg += \`🔴 Dif: S/ \${s.dif.toFixed(2)}\\n\`;
     msg += \`----------------\\n\`;
 });
+msg += \`\\n🏆 *TOTAL: S/ \${totalVenta.toFixed(2)}*\\n\\n🔎 *Ver Detalle:* https://odoo-lemon.vercel.app/\`;
 
-msg += \`\\n🏆 *TOTAL: S/ \${totalVenta.toFixed(2)}*\`;
-msg += \`\\n\\n🔎 *Ver Detalle y Rentabilidad:*\\n👉 https://odoo-lemon.vercel.app/\`;
-
-return [{
-  json: {
-    message: msg,
-    phone: meta.targetPhone,
-    hasData: true,
-    saveToSupabase: true,
-    dbPayload: {
-        empresa_id: meta.empresaIdSupabase,
-        fecha_reporte: meta.fechaConsulta,
-        total_ventas: totalVenta,
-        total_diferencia: totalDif,
-        enviado_whatsapp: true
-    }
-  }
-}];
+return [{ json: { 
+    message: msg, 
+    phone: meta.targetPhone, 
+    saveToSupabase: true, 
+    dbPayload: { empresa_id: meta.empresaIdSupabase, fecha_reporte: meta.fechaConsulta, total_ventas: totalVenta, total_diferencia: totalDif, enviado_whatsapp: true } 
+} }];
         `
       },
       "name": "Code - Merge & Format",
@@ -365,8 +306,7 @@ return [{
           "parameters": [
             { "name": "apikey", "value": SUPABASE_KEY },
             { "name": "Authorization", "value": `Bearer ${SUPABASE_KEY}` },
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Prefer", "value": "return=minimal" }
+            { "name": "Content-Type", "value": "application/json" }
           ]
         },
         "body": "={{ $json.dbPayload }}"
@@ -399,12 +339,8 @@ return [{
     "HTTP - Get Sessions": { "main": [[{ "node": "Code - Prep Payments", "type": "main", "index": 0 }]] },
     "Code - Prep Payments": { "main": [[{ "node": "HTTP - Get Payments", "type": "main", "index": 0 }]] },
     "HTTP - Get Payments": { "main": [[{ "node": "Code - Merge & Format", "type": "main", "index": 0 }]] },
-    "Code - Merge & Format": { "main": [[{ "node": "Guardar?", "type": "main", "index": 0 }]] },
-    "Guardar?": {
-      "main": [
-        [{ "node": "Supabase Save", "type": "main", "index": 0 }, { "node": "WhatsApp", "type": "main", "index": 0 }]
-      ]
-    },
+    "Code - Merge & Format": { "main": [[{ "node": "Guardar?", "type": "main", "index": 0 }, { "node": "WhatsApp", "type": "main", "index": 0 }]] },
+    "Guardar?": { "main": [[{ "node": "Supabase Save", "type": "main", "index": 0 }]] },
     "Supabase Save": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
     "WhatsApp": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] }
   }
