@@ -413,7 +413,7 @@ orders.forEach(o => {
     }
 });
 
-const msg = \`📈 *REPORTE MENSUAL LEMON BI*\\n🏢 \${meta.empresaName}\\n📅 Periodo: \${meta.periodo}\\n\\n💰 *Ventas Totales: S/ \${totalVendido.toFixed(2)}*\\n\\n💡 *¿Quieres ver tu Rentabilidad Real?*\\nHemos calculado tus márgenes, costos y productos estrella. Ingresa aquí:\\n👉 https://odoo-lemon.vercel.app/\`;
+const msg = \`📈 *REPORTE MENSUAL LEMON BI*\\n🏢 \${meta.empresaName}\\n📅 Periodo: \${meta.periodo}\\n\\n💰 *Ventas Totales: S/ \${totalVendido.toFixed(2)}*\\n\\n🔎 *Ver Detalle y Rentabilidad:*\\n👉 https://odoo-lemon.vercel.app/\`;
 
 return [{
     json: {
