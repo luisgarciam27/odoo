@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow, RefreshCw, Database, Calendar, Server, PlayCircle, Smartphone } from 'lucide-react';
+import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow, RefreshCw, Database, Calendar, Server, Smartphone } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { DAILY_WORKFLOW_JSON, MONTHLY_WORKFLOW_JSON } from '../services/n8nTemplate';
 
