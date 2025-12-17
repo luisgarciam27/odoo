@@ -3,7 +3,7 @@
 const SUPABASE_URL = "https://ogopzhmsjnotuntfimpx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nb3B6aG1zam5vdHVudGZpbXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MjcwNjksImV4cCI6MjA4MTUwMzA2OX0.z9rcjc9ToplMYhLKQQl0iuKYc87hm1JAN2O1yfv3lmE";
 
-// --- FLUJO 1: REPORTE DIARIO DE CAJA (CORREGIDO) ---
+// --- FLUJO 1: REPORTE DIARIO DE CAJA (FINAL CORREGIDO) ---
 export const DAILY_WORKFLOW_JSON = {
   "name": "LemonBI - Reporte Diario (Final Corregido)",
   "nodes": [
@@ -52,14 +52,12 @@ const apiKey = data.odoo_api_key;
 const targetPhone = data.whatsapp_numeros;
 const companyFilter = data.filtro_compania;
 
-// FECHA: AYER
 const date = new Date();
 date.setDate(date.getDate() - 1);
 const options = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };
 const formatter = new Intl.DateTimeFormat('en-CA', options);
 const yesterdayStr = formatter.format(date);
 
-// Filtro de Compañía
 let companyFilterXml = '';
 if (companyFilter && companyFilter !== 'ALL') {
     companyFilterXml = \`<value><array><data>
@@ -80,34 +78,19 @@ const xml = \`<?xml version="1.0"?>
     <param><value><string>search_read</string></value></param>
     <param>
       <value><array><data>
-        <value><array><data>
-            <value><string>stop_at</string></value>
-            <value><string>&gt;=</string></value>
-            <value><string>\${yesterdayStr} 00:00:00</string></value>
-        </data></array></value>
-        <value><array><data>
-            <value><string>stop_at</string></value>
-            <value><string>&lt;=</string></value>
-            <value><string>\${yesterdayStr} 23:59:59</string></value>
-        </data></array></value>
-        <value><array><data>
-            <value><string>state</string></value>
-            <value><string>=</string></value>
-            <value><string>closed</string></value>
-        </data></array></value>
+        <value><array><data><value><string>stop_at</string></value><value><string>&gt;=</string></value><value><string>\${yesterdayStr} 00:00:00</string></value></data></array></value>
+        <value><array><data><value><string>stop_at</string></value><value><string>&lt;=</string></value><value><string>\${yesterdayStr} 23:59:59</string></value></data></array></value>
+        <value><array><data><value><string>state</string></value><value><string>=</string></value><value><string>closed</string></value></data></array></value>
         \${companyFilterXml}
       </data></array></value>
     </param>
     <param>
       <value><struct>
-        <member>
-          <name>fields</name>
-          <value><array><data>
+        <member><name>fields</name><value><array><data>
             <value><string>config_id</string></value>
             <value><string>total_payments_amount</string></value>
             <value><string>cash_register_difference</string></value>
-          </data></array></value>
-        </member>
+          </data></array></value></member>
       </struct></value>
     </param>
   </params>
@@ -116,7 +99,7 @@ const xml = \`<?xml version="1.0"?>
 return {
   json: { xmlBody: xml, url, db, apiKey, empresaName, targetPhone, fechaConsulta: yesterdayStr, empresaIdSupabase: data.id }
 };
-        `
+`
       },
       "name": "Code - Configura Query Sessions",
       "type": "n8n-nodes-base.code",
@@ -176,7 +159,6 @@ if (rawParams && (Array.isArray(rawParams) && rawParams.length > 0)) {
     });
 }
 
-// Dummy ID para evitar error HTTP si no hay sesiones
 let idsXml = sessionIds.length > 0 ? sessionIds.map(id => \`<value><int>\${id}</int></value>\`).join('') : '<value><int>0</int></value>';
 
 const xmlPayments = \`<?xml version="1.0"?>
@@ -194,7 +176,7 @@ const xmlPayments = \`<?xml version="1.0"?>
 </methodCall>\`;
 
 return [{ json: { hasData: sessionIds.length > 0, meta, sessions, xmlPayments } }];
-        `
+`
       },
       "name": "Code - Prep Payments",
       "type": "n8n-nodes-base.code",
@@ -281,7 +263,7 @@ return [{ json: {
     saveToSupabase: true, 
     dbPayload: { empresa_id: meta.empresaIdSupabase, fecha_reporte: meta.fechaConsulta, total_ventas: totalVenta, total_diferencia: totalDif, enviado_whatsapp: true } 
 } }];
-        `
+`
       },
       "name": "Code - Merge & Format",
       "type": "n8n-nodes-base.code",
@@ -352,9 +334,7 @@ export const MONTHLY_WORKFLOW_JSON = {
   "nodes": [
     {
       "parameters": {
-        "rule": {
-          "interval": [{ "field": "cronExpression", "expression": "0 6 1 * *" }]
-        }
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 6 1 * *" }] }
       },
       "name": "Schedule - 1ro Mes 6:00 AM",
       "type": "n8n-nodes-base.scheduleTrigger",
@@ -389,20 +369,14 @@ export const MONTHLY_WORKFLOW_JSON = {
         "jsCode": `
 const data = $input.first().json;
 const empresaName = data.codigo_acceso;
-
-// CALCULAR MES ANTERIOR
 const date = new Date();
-date.setDate(1); // Ir al 1ro del mes actual
-date.setHours(-1); // Ir a la ultima hora del mes anterior
-
+date.setDate(1); date.setHours(-1);
 const year = date.getFullYear();
-const month = date.getMonth() + 1; // Mes 1-12
+const month = date.getMonth() + 1;
 const lastDay = date.getDate();
-
 const startStr = \`\${year}-\${String(month).padStart(2,'0')}-01\`;
 const endStr = \`\${year}-\${String(month).padStart(2,'0')}-\${lastDay}\`;
 
-// Query para obtener TOTAL VENDIDO (pos.order)
 const xml = \`<?xml version="1.0"?>
 <methodCall>
   <methodName>execute_kw</methodName>
@@ -414,46 +388,17 @@ const xml = \`<?xml version="1.0"?>
     <param><value><string>search_read</string></value></param>
     <param>
       <value><array><data>
-        <value><array><data>
-            <value><string>date_order</string></value>
-            <value><string>&gt;=</string></value>
-            <value><string>\${startStr} 00:00:00</string></value>
-        </data></array></value>
-        <value><array><data>
-            <value><string>date_order</string></value>
-            <value><string>&lt;=</string></value>
-            <value><string>\${endStr} 23:59:59</string></value>
-        </data></array></value>
-        <value><array><data>
-            <value><string>state</string></value>
-            <value><string>!=</string></value>
-            <value><string>cancel</string></value>
-        </data></array></value>
+        <value><array><data><value><string>date_order</string></value><value><string>&gt;=</string></value><value><string>\${startStr} 00:00:00</string></value></data></array></value>
+        <value><array><data><value><string>date_order</string></value><value><string>&lt;=</string></value><value><string>\${endStr} 23:59:59</string></value></data></array></value>
+        <value><array><data><value><string>state</string></value><value><string>!=</string></value><value><string>cancel</string></value></data></array></value>
       </data></array></value>
     </param>
-    <param>
-      <value><struct>
-        <member>
-            <name>fields</name>
-            <value><array><data>
-                <value><string>amount_total</string></value>
-            </data></array></value>
-        </member>
-      </struct></value>
-    </param>
+    <param><value><struct><member><name>fields</name><value><array><data><value><string>amount_total</string></value></data></array></value></member></struct></value></param>
   </params>
 </methodCall>\`;
 
-return {
-  json: { 
-    xmlBody: xml, 
-    url: data.odoo_url, 
-    empresaName, 
-    targetPhone: data.whatsapp_numeros, 
-    periodo: \`\${month}/\${year}\`
-  }
-};
-        `
+return { json: { xmlBody: xml, url: data.odoo_url, empresaName, targetPhone: data.whatsapp_numeros, periodo: \`\${month}/\${year}\` } };
+`
       },
       "name": "Code - Fechas y Query",
       "type": "n8n-nodes-base.code",
@@ -479,17 +424,12 @@ return {
       "parameters": {
         "jsCode": `
 if ($input.first().error) return [{json: {send: false}}];
-
 const responseData = $input.first().json;
 const meta = $('Code - Fechas y Query').first().json;
-
-// Parsear XML-RPC response
 const rawParams = responseData.methodResponse?.params?.param?.value?.array?.data?.value;
 if (!rawParams) return [{json: {send: false}}];
-
 const orders = Array.isArray(rawParams) ? rawParams : [rawParams];
 let totalVendido = 0;
-
 orders.forEach(o => {
     const struct = o.struct?.member || [];
     const val = struct.find(m => m.name === 'amount_total');
@@ -498,17 +438,9 @@ orders.forEach(o => {
        else if(val.value.string) totalVendido += parseFloat(val.value.string);
     }
 });
-
-const msg = \`📈 *REPORTE MENSUAL LEMON BI*\\n🏢 \${meta.empresaName}\\n📅 Periodo: \${meta.periodo}\\n\\n💰 *Ventas Totales: S/ \${totalVendido.toFixed(2)}*\\n\\n🔎 *Ver Detalle y Rentabilidad:*\\n👉 https://odoo-lemon.vercel.app/\`;
-
-return [{
-    json: {
-        message: msg,
-        phone: meta.targetPhone,
-        send: true
-    }
-}];
-        `
+const msg = \`📈 *REPORTE MENSUAL LEMON BI*\\n🏢 \${meta.empresaName}\\n📅 Periodo: \${meta.periodo}\\n\\n💰 *Ventas Totales: S/ \${totalVendido.toFixed(2)}*\\n\\n🔎 *Ver Detalle:* https://odoo-lemon.vercel.app/\`;
+return [{ json: { message: msg, phone: meta.targetPhone, send: true } }];
+`
       },
       "name": "Code - Mensaje",
       "type": "n8n-nodes-base.code",
@@ -537,13 +469,6 @@ return [{
       "typeVersion": 4.2,
       "position": [1150, -60],
       "credentials": { "evolutionApi": { "id": "ckynLYdXPqMmVdMh", "name": "Evolution account" } }
-    },
-    {
-      "parameters": {},
-      "name": "Loop",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [1350, -60]
     }
   ],
   "connections": {

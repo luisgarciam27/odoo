@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow, RefreshCw, Database, Calendar, Server, Smartphone } from 'lucide-react';
+import { Trash2, Edit, Plus, X, LogOut, Key, Shield, Activity, RefreshCw, Smartphone, Copy, Workflow } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { DAILY_WORKFLOW_JSON, MONTHLY_WORKFLOW_JSON } from '../services/n8nTemplate';
 
@@ -15,13 +14,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-    const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
     
     // Test Connection State
     const [testingClient, setTestingClient] = useState<string | null>(null);
     const [testResult, setTestResult] = useState<any | null>(null);
-    const [isModalTesting, setIsModalTesting] = useState(false);
-    const [modalTestMessage, setModalTestMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
     // Simulation State
     const [isSimulating, setIsSimulating] = useState(false);
@@ -42,9 +38,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
     const loadClients = async () => {
         setIsLoading(true);
-        const data = await getClients();
-        setClients(data);
-        setIsLoading(false);
+        try {
+            const data = await getClients();
+            setClients(data);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -55,36 +54,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         e.preventDefault();
         setIsLoading(true);
         const isNew = !originalCode;
-        const result = await saveClient(currentClient, isNew);
-        if (result.success) {
-            await loadClients();
-            setIsEditing(false);
-            resetForm();
-        } else {
-            alert(result.message || "Error al guardar.");
+        try {
+            const result = await saveClient(currentClient, isNew);
+            if (result.success) {
+                await loadClients();
+                setIsEditing(false);
+                resetForm();
+            } else {
+                alert(result.message || "Error al guardar.");
+            }
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     const handleDelete = async (code: string) => {
         if (confirm(`¿Eliminar cliente ${code}?`)) {
             setIsLoading(true);
-            if (await deleteClient(code)) await loadClients();
-            setIsLoading(false);
+            try {
+                if (await deleteClient(code)) await loadClients();
+            } finally {
+                setIsLoading(false);
+            }
         }
     };
 
     const handleEdit = (client: ClientConfig) => {
         setCurrentClient(client);
         setOriginalCode(client.code);
-        setModalTestMessage(null);
         setIsEditing(true);
     };
 
     const resetForm = () => {
         setCurrentClient({ code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: '' });
         setOriginalCode(null);
-        setModalTestMessage(null);
     };
 
     const handleChangePassword = (e: React.FormEvent) => {
@@ -132,7 +135,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             if (testResult.companyId !== 'NO ENCONTRADO') domain.push(['company_id', '=', testResult.companyId]);
             const sessions = await odoo.searchRead(testResult.uid, client.apiKey, 'pos.session', domain, ['config_id', 'total_payments_amount', 'cash_register_difference']);
             
-            // Fix: Corrected syntax for template literals and interpolation to prevent "void" return error
             let totalVenta = 0;
             let msg = `📊 *SIMULACRO REPORTE*\n🏢 ${client.code}\n📅 ${yesterdayStr}\n\n`;
             
@@ -164,7 +166,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         finally { setIsSimulating(false); }
     };
 
-    // Helper: Implement missing copyWorkflow and clipboard functions
     const copyToClipboard = (text: string) => { navigator.clipboard.writeText(text); alert("Copiado"); };
 
     const copyWorkflow = (type: 'daily' | 'monthly') => {
@@ -187,16 +188,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
             <div className="max-w-7xl mx-auto p-6">
                 <div className="flex justify-between items-end mb-6">
-                    <h2 className="text-2xl font-bold">Clientes Configurados</h2>
+                    <div>
+                        <h2 className="text-2xl font-bold">Clientes Configurados</h2>
+                        <p className="text-slate-500 text-sm">Gestiona el acceso de las sucursales a Odoo y n8n.</p>
+                    </div>
                     <button onClick={() => { resetForm(); setIsEditing(true); }} className="bg-brand-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow flex items-center gap-2"><Plus className="w-5 h-5" /> Nuevo</button>
                 </div>
 
-                <div className="bg-white rounded-2xl shadow overflow-hidden">
+                <div className="bg-white rounded-2xl shadow overflow-hidden relative min-h-[100px]">
+                    {isLoading && (
+                        <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center">
+                            <RefreshCw className="w-8 h-8 animate-spin text-brand-500" />
+                        </div>
+                    )}
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 text-xs text-slate-500 uppercase font-bold border-b">
                             <tr>
                                 <th className="px-6 py-4">Código</th>
-                                <th className="px-6 py-4">Filtro</th>
+                                <th className="px-6 py-4">Filtro Compañía</th>
                                 <th className="px-6 py-4">WhatsApp</th>
                                 <th className="px-6 py-4">Acciones</th>
                             </tr>
@@ -206,14 +215,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                 <tr key={c.code} className="hover:bg-slate-50">
                                     <td className="px-6 py-4 font-bold">{c.code}</td>
                                     <td className="px-6 py-4 text-brand-700">{c.companyFilter}</td>
-                                    <td className="px-6 py-4 text-xs">{c.whatsappNumbers}</td>
+                                    <td className="px-6 py-4 text-xs font-mono">{c.whatsappNumbers || '---'}</td>
                                     <td className="px-6 py-4 flex gap-2">
-                                        <button onClick={() => handleTestConnection(c)} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Activity className="w-4 h-4" /></button>
+                                        <button 
+                                            onClick={() => handleTestConnection(c)} 
+                                            disabled={testingClient === c.code}
+                                            className="p-2 bg-emerald-50 text-emerald-600 rounded-lg disabled:opacity-50"
+                                            title="Probar Conexión"
+                                        >
+                                            {testingClient === c.code ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                                        </button>
                                         <button onClick={() => handleEdit(c)} className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Edit className="w-4 h-4" /></button>
                                         <button onClick={() => handleDelete(c.code)} className="p-2 bg-red-50 text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                                     </td>
                                 </tr>
                             ))}
+                            {clients.length === 0 && !isLoading && (
+                                <tr><td colSpan={4} className="px-6 py-10 text-center text-slate-400 italic">No hay clientes registrados.</td></tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -227,23 +246,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                             <button onClick={() => setTestResult(null)}><X className="w-5 h-5"/></button>
                         </div>
                         <div className="p-6 overflow-y-auto space-y-4">
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-slate-50 p-3 rounded-lg"><p className="text-[10px] font-bold text-slate-400">UID</p><p className="font-mono text-lg">{testResult.uid}</p></div>
-                                <div className="bg-slate-50 p-3 rounded-lg"><p className="text-[10px] font-bold text-slate-400">Company ID</p><p className="font-mono text-lg text-brand-600">{testResult.companyId}</p></div>
-                            </div>
-                            <button onClick={handleSimulateReport} className="w-full bg-slate-800 text-white p-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
-                                {isSimulating ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Smartphone className="w-4 h-4" />} Simular Reporte Diario
-                            </button>
-                            {simulationResult && (
-                                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 relative">
-                                    <div className="bg-white rounded p-3 text-xs font-mono whitespace-pre-wrap">{simulationResult}</div>
-                                    <button onClick={() => copyToClipboard(simulationResult)} className="absolute top-6 right-6 p-1 bg-white shadow-sm border rounded"><Copy className="w-3 h-3"/></button>
+                            {testResult.status === 'success' ? (
+                                <>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="bg-slate-50 p-3 rounded-lg"><p className="text-[10px] font-bold text-slate-400">UID ODOO</p><p className="font-mono text-lg">{testResult.uid}</p></div>
+                                        <div className="bg-slate-50 p-3 rounded-lg"><p className="text-[10px] font-bold text-slate-400">COMPANY ID</p><p className="font-mono text-lg text-brand-600">{testResult.companyId}</p></div>
+                                    </div>
+                                    <button onClick={handleSimulateReport} className="w-full bg-slate-800 text-white p-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
+                                        {isSimulating ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Smartphone className="w-4 h-4" />} Simular Reporte Diario
+                                    </button>
+                                    {simulationResult && (
+                                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 relative">
+                                            <div className="bg-white rounded p-3 text-xs font-mono whitespace-pre-wrap">{simulationResult}</div>
+                                            <button onClick={() => copyToClipboard(simulationResult)} className="absolute top-6 right-6 p-1 bg-white shadow-sm border rounded hover:text-brand-600"><Copy className="w-3 h-3"/></button>
+                                        </div>
+                                    )}
+                                    <div className="border-t pt-4">
+                                        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Integración con n8n</p>
+                                        <button onClick={() => copyWorkflow('daily')} className="w-full bg-emerald-600 text-white px-3 py-2.5 rounded-lg font-bold text-xs uppercase flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"><Workflow className="w-3 h-3"/> Copiar JSON Flujo Diario</button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center p-4">
+                                    <p className="text-red-500 font-bold mb-2">Error de Conexión</p>
+                                    <p className="text-xs text-slate-500">{testResult.message}</p>
                                 </div>
                             )}
-                            <div className="border-t pt-4">
-                                <p className="text-xs font-bold text-slate-400 uppercase mb-2">Importar a n8n</p>
-                                <button onClick={() => copyWorkflow('daily')} className="w-full bg-emerald-600 text-white px-3 py-2.5 rounded-lg font-bold text-xs uppercase flex items-center justify-center gap-2"><Workflow className="w-3 h-3"/> Copiar JSON Flujo Diario</button>
-                            </div>
                         </div>
                         <div className="bg-slate-50 p-4 flex justify-end"><button onClick={() => setTestResult(null)} className="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold">Cerrar</button></div>
                     </div>
@@ -251,7 +279,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             )}
 
             {isEditing && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 overflow-y-auto">
                     <div className="bg-white rounded-2xl w-full max-w-xl p-6 shadow-2xl animate-in zoom-in">
                         <div className="flex justify-between mb-4"><h3 className="font-bold text-lg">{originalCode ? 'Editar' : 'Nuevo'} Cliente</h3><button onClick={() => setIsEditing(false)}><X/></button></div>
                         <form onSubmit={handleSaveClient} className="grid grid-cols-2 gap-4">
@@ -263,13 +291,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                             <input type="text" placeholder="DB" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.db} onChange={e => setCurrentClient({...currentClient, db: e.target.value})} required/>
                             <input type="text" placeholder="Usuario Técnico" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.username} onChange={e => setCurrentClient({...currentClient, username: e.target.value})} required/>
                             <input type="text" placeholder="API Key" className="w-full col-span-2 p-2 bg-slate-50 border rounded font-mono" value={currentClient.apiKey} onChange={e => setCurrentClient({...currentClient, apiKey: e.target.value})} required/>
-                            <div className="col-span-2 flex gap-2 pt-4"><button type="button" onClick={() => setIsEditing(false)} className="flex-1 p-3 bg-slate-100 rounded-xl font-bold">Cancelar</button><button type="submit" className="flex-1 p-3 bg-brand-600 text-white rounded-xl font-bold">Guardar</button></div>
+                            <div className="col-span-2 flex gap-2 pt-4"><button type="button" onClick={() => setIsEditing(false)} className="flex-1 p-3 bg-slate-100 rounded-xl font-bold">Cancelar</button><button type="submit" disabled={isLoading} className="flex-1 p-3 bg-brand-600 text-white rounded-xl font-bold disabled:opacity-50">{isLoading ? 'Guardando...' : 'Guardar'}</button></div>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* Added: UI for changing admin password which was missing from JSX */}
             {isPasswordModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
                     <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in">
