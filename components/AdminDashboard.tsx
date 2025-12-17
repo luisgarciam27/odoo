@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow, RefreshCw, Database, Calendar, Server } from 'lucide-react';
+import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow, RefreshCw, Database, Calendar, Server, PlayCircle, Smartphone } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { DAILY_WORKFLOW_JSON, MONTHLY_WORKFLOW_JSON } from '../services/n8nTemplate';
 
@@ -23,6 +23,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     // Test Connection State (Modal)
     const [isModalTesting, setIsModalTesting] = useState(false);
     const [modalTestMessage, setModalTestMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
+    // Simulation State
+    const [isSimulating, setIsSimulating] = useState(false);
+    const [simulationResult, setSimulationResult] = useState<string | null>(null);
 
     // Form States
     const [currentClient, setCurrentClient] = useState<ClientConfig>({
@@ -140,6 +144,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const handleTestConnection = async (client: ClientConfig) => {
         setTestingClient(client.code);
         setTestResult(null);
+        setSimulationResult(null); // Reset simulation
 
         try {
             const odoo = new OdooClient(client.url, client.db, true); // useProxy = true
@@ -175,6 +180,69 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             });
         } finally {
             setTestingClient(null);
+        }
+    };
+
+    // --- Simular Reporte Diario ---
+    const handleSimulateReport = async () => {
+        if (!testResult || !testResult.clientConfig) return;
+        
+        setIsSimulating(true);
+        setSimulationResult(null);
+        const client = testResult.clientConfig as ClientConfig;
+
+        try {
+            const odoo = new OdooClient(client.url, client.db, true);
+            // Reutilizamos el UID si está disponible, o re-autenticamos si fuera necesario, 
+            // pero ya tenemos el UID validado en testResult.uid
+            const uid = testResult.uid;
+
+            // Logica equivalente a n8n para "Ayer"
+            const date = new Date();
+            date.setDate(date.getDate() - 1);
+            // Formato YYYY-MM-DD
+            const yesterdayStr = date.toLocaleDateString('en-CA'); 
+
+            // Filtro Odoo
+            const domain = [
+                ['stop_at', '>=', `${yesterdayStr} 00:00:00`],
+                ['stop_at', '<=', `${yesterdayStr} 23:59:59`],
+                ['state', '=', 'closed']
+            ];
+
+            const fields = ['config_id', 'total_payments_amount', 'cash_register_difference'];
+            
+            const sessions = await odoo.searchRead(uid, client.apiKey, 'pos.session', domain, fields);
+
+            let totalVenta = 0;
+            let msg = `📊 *REPORTE DIARIO (SIMULACRO)*\n🏢 ${client.code}\n📅 ${yesterdayStr}\n\n`;
+
+            if (!sessions || sessions.length === 0) {
+                msg += "ℹ️ Sin cierres registrados para la fecha.";
+            } else {
+                sessions.forEach((s: any) => {
+                    // Odoo returns [id, name] for Many2one fields
+                    const tienda = Array.isArray(s.config_id) ? s.config_id[1] : 'Tienda Desconocida';
+                    const venta = s.total_payments_amount || 0;
+                    const dif = s.cash_register_difference || 0;
+                    
+                    totalVenta += venta;
+                    
+                    msg += `🏪 *${tienda}*\n💰 Venta: S/ ${venta.toFixed(2)}\n`;
+                    if(Math.abs(dif) > 0.01) msg += `🔴 Dif: S/ ${dif.toFixed(2)}\n`;
+                    msg += `----------------\n`;
+                });
+                msg += `\n🏆 *TOTAL: S/ ${totalVenta.toFixed(2)}*`;
+                msg += `\n\n🔎 *Ver Detalle:* https://odoo-lemon.vercel.app/`;
+            }
+
+            setSimulationResult(msg);
+
+        } catch (error: any) {
+            console.error(error);
+            setSimulationResult(`❌ Error en simulación: ${error.message}`);
+        } finally {
+            setIsSimulating(false);
         }
     };
 
@@ -357,6 +425,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                             <p className="font-mono text-sm font-bold text-emerald-800 mt-1">{testResult.whatsappNumbers}</p>
                                             <button onClick={() => copyToClipboard(testResult.whatsappNumbers)} className="absolute top-2 right-2 p-1 text-emerald-400 hover:text-emerald-700"><Copy className="w-4 h-4"/></button>
                                         </div>
+                                    </div>
+
+                                    {/* SIMULADOR DE MENSAJE */}
+                                    <div className="border-t border-slate-100 pt-4">
+                                        <button 
+                                            onClick={handleSimulateReport}
+                                            disabled={isSimulating}
+                                            className="w-full bg-slate-800 hover:bg-slate-900 text-white p-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all mb-4"
+                                        >
+                                            {isSimulating ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Smartphone className="w-4 h-4" />}
+                                            Simular Reporte Diario (Ver Preview)
+                                        </button>
+
+                                        {simulationResult && (
+                                            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 relative animate-in fade-in zoom-in duration-300">
+                                                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-2">Vista Previa WhatsApp</p>
+                                                <div className="bg-white rounded-lg p-3 shadow-sm border border-emerald-100 text-sm font-sans whitespace-pre-wrap text-slate-700 leading-relaxed">
+                                                    {simulationResult}
+                                                </div>
+                                                <button onClick={() => copyToClipboard(simulationResult)} className="absolute top-3 right-3 p-1.5 bg-white rounded-lg text-emerald-600 shadow-sm hover:text-emerald-800">
+                                                    <Copy className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* SECCIÓN JSON N8N */}
