@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClients, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson } from 'lucide-react';
+import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
+import { N8N_WORKFLOW_TEMPLATE } from '../services/n8nTemplate';
 
 interface AdminDashboardProps {
     onLogout: () => void;
@@ -147,7 +148,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         alert(`Copiado al portapapeles`);
     };
 
-    // Generar JSON para n8n
+    // Generar JSON para Configuración de Empresa
     const generateN8nJson = () => {
         if (!testResult || testResult.status !== 'success') return '';
         
@@ -162,7 +163,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             }
         };
         
-        return JSON.stringify(jsonObject, null, 2); // Indentación de 2 espacios
+        return JSON.stringify(jsonObject, null, 2); 
+    };
+
+    // Copiar Flujo Maestro Completo
+    const copyWorkflowTemplate = () => {
+        const template = JSON.stringify(N8N_WORKFLOW_TEMPLATE, null, 2);
+        copyToClipboard(template);
     };
 
     return (
@@ -324,24 +331,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
                                     {/* SECCIÓN JSON N8N */}
                                     <div className="border-t border-slate-100 pt-4">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2">
-                                                <FileJson className="w-4 h-4 text-brand-500"/> Configuración para n8n
-                                            </h4>
+                                        <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-3">
+                                            <FileJson className="w-4 h-4 text-brand-500"/> Integración con n8n
+                                        </h4>
+                                        
+                                        <div className="flex gap-2">
                                             <button 
                                                 onClick={() => copyToClipboard(generateN8nJson())} 
-                                                className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded font-bold uppercase transition-colors flex items-center gap-1"
+                                                className="flex-1 text-[11px] bg-slate-900 hover:bg-slate-800 text-white px-3 py-2.5 rounded-lg font-bold uppercase transition-colors flex items-center justify-center gap-2"
                                             >
-                                                <Copy className="w-3 h-3"/> Copiar JSON
+                                                <Copy className="w-3 h-3"/> Copiar Config
+                                            </button>
+                                            <button 
+                                                onClick={copyWorkflowTemplate} 
+                                                className="flex-1 text-[11px] bg-brand-600 hover:bg-brand-700 text-white px-3 py-2.5 rounded-lg font-bold uppercase transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Workflow className="w-3 h-3"/> Copiar Flujo n8n
                                             </button>
                                         </div>
-                                        <div className="bg-slate-900 rounded-xl p-3 relative group overflow-hidden">
-                                            <pre className="text-[10px] text-emerald-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">
-                                                {generateN8nJson()}
-                                            </pre>
-                                        </div>
-                                        <p className="text-[10px] text-slate-400 mt-2">
-                                            Copia este bloque y pégalo dentro del array del nodo <strong>"Code - Configuración Maestra"</strong> en tu flujo de n8n.
+
+                                        <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                                            <strong>Config:</strong> Pégalo dentro del nodo "Configuración Maestra".<br/>
+                                            <strong>Flujo n8n:</strong> Pégalo (Ctrl+V) en el lienzo de n8n para crear todo el flujo corregido.
                                         </p>
                                     </div>
 
