@@ -1,3 +1,4 @@
+
 // CONFIGURACIÓN COMÚN
 const SUPABASE_URL = "https://ogopzhmsjnotuntfimpx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nb3B6aG1zam5vdHVudGZpbXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MjcwNjksImV4cCI6MjA4MTUwMzA2OX0.z9rcjc9ToplMYhLKQQl0iuKYc87hm1JAN2O1yfv3lmE";
@@ -49,6 +50,7 @@ const url = data.odoo_url;
 const db = data.odoo_db;
 const apiKey = data.odoo_api_key;
 const targetPhone = data.whatsapp_numeros;
+const companyFilter = data.filtro_compania;
 
 // FECHA: AYER
 const date = new Date();
@@ -56,6 +58,16 @@ date.setDate(date.getDate() - 1);
 const options = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };
 const formatter = new Intl.DateTimeFormat('en-CA', options);
 const yesterdayStr = formatter.format(date);
+
+// Construir Filtro de Compañía si existe
+let companyFilterXml = '';
+if (companyFilter && companyFilter !== 'ALL') {
+    companyFilterXml = \`<value><array><data>
+        <value><string>company_id.name</string></value>
+        <value><string>ilike</string></value>
+        <value><string>\${companyFilter}</string></value>
+    </data></array></value>\`;
+}
 
 // XML-RPC para buscar sesiones cerradas ayer
 const xml = \`<?xml version="1.0"?>
@@ -84,6 +96,7 @@ const xml = \`<?xml version="1.0"?>
             <value><string>=</string></value>
             <value><string>closed</string></value>
         </data></array></value>
+        \${companyFilterXml}
       </data></array></value>
     </param>
     <param>

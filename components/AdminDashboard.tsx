@@ -204,11 +204,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             const yesterdayStr = date.toLocaleDateString('en-CA'); 
 
             // Filtro Odoo
-            const domain = [
+            const domain: any[] = [
                 ['stop_at', '>=', `${yesterdayStr} 00:00:00`],
                 ['stop_at', '<=', `${yesterdayStr} 23:59:59`],
                 ['state', '=', 'closed']
             ];
+
+            // --- CORRECCIÓN CRÍTICA: Filtrar por Company ID si existe ---
+            if (testResult.companyId && testResult.companyId !== 'NO ENCONTRADO') {
+                domain.push(['company_id', '=', testResult.companyId]);
+            }
 
             const fields = ['config_id', 'total_payments_amount', 'cash_register_difference'];
             
