@@ -59,9 +59,10 @@ const options = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', d
 const formatter = new Intl.DateTimeFormat('en-CA', options);
 const yesterdayStr = formatter.format(date);
 
-// Construir Filtro de Compañía si existe
+// Construir Filtro de Compañía si existe (CAMBIO 1)
 let companyFilterXml = '';
 if (companyFilter && companyFilter !== 'ALL') {
+    // Usamos 'ilike' en company_id.name para filtrar por el nombre configurado
     companyFilterXml = \`<value><array><data>
         <value><string>company_id.name</string></value>
         <value><string>ilike</string></value>
@@ -186,7 +187,7 @@ rawSessions.forEach(s => {
     }
 });
 
-// Construir XML para consultar Pagos (pos.payment)
+// Construir XML para consultar Pagos (pos.payment) (CAMBIO 2)
 // Filtrar por session_id IN [ids]
 let idsXml = '';
 sessionIds.forEach(id => {
@@ -304,7 +305,7 @@ sessions.forEach(s => {
     
     msg += \`🏪 *\${s.tienda}*\\n💰 Venta: S/ \${s.venta.toFixed(2)}\\n\`;
     
-    // Agrupar Pagos
+    // Agrupar Pagos y Agregar al Mensaje (CAMBIO 2)
     const sessionPayments = payments.filter(p => p.sessionId === s.id);
     const methods = {};
     sessionPayments.forEach(p => {
