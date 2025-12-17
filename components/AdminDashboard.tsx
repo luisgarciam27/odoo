@@ -231,6 +231,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                     </td>
                                 </tr>
                             ))}
+                            {clients.length === 0 && !isLoading && (
+                                <tr><td colSpan={4} className="px-6 py-10 text-center text-slate-400">No hay clientes configurados.</td></tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
