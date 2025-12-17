@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow, RefreshCw, Database, Calendar } from 'lucide-react';
+import { Trash2, Edit, Plus, Save, X, LogOut, Key, Shield, Building2, Eye, EyeOff, Activity, CheckCircle, AlertTriangle, Copy, MessageSquare, FileJson, Workflow, RefreshCw, Database, Calendar, Server } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { DAILY_WORKFLOW_JSON, MONTHLY_WORKFLOW_JSON } from '../services/n8nTemplate';
 
@@ -16,9 +16,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
     
-    // Test Connection State
+    // Test Connection State (Main Dashboard)
     const [testingClient, setTestingClient] = useState<string | null>(null);
     const [testResult, setTestResult] = useState<any | null>(null);
+
+    // Test Connection State (Modal)
+    const [isModalTesting, setIsModalTesting] = useState(false);
+    const [modalTestMessage, setModalTestMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
     // Form States
     const [currentClient, setCurrentClient] = useState<ClientConfig>({
@@ -77,12 +81,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const handleEdit = (client: ClientConfig) => {
         setCurrentClient(client);
         setOriginalCode(client.code);
+        setModalTestMessage(null);
         setIsEditing(true);
     };
 
     const resetForm = () => {
         setCurrentClient({ code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: '' });
         setOriginalCode(null);
+        setModalTestMessage(null);
     };
 
     const handleChangePassword = (e: React.FormEvent) => {
@@ -109,7 +115,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         setShowApiKey(prev => ({ ...prev, [code]: !prev[code] }));
     };
 
-    // --- Test Connection ---
+    // --- Test Connection (Modal) ---
+    const handleModalTest = async () => {
+        if (!currentClient.url || !currentClient.db || !currentClient.username || !currentClient.apiKey) {
+            setModalTestMessage({type: 'error', text: 'Completa todos los campos de conexión (URL, DB, User, API Key)'});
+            return;
+        }
+
+        setIsModalTesting(true);
+        setModalTestMessage(null);
+
+        try {
+            const odoo = new OdooClient(currentClient.url, currentClient.db, true);
+            const uid = await odoo.authenticate(currentClient.username, currentClient.apiKey);
+            setModalTestMessage({type: 'success', text: `¡Conexión Exitosa! UID: ${uid}`});
+        } catch (error: any) {
+            setModalTestMessage({type: 'error', text: error.message || "Error al conectar con Odoo."});
+        } finally {
+            setIsModalTesting(false);
+        }
+    };
+
+    // --- Test Connection (Main List) ---
     const handleTestConnection = async (client: ClientConfig) => {
         setTestingClient(client.code);
         setTestResult(null);
@@ -388,9 +415,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
             {/* Modal Edit/Create */}
             {isEditing && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
                             <h3 className="font-bold text-lg text-slate-800">{originalCode ? 'Editar Cliente' : 'Nuevo Cliente'}</h3>
                             <button onClick={() => setIsEditing(false)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
                         </div>
@@ -437,6 +464,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                 </div>
                             </div>
                             
+                            <div className="col-span-1 md:col-span-2 border-t border-slate-100 pt-4 mt-2">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                    <Server className="w-3 h-3" /> Credenciales Odoo
+                                </p>
+                            </div>
+
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Base de Datos (DB)</label>
                                 <input 
@@ -485,7 +518,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                 />
                             </div>
 
-                            <div className="col-span-1 md:col-span-2 pt-4 flex gap-3">
+                            {/* Botón de Prueba en el Modal */}
+                            <div className="col-span-1 md:col-span-2 flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                <div className="flex-1 mr-4">
+                                     {modalTestMessage ? (
+                                        <div className={`text-xs font-bold flex items-center gap-2 ${modalTestMessage.type === 'success' ? 'text-emerald-600' : 'text-red-500'}`}>
+                                            {modalTestMessage.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                                            {modalTestMessage.text}
+                                        </div>
+                                     ) : (
+                                         <p className="text-xs text-slate-400">Verifica las credenciales antes de guardar.</p>
+                                     )}
+                                </div>
+                                <button 
+                                    type="button" 
+                                    onClick={handleModalTest}
+                                    disabled={isModalTesting}
+                                    className="text-xs font-bold uppercase bg-white border border-slate-200 hover:border-brand-300 text-slate-600 hover:text-brand-600 px-3 py-2 rounded-lg transition-all flex items-center gap-2"
+                                >
+                                    {isModalTesting ? <Activity className="w-3 h-3 animate-spin"/> : <Server className="w-3 h-3" />}
+                                    Probar Conexión
+                                </button>
+                            </div>
+
+                            <div className="col-span-1 md:col-span-2 pt-2 flex gap-3">
                                 <button type="button" disabled={isLoading} onClick={() => setIsEditing(false)} className="flex-1 py-3 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50">Cancelar</button>
                                 <button type="submit" disabled={isLoading} className="flex-1 py-3 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-md flex items-center justify-center gap-2">
                                     {isLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4" />} Guardar Cliente
