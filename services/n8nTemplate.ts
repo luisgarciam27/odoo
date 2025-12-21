@@ -6,10 +6,10 @@ export const DAILY_WORKFLOW_JSON = {
     {
       "parameters": {
         "rule": {
-          "interval": [{ "field": "cronExpression", "expression": "0 6 * * *" }]
+          "interval": [{ "field": "cronExpression", "expression": "30 12 * * *" }]
         }
       },
-      "name": "Schedule - 6:00 AM",
+      "name": "Schedule - 12:30 PM",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [400, 300]
@@ -109,7 +109,7 @@ export const DAILY_WORKFLOW_JSON = {
     }
   ],
   "connections": {
-    "Schedule - 6:00 AM": { "main": [[{ "node": "GET Empresas Activas", "type": "main", "index": 0 }]] },
+    "Schedule - 12:30 PM": { "main": [[{ "node": "GET Empresas Activas", "type": "main", "index": 0 }]] },
     "GET Empresas Activas": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
     "Split In Batches": { "main": [[{ "node": "Configuracion", "type": "main", "index": 0 }]] },
     "Configuracion": { "main": [[{ "node": "Odoo Auth", "type": "main", "index": 0 }]] },
