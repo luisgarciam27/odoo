@@ -3,7 +3,6 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, Area, AreaChart 
 } from 'recharts';
-// Fix: Added 'X' to the lucide-react imports to resolve the missing icon error.
 import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Store, Download, FileSpreadsheet, ArrowUp, ArrowDown, Receipt, Target, PieChart as PieChartIcon, MapPin, CreditCard, Wallet, CalendarRange, Zap, X } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
@@ -408,109 +407,24 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       );
   };
 
-  const renderGeneralView = () => (
-      <>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-brand-500 to-brand-600'} rounded-2xl shadow-lg p-6 flex flex-col justify-between hover:scale-[1.02] transition-transform relative overflow-hidden group`}>
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
-                <div className="flex items-center justify-between mb-4 relative z-10">
-                    <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
-                        {isRentabilidad ? <DollarSign className="w-6 h-6 text-white" /> : <TrendingUp className="w-6 h-6 text-white" />}
-                    </div>
-                    <VariacionBadge val={kpis.variacionVentas} />
-                </div>
-                <div className="relative z-10">
-                    <p className="text-white/80 text-sm font-medium tracking-wide">Venta Total (con IGV)</p>
-                    <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">S/ {kpis.totalVentas}</h3>
-                </div>
-            </div>
-            <div className={`rounded-2xl shadow-md border p-6 flex flex-col justify-between hover:scale-[1.02] transition-all bg-white ${isRentabilidad ? 'border-brand-200' : 'border-slate-100'}`}>
-                <div className="flex items-center justify-between mb-4">
-                    <div className={`p-2.5 rounded-xl ${isRentabilidad ? 'bg-brand-100 text-brand-600' : 'bg-blue-50 text-blue-600'}`}>
-                        {isRentabilidad ? <TrendingUp className="w-6 h-6" /> : <Receipt className="w-6 h-6" />}
-                    </div>
-                    {isRentabilidad && <VariacionBadge val={kpis.variacionMargen} />}
-                </div>
-                <div>
-                    <p className="text-slate-500 text-sm font-medium">{isRentabilidad ? 'Ganancia Neta' : 'Ticket Promedio Est.'}</p>
-                    <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-600' : 'text-slate-800'}`}>S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}</h3>
-                </div>
-            </div>
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="p-2.5 bg-violet-50 rounded-xl text-violet-600"><Package className="w-6 h-6" /></div>
-                    <VariacionBadge val={kpis.variacionUnidades} />
-                </div>
-                <div><p className="text-slate-500 text-sm font-medium">Items Procesados</p><h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3></div>
-            </div>
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="p-2.5 bg-orange-50 rounded-xl text-orange-600"><Store className="w-6 h-6" /></div>
-                </div>
-                <div><p className="text-slate-500 text-sm font-medium">Margen Promedio %</p><h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.margenPromedio}%</h3></div>
-            </div>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ArrowUpRight className="w-5 h-5 text-brand-500"/> Tendencia de Ventas (Diario)</h3>
-                <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                        <defs><linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={chartColor} stopOpacity={0.3}/><stop offset="95%" stopColor={chartColor} stopOpacity={0}/></linearGradient></defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                        <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dy={10} />
-                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
-                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} contentStyle={{borderRadius: '12px', border: 'none'}} />
-                        <Area type="monotone" dataKey={chartDataKey} stroke={chartColor} fillOpacity={1} fill="url(#colorVentas)" strokeWidth={2} />
-                    </AreaChart>
-                </ResponsiveContainer>
-                </div>
-            </div>
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                    {view === 'ventas' ? <CreditCard className="w-5 h-5 text-emerald-500"/> : <PieChartIcon className="w-5 h-5 text-violet-500"/>}
-                    {view === 'ventas' ? 'Distribución por Método de Pago' : 'Participación por Categoría'}
-                </h3>
-                <div className="h-[300px] w-full flex">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie data={view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria} cx="50%" cy="50%" innerRadius={70} outerRadius={90} fill="#8884d8" paddingAngle={3} dataKey="value" stroke="#fff" strokeWidth={3}>
-                                {(view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria).map((_, index) => ( <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} /> ))}
-                            </Pie>
-                            <Tooltip formatter={(value: number) => `S/ ${value.toFixed(2)}`} contentStyle={{borderRadius: '12px', border: 'none'}} />
-                            <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '11px'}} />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-        </div>
-        <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
-            <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><MapPin className="w-5 h-5 text-brand-500"/> Comparativa por Punto de Venta</h3>
-            <div className="h-[350px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={comparativaSedes} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dy={10} />
-                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
-                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, '']} contentStyle={{borderRadius: '12px', border: 'none'}} />
-                        <Legend wrapperStyle={{paddingTop: '20px'}} />
-                        <Bar dataKey="ventas" name="Venta Total" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="margen" name="Ganancia" fill="#84cc16" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-      </>
-  );
-
   return (
     <div className="p-4 md:p-6 lg:p-8 font-sans w-full relative pb-20 text-slate-700">
-      <OdooConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} initialConfig={{ url: session?.url || '', db: session?.db || '', username: session?.username || '', apiKey: session?.apiKey || '' }} onSave={() => setIsConfigOpen(false)} />
+      <OdooConfigModal 
+        isOpen={isConfigOpen} 
+        onClose={() => setIsConfigOpen(false)} 
+        initialConfig={session ? { url: session.url, db: session.db, username: session.username, apiKey: session.apiKey } : { url: '', db: '', username: '', apiKey: '' }} 
+        onSave={() => setIsConfigOpen(false)} 
+      />
+      
       {loading && (
           <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-50 flex flex-col items-center justify-center h-screen fixed">
-              <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 border border-slate-100 relative z-10"><RefreshCw className="w-8 h-8 animate-spin text-brand-500" /><span className="font-medium text-slate-600">Sincronizando con Odoo...</span></div>
+              <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 border border-slate-100 relative z-10">
+                <RefreshCw className="w-8 h-8 animate-spin text-brand-500" />
+                <span className="font-medium text-slate-600">Sincronizando con Odoo...</span>
+              </div>
           </div>
       )}
+
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-2">
            <div>
@@ -525,12 +439,23 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs uppercase shadow-sm ${session ? 'bg-brand-50 text-brand-700 border-brand-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{session ? 'Online' : 'Demo'}</div>
            </div>
         </div>
+
         {error && ( <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex gap-3 items-center shadow-sm"><AlertCircle className="w-5 h-5 text-red-500" /><p className="text-sm">{error}</p></div> )}
+
         <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-5 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-500"></div>
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap gap-4 items-end border-b border-slate-100 pb-4">
-                <div className="w-full md:w-auto"><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Punto de Venta</label><select value={filtros.sedeSeleccionada} onChange={(e) => setFiltros({...filtros, sedeSeleccionada: e.target.value})} className="w-full md:w-56 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500">{sedes.map(sede => <option key={sede} value={sede}>{sede}</option>)}</select></div>
+                <div className="w-full md:w-auto">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Punto de Venta</label>
+                    <select 
+                        value={filtros.sedeSeleccionada} 
+                        onChange={(e) => setFiltros({...filtros, sedeSeleccionada: e.target.value})} 
+                        className="w-full md:w-56 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                    >
+                        {sedes.map(sede => <option key={sede} value={sede}>{sede}</option>)}
+                    </select>
+                </div>
             </div>
             <div className="flex flex-wrap gap-6 items-center">
                 <div>
@@ -558,6 +483,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             </div>
           </div>
         </div>
+
         {view === 'pagos' ? (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -595,7 +521,103 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 </div>
               ))}
           </div>
-        ) : renderGeneralView()}
+        ) : (
+            <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-brand-500 to-brand-600'} rounded-2xl shadow-lg p-6 flex flex-col justify-between hover:scale-[1.02] transition-transform relative overflow-hidden group`}>
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
+                        <div className="flex items-center justify-between mb-4 relative z-10">
+                            <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
+                                {isRentabilidad ? <DollarSign className="w-6 h-6 text-white" /> : <TrendingUp className="w-6 h-6 text-white" />}
+                            </div>
+                            <VariacionBadge val={kpis.variacionVentas} />
+                        </div>
+                        <div className="relative z-10">
+                            <p className="text-white/80 text-sm font-medium tracking-wide">Venta Total (con IGV)</p>
+                            <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">S/ {kpis.totalVentas}</h3>
+                        </div>
+                    </div>
+                    <div className={`rounded-2xl shadow-md border p-6 flex flex-col justify-between hover:scale-[1.02] transition-all bg-white ${isRentabilidad ? 'border-brand-200' : 'border-slate-100'}`}>
+                        <div className="flex items-center justify-between mb-4">
+                            <div className={`p-2.5 rounded-xl ${isRentabilidad ? 'bg-brand-100 text-brand-600' : 'bg-blue-50 text-blue-600'}`}>
+                                {isRentabilidad ? <TrendingUp className="w-6 h-6" /> : <Receipt className="w-6 h-6" />}
+                            </div>
+                            {isRentabilidad && <VariacionBadge val={kpis.variacionMargen} />}
+                        </div>
+                        <div>
+                            <p className="text-slate-500 text-sm font-medium">{isRentabilidad ? 'Ganancia Neta' : 'Ticket Promedio Est.'}</p>
+                            <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-600' : 'text-slate-800'}`}>S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}</h3>
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="p-2.5 bg-violet-50 rounded-xl text-violet-600"><Package className="w-6 h-6" /></div>
+                            <VariacionBadge val={kpis.variacionUnidades} />
+                        </div>
+                        <div><p className="text-slate-500 text-sm font-medium">Items Procesados</p><h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3></div>
+                    </div>
+                    <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="p-2.5 bg-orange-50 rounded-xl text-orange-600"><Store className="w-6 h-6" /></div>
+                        </div>
+                        <div><p className="text-slate-500 text-sm font-medium">Margen Promedio %</p><h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.margenPromedio}%</h3></div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                    <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
+                        <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ArrowUpRight className="w-5 h-5 text-brand-500"/> Tendencia de Ventas (Diario)</h3>
+                        <div className="h-[300px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                    <defs><linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={chartColor} stopOpacity={0.3}/><stop offset="95%" stopColor={chartColor} stopOpacity={0}/></linearGradient></defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                                    <XAxis dataKey="fecha" tickFormatter={(v) => new Date(v + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dy={10} />
+                                    <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dx={-10} tickFormatter={(v) => `S/${v}`} />
+                                    <Tooltip formatter={(val: number) => [`S/ ${Number(val).toFixed(2)}`, chartLabel]} contentStyle={{borderRadius: '12px', border: 'none'}} />
+                                    <Area type="monotone" dataKey={chartDataKey} stroke={chartColor} fillOpacity={1} fill="url(#colorVentas)" strokeWidth={2} />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
+                        <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                            {view === 'ventas' ? <CreditCard className="w-5 h-5 text-emerald-500"/> : <PieChartIcon className="w-5 h-5 text-violet-500"/>}
+                            {view === 'ventas' ? 'Distribución por Método de Pago' : 'Participación por Categoría'}
+                        </h3>
+                        <div className="h-[300px] w-full flex">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria} cx="50%" cy="50%" innerRadius={70} outerRadius={90} fill="#8884d8" paddingAngle={3} dataKey="value" stroke="#fff" strokeWidth={3}>
+                                        {(view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria).map((_, index) => ( <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} /> ))}
+                                    </Pie>
+                                    <Tooltip formatter={(val: number) => `S/ ${val.toFixed(2)}`} contentStyle={{borderRadius: '12px', border: 'none'}} />
+                                    <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '11px'}} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><MapPin className="w-5 h-5 text-brand-500"/> Comparativa por Punto de Venta</h3>
+                    <div className="h-[350px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={comparativaSedes} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="name" stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dy={10} />
+                                <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dx={-10} tickFormatter={(val) => `S/${val}`} />
+                                <Tooltip formatter={(val: number) => [`S/ ${Number(val).toFixed(2)}`, '']} contentStyle={{borderRadius: '12px', border: 'none'}} />
+                                <Legend wrapperStyle={{paddingTop: '20px'}} />
+                                <Bar dataKey="ventas" name="Venta Total" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="margen" name="Ganancia" fill="#84cc16" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            </>
+        )}
+
         {((view !== 'pagos' && view !== 'comparativa') || drillDownSede) && (
             <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-6">

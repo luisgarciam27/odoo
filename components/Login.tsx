@@ -107,23 +107,37 @@ const Login: React.FC<LoginProps> = ({ onLogin, onAdminLogin }) => {
                 Plataforma de analítica inteligente para iluminar tus decisiones de negocio en tiempo real.
             </p>
         </div>
+        
         <div className="relative z-10 space-y-8">
             <h3 className="text-[10px] font-bold text-brand-600 uppercase tracking-widest mb-4 pb-2 border-b border-brand-100 inline-block">Proceso de Inicio</h3>
+            
             <div className="flex gap-4 items-start group">
                 <div className="w-8 h-8 rounded-lg bg-brand-50 border border-brand-100 text-brand-600 flex items-center justify-center font-mono text-sm font-bold shadow-sm group-hover:bg-brand-500 group-hover:text-white transition-all">01</div>
-                <div><h4 className="font-bold text-slate-800 mb-1">Conecta</h4><p className="text-sm text-slate-500 font-light">Ingresa tu código de sucursal para establecer conexión.</p></div>
+                <div>
+                  <h4 className="font-bold text-slate-800 mb-1">Conecta</h4>
+                  <p className="text-sm text-slate-500 font-light">Ingresa tu código de sucursal para establecer conexión.</p>
+                </div>
             </div>
+            
             <div className="flex gap-4 items-start group">
                 <div className="w-8 h-8 rounded-lg bg-brand-50 border border-brand-100 text-brand-600 flex items-center justify-center font-mono text-sm font-bold shadow-sm group-hover:bg-brand-500 group-hover:text-white transition-all">02</div>
-                <div><h4 className="font-bold text-slate-800 mb-1">Sincroniza</h4><p className="text-sm text-slate-500 font-light">Sincronizamos tus ventas e inventario de Odoo al instante.</p></div>
+                <div>
+                  <h4 className="font-bold text-slate-800 mb-1">Sincroniza</h4>
+                  <p className="text-sm text-slate-500 font-light">Sincronizamos tus ventas e inventario de Odoo al instante.</p>
+                </div>
             </div>
+
             <div className="flex gap-4 items-start group">
                 <div className="w-8 h-8 rounded-lg bg-brand-50 border border-brand-100 text-brand-600 flex items-center justify-center font-mono text-sm font-bold shadow-sm group-hover:bg-brand-500 group-hover:text-white transition-all">03</div>
-                <div><h4 className="font-bold text-slate-800 mb-1">Decide</h4><p className="text-sm text-slate-500 font-light">Visualiza métricas clave con claridad y toma el control.</p></div>
+                <div>
+                  <h4 className="font-bold text-slate-800 mb-1">Decide</h4>
+                  <p className="text-sm text-slate-500 font-light">Visualiza métricas clave con claridad y toma el control.</p>
+                </div>
             </div>
         </div>
+
         <div className="mt-12 relative z-10 flex flex-col gap-3">
-            <p className="text-[10px] text-slate-400 font-mono opacity-70">&copy; 2025 LEMON BI Analytics v2.4 (Supabase)</p>
+            <p className="text-[10px] text-slate-400 font-mono opacity-70">&copy; 2025 LEMON BI Analytics v2.4</p>
             <a href="https://gaorsystem.vercel.app/" target="_blank" rel="noreferrer" className="flex items-center gap-2 group transition-all hover:scale-[1.02] origin-left">
                 <div className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
                     <Rocket className="w-6 h-6 text-violet-600 fill-emerald-500/20" />
@@ -135,6 +149,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onAdminLogin }) => {
             </a>
         </div>
       </div>
+
       <div className={`w-full md:w-1/2 lg:w-7/12 flex items-center justify-center p-6 md:p-12 relative transition-colors duration-500 ${isAdminMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
         <div className={`max-w-md w-full relative z-10 backdrop-blur-xl p-8 rounded-3xl shadow-xl border transition-all duration-500 ${isAdminMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white/80 border-white'}`}>
             <div className="mb-8 flex justify-between items-start">
