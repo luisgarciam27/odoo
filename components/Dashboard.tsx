@@ -1,8 +1,11 @@
+
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ScatterChart, Scatter, ZAxis, Area, AreaChart 
 } from 'recharts';
-import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin, CreditCard, Wallet, CalendarRange, Clock } from 'lucide-react';
+// Fix: Corrected 'zap' to 'Zap' in the lucide-react import to resolve the name error on line 803
+import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin, CreditCard, Wallet, CalendarRange, Clock, Zap } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal, { ConnectionConfig } from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
@@ -100,7 +103,7 @@ interface SortConfig {
   key: SortKey;
   direction: 'asc' | 'desc';
 }
-type FilterMode = 'mes' | 'anio' | 'custom';
+type FilterMode = 'hoy' | 'mes' | 'anio' | 'custom';
 
 const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const [ventasData, setVentasData] = useState<Venta[]>([]); 
@@ -110,26 +113,25 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'fecha', direction: 'desc' });
   const [drillDownSede, setDrillDownSede] = useState<string | null>(null);
 
-  // Estados de Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth(); 
 
-  const [filterMode, setFilterMode] = useState<FilterMode>('mes');
+  const [filterMode, setFilterMode] = useState<FilterMode>('hoy');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   
   const [dateRange, setDateRange] = useState({
-      start: new Date(currentYear, currentMonth, 1).toLocaleDateString('en-CA'),
-      end: new Date(currentYear, currentMonth + 1, 0).toLocaleDateString('en-CA')
+      start: new Date().toLocaleDateString('en-CA'),
+      end: new Date().toLocaleDateString('en-CA')
   });
 
   const [filtros, setFiltros] = useState<Filtros>({
     sedeSeleccionada: 'Todas',
     companiaSeleccionada: session?.companyName || 'Todas',
-    periodoSeleccionado: 'mes',
+    periodoSeleccionado: 'hoy',
     fechaInicio: '', 
     fechaFin: ''
   });
@@ -141,7 +143,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   useEffect(() => {
       let start = '';
       let end = '';
-      if (filterMode === 'mes') {
+      if (filterMode === 'hoy') {
+          const today = new Date().toLocaleDateString('en-CA');
+          start = today;
+          end = today;
+      }
+      else if (filterMode === 'mes') {
           const firstDay = new Date(selectedYear, selectedMonth, 1);
           const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
           start = firstDay.toLocaleDateString('en-CA'); 
@@ -162,8 +169,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       setError(null);
       setDrillDownSede(null); 
       
+      // Buffer amplio para asegurar traer datos correctos de zonas horarias
       const bufferStart = new Date(dateRange.start);
-      bufferStart.setDate(bufferStart.getDate() - 40); 
+      bufferStart.setDate(bufferStart.getDate() - 1); 
       const bufferEnd = new Date(dateRange.end);
       bufferEnd.setDate(bufferEnd.getDate() + 1);
       
@@ -181,12 +189,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
       const client = new OdooClient(session.url, session.db, session.useProxy);
       const modelOrder = 'pos.order';
-      // Added 'payment_ids' and 'session_id'
       const fieldsOrder = ['date_order', 'config_id', 'lines', 'company_id', 'user_id', 'pos_reference', 'name', 'payment_ids', 'session_id'];
 
       const domain: any[] = [
         ['state', '!=', 'cancel'], 
-        ['state', '!=', 'draft'],
         ['date_order', '>=', `${queryStart} 00:00:00`],
         ['date_order', '<=', `${queryEnd} 23:59:59`]
       ];
@@ -195,12 +201,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
           domain.push(['company_id', '=', session.companyId]);
       }
 
-      const options: any = { limit: 5000, order: 'date_order desc' }; 
+      const options: any = { limit: 10000, order: 'date_order desc' }; 
 
       try {
-          // --- CONTEXTO DE COMPAÑÍA CRÍTICO ---
-          // Definimos el contexto y lo pasamos a TODAS las llamadas (Ordenes, Líneas, Productos)
-          // Si no se pasa el contexto al leer 'product.product', Odoo devuelve el costo de la compañía por defecto (a veces 0).
           const context = session.companyId ? { allowed_company_ids: [session.companyId] } : {};
           if (session.companyId) options.context = context;
 
@@ -227,12 +230,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               return result;
           };
 
-          // Opciones auxiliares para llamadas secundarias que incluyen el contexto
           const subOptions = { context };
 
           // --- FETCH ORDER LINES ---
           const lineChunks = chunkArray(allLineIds, 1000);
           let allLinesData: any[] = [];
+          // CRITICO: Añadido price_subtotal_incl para coincidir con Odoo (incluye impuestos)
           const fieldsLine = ['product_id', 'qty', 'price_subtotal', 'price_subtotal_incl']; 
 
           for (const chunk of lineChunks) {
@@ -240,14 +243,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               if (linesData) allLinesData = allLinesData.concat(linesData);
           }
 
-          // --- FETCH PRODUCTS INFO (COST) ---
+          // --- FETCH PRODUCTS INFO ---
           const productIds = new Set(allLinesData.map((l: any) => Array.isArray(l.product_id) ? l.product_id[0] : null).filter(id => id));
           let productMap = new Map<number, {cost: number, cat: string}>();
 
           if (productIds.size > 0) {
               const productChunks = chunkArray(Array.from(productIds), 1000);
               for (const pChunk of productChunks) {
-                  // IMPORTANTE: Pasamos subOptions (con el contexto) para obtener el standard_price correcto de esta compañía
                   const productsData = await client.searchRead(session.uid, session.apiKey, 'product.product', [['id', 'in', pChunk]], ['standard_price', 'categ_id'], subOptions);
                   if (productsData) {
                       productsData.forEach((p: any) => {
@@ -297,28 +299,29 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                       if (line) {
                           const productId = Array.isArray(line.product_id) ? line.product_id[0] : 0;
                           const productName = Array.isArray(line.product_id) ? line.product_id[1] : 'Producto Desconocido';
-                          const ventaNeta = line.price_subtotal || 0; 
+                          
+                          // CORRECCIÓN: Usar price_subtotal_incl para igualar el tablero de Odoo
+                          const ventaBruta = line.price_subtotal_incl || 0; 
                           const prodInfo = productMap.get(productId) || { cost: 0, cat: 'Varios' };
                           const unitCost = prodInfo.cost; 
-                          // Costo directo desde Odoo (ahora con contexto corregido)
 
                           const costoTotal = unitCost * (line.qty || 1);
-                          const margen = ventaNeta - costoTotal; 
+                          const margen = ventaBruta - costoTotal; 
 
                           mappedVentas.push({
                               fecha: orderDate,
                               sede,
                               compania,
                               vendedor,
-                              sesion, // Nuevo campo
+                              sesion,
                               producto: productName,
                               categoria: prodInfo.cat,
                               metodoPago, 
                               cantidad: line.qty || 1,
-                              total: ventaNeta, 
+                              total: ventaBruta, 
                               costo: costoTotal,
                               margen,
-                              margenPorcentaje: ventaNeta > 0 ? ((margen / ventaNeta) * 100).toFixed(1) : '0.0',
+                              margenPorcentaje: ventaBruta > 0 ? ((margen / ventaBruta) * 100).toFixed(1) : '0.0',
                           });
                       }
                   });
@@ -486,16 +489,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       return Object.entries(agg).map(([name, ventas]) => ({ name, ventas })).sort((a, b) => b.ventas - a.ventas);
   }, [filteredData]);
 
-  // --- LOGICA ESPECIFICA PARA VISTA 'PAGOS' ---
   const pagosData = useMemo(() => {
       if (view !== 'pagos') return [];
-      
-      // Agrupar por Fecha + Sesión + Método (Para la tabla detalle)
-      // Aunque en la tabla queremos filas individuales, para los gráficos necesitamos agrupamientos.
-      
-      // Para tabla detallada, podemos usar filteredData directamente (mapeando campos) o agrupar ligeramente.
-      // Vamos a mostrar detalle por producto/linea que es lo que tenemos, pero con info de sesión.
-      
       return filteredData.map(v => ({
           fecha: v.fecha,
           fechaStr: v.fecha.toLocaleDateString('es-PE'),
@@ -511,7 +506,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const pagosPorDiaStack = useMemo(() => {
       if (view !== 'pagos') return [];
       const agg: Record<string, any> = {};
-      // Get all methods to ensure keys exist. Explicitly type Set<string> to avoid unknown type.
       const methods = new Set<string>(filteredData.map(v => v.metodoPago));
       
       filteredData.forEach(v => {
@@ -520,20 +514,17 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               agg[f] = { fecha: f };
               methods.forEach(m => agg[f][m] = 0);
           }
-          // Explicit casting to string to avoid index type errors if inference fails
           const metodo = v.metodoPago as string;
           agg[f][metodo] = (agg[f][metodo] || 0) + v.total;
       });
       return Object.values(agg).sort((a: any, b: any) => a.fecha.localeCompare(b.fecha));
   }, [filteredData, view]);
 
-  // --- LOGICA PARA VISTA DETALLE DE SEDE (Drilldown) ---
   const sessionsInSede = useMemo(() => {
       if (!drillDownSede) return [];
       const agg: Record<string, { sesion: string; responsable: string; total: number; transacciones: number; inicio: Date; fin: Date }> = {};
       
       filteredData.forEach(v => {
-          // Filtrar solo los datos de la sede seleccionada (aunque filteredData ya debería tenerlo por el efecto de drillDownSede, aseguramos)
           if(v.sede !== drillDownSede) return;
 
           if (!agg[v.sesion]) {
@@ -547,7 +538,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               };
           }
           agg[v.sesion].total += v.total;
-          agg[v.sesion].transacciones += 1; // Contamos líneas de producto como transacciones aproximadas o items
+          agg[v.sesion].transacciones += 1; 
           if (v.fecha < agg[v.sesion].inicio) agg[v.sesion].inicio = v.fecha;
           if (v.fecha > agg[v.sesion].fin) agg[v.sesion].fin = v.fecha;
       });
@@ -556,13 +547,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   }, [filteredData, drillDownSede]);
 
 
-  // --- REPORTES Y TABLAS ---
-
   const reporteProductos = useMemo(() => {
-    // Si estamos en vista pagos, usamos pagosData para la tabla, pero la lógica de paginación es compartida.
-    // Separaremos la lógica de tabla según la vista.
     if (view === 'pagos') {
-        return pagosData; // Usamos esto como fuente para la tabla de pagos
+        return pagosData;
     }
 
     const agrupado: Record<string, any> = {};
@@ -605,7 +592,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         });
   }, [filteredData, sortConfig, view, pagosData]);
 
-  // Use a generic source for pagination based on view
   const tableSource = view === 'pagos' ? pagosData : reporteProductos;
 
   useEffect(() => { setCurrentPage(1); }, [tableSource.length, sortConfig, view]);
@@ -641,161 +627,29 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const ANIOS = [2023, 2024, 2025];
-  // Vivid Lemon/Spring Palette
   const COLORS = ['#84cc16', '#0ea5e9', '#f59e0b', '#ec4899', '#8b5cf6', '#10b981', '#f43f5e', '#6366f1'];
 
   const handleDownloadPagos = () => {
     try {
         const wb = XLSX.utils.book_new();
         const titulo = [["REPORTE DE INGRESOS POR MÉTODO DE PAGO Y SESIÓN"]];
-        const fechaReporte = [["Fecha de Emisión:", new Date().toLocaleDateString()]];
-        const empresaInfo = [["Empresa:", session?.companyName || 'Todas']];
-        const rangoInfo = [["Periodo:", `${dateRange.start} al ${dateRange.end}`]];
-        const espacio = [[""]];
-
         const headers = [["FECHA", "SEDE", "SESIÓN CAJA", "MÉTODO DE PAGO", "PRODUCTO / CONCEPTO", "MONTO (S/)"]];
-        
-        const body = pagosData.map((row: any) => [
-            row.fechaStr,
-            row.sede,
-            row.sesion,
-            row.metodo,
-            row.producto,
-            row.total
-        ]);
-
-        const totalSum = pagosData.reduce((acc: number, r: any) => acc + r.total, 0);
-        const totalRow = [["TOTAL GENERAL", "", "", "", "", totalSum]];
-
-        // Resumen por Metodo
-        const resumenMetodo = ventasPorMetodoPago.map(m => [m.name, m.value]);
-        const headerResumen = [["RESUMEN POR MÉTODO", "TOTAL"]];
-
-        const dataMain = [...titulo, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio, ...headers, ...body, ...totalRow, ...espacio, ...espacio, ...headerResumen, ...resumenMetodo];
-        
-        const ws = XLSX.utils.aoa_to_sheet(dataMain);
-        ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
-
+        const body = pagosData.map((row: any) => [row.fechaStr, row.sede, row.sesion, row.metodo, row.producto, row.total]);
+        const ws = XLSX.utils.aoa_to_sheet([...titulo, [""], ...headers, ...body]);
         XLSX.utils.book_append_sheet(wb, ws, "Pagos Detalle");
         XLSX.writeFile(wb, `Reporte_Pagos_${dateRange.start}.xlsx`);
-
-    } catch (e) {
-        console.error(e);
-        alert("Error generando Excel de pagos.");
-    }
-  };
-
-  const handleDownloadComparativa = () => {
-    try {
-        const wb = XLSX.utils.book_new();
-
-        const titulo = [["REPORTE COMPARATIVO DE SEDES"]];
-        const fechaReporte = [["Fecha de Emisión:", new Date().toLocaleDateString()]];
-        const empresaInfo = [["Empresa:", session?.companyName || 'Todas']];
-        const rangoInfo = [["Periodo:", `${dateRange.start} al ${dateRange.end}`]];
-        const espacio = [[""]];
-
-        const headersResumen = [["SEDE / PUNTO DE VENTA", "TRANSACCIONES", "VENTA NETA (S/)", "COSTO TOTAL (S/)", "GANANCIA NETA (S/)", "MARGEN %"]];
-        const bodyResumen = kpisPorSede.map(s => [s.name, s.transacciones, s.ventas, s.costo, s.margen, s.margenPct / 100]);
-        
-        const totalVentas = kpisPorSede.reduce((sum, s) => sum + s.ventas, 0);
-        const totalCosto = kpisPorSede.reduce((sum, s) => sum + s.costo, 0);
-        const totalMargen = kpisPorSede.reduce((sum, s) => sum + s.margen, 0);
-        const totalTransacciones = kpisPorSede.reduce((sum, s) => sum + s.transacciones, 0);
-        const margenPromedio = totalVentas > 0 ? (totalMargen / totalVentas) : 0;
-        const totalRowResumen = [["TOTALES GLOBALES", totalTransacciones, totalVentas, totalCosto, totalMargen, margenPromedio]];
-
-        const dataResumen = [...titulo, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio, ...headersResumen, ...bodyResumen, ...totalRowResumen];
-        const wsResumen = XLSX.utils.aoa_to_sheet(dataResumen);
-        wsResumen['!cols'] = [{ wch: 35 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }];
-        wsResumen['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
-        
-        XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen Sedes");
-
-        const detalleAgrupado: Record<string, any> = {};
-        filteredData.forEach(v => {
-            const key = `${v.sede}|${v.producto}|${v.metodoPago}`;
-            if (!detalleAgrupado[key]) {
-                detalleAgrupado[key] = { sede: v.sede, producto: v.producto, categoria: v.categoria, metodoPago: v.metodoPago, cantidad: 0, costo: 0, total: 0, margen: 0 };
-            }
-            detalleAgrupado[key].cantidad += v.cantidad;
-            detalleAgrupado[key].costo += v.costo;
-            detalleAgrupado[key].total += v.total;
-            detalleAgrupado[key].margen += v.margen;
-        });
-        
-        const listaDetalle = Object.values(detalleAgrupado).sort((a, b) => a.sede === b.sede ? b.total - a.total : a.sede.localeCompare(b.sede));
-        const tituloDetalle = [["DETALLE DE PRODUCTOS POR SEDE"]];
-        const headersDetalle = [["SEDE", "PRODUCTO", "CATEGORÍA", "MÉTODO DE PAGO", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "RENTABILIDAD %"]];
-        const bodyDetalle = listaDetalle.map(d => [d.sede, d.producto, d.categoria, d.metodoPago, d.cantidad, d.costo, d.total, d.margen, d.total > 0 ? (d.margen / d.total) : 0]);
-        const sumCant = listaDetalle.reduce((acc, curr) => acc + curr.cantidad, 0);
-        const sumCosto = listaDetalle.reduce((acc, curr) => acc + curr.costo, 0);
-        const sumTotal = listaDetalle.reduce((acc, curr) => acc + curr.total, 0);
-        const sumMargen = listaDetalle.reduce((acc, curr) => acc + curr.margen, 0);
-        const sumRentabilidad = sumTotal > 0 ? sumMargen / sumTotal : 0;
-        const totalRowDetalle = [["TOTAL GENERAL", "", "", "", sumCant, sumCosto, sumTotal, sumMargen, sumRentabilidad]];
-
-        const dataDetalle = [...tituloDetalle, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio, ...headersDetalle, ...bodyDetalle, ...totalRowDetalle];
-        const wsDetalle = XLSX.utils.aoa_to_sheet(dataDetalle);
-        wsDetalle['!cols'] = [{ wch: 25 }, { wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }];
-        wsDetalle['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }];
-
-        XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle Productos");
-        XLSX.writeFile(wb, `Comparativa_Completa_${dateRange.start}.xlsx`);
-
-    } catch (error) {
-        console.error("Error exportando Excel:", error);
-        alert("Error al generar el reporte comparativo.");
-    }
+    } catch (e) { console.error(e); alert("Error generando Excel de pagos."); }
   };
 
   const handleDownloadExcel = () => {
     try {
         const wb = XLSX.utils.book_new();
-        
-        const titulo = [[drillDownSede ? `REPORTE DE PRODUCTOS - SEDE: ${drillDownSede}` : "REPORTE DETALLADO DE PRODUCTOS"]];
-        const fechaReporte = [["Fecha de Emisión:", new Date().toLocaleDateString()]];
-        const empresaInfo = [["Empresa:", session?.companyName || 'Todas']];
-        const rangoInfo = [["Periodo:", `${dateRange.start} al ${dateRange.end}`]];
-        const espacio = [[""]];
-
         const headers = [["PRODUCTO", "CATEGORÍA", "MÉTODO DE PAGO", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "MARGEN %"]];
-        
-        // Extract array from union type for map operation
-        const productsList = reporteProductos as any[];
-
-        const body = productsList.map(p => [
-            p.producto,
-            p.categoria,
-            p.metodoPago,
-            p.cantidad,
-            p.costo,
-            p.ventaNeta,
-            p.ganancia,
-            p.margenPorcentaje / 100
-        ]);
-
-        const sumCant = productsList.reduce((acc, curr) => acc + curr.cantidad, 0);
-        const sumCosto = productsList.reduce((acc, curr) => acc + curr.costo, 0);
-        const sumTotal = productsList.reduce((acc, curr) => acc + curr.ventaNeta, 0);
-        const sumMargen = productsList.reduce((acc, curr) => acc + curr.ganancia, 0);
-        const sumRentabilidad = sumTotal > 0 ? sumMargen / sumTotal : 0;
-
-        const totalRow = [["TOTALES", "", "", sumCant, sumCosto, sumTotal, sumMargen, sumRentabilidad]];
-
-        const data = [...titulo, ...espacio, ...fechaReporte, ...empresaInfo, ...rangoInfo, ...espacio, ...headers, ...body, ...totalRow];
-        const ws = XLSX.utils.aoa_to_sheet(data);
-        
-        ws['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }];
-        ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
-
+        const body = (reporteProductos as any[]).map(p => [p.producto, p.categoria, p.metodoPago, p.cantidad, p.costo, p.ventaNeta, p.ganancia, p.margenPorcentaje / 100]);
+        const ws = XLSX.utils.aoa_to_sheet([...headers, ...body]);
         XLSX.utils.book_append_sheet(wb, ws, "Productos");
         XLSX.writeFile(wb, `Reporte_Productos_${dateRange.start}.xlsx`);
-
-    } catch (error) {
-        console.error("Error exportando Excel:", error);
-        alert("Error al generar el reporte de productos.");
-    }
+    } catch (e) { alert("Error al generar el reporte de productos."); }
   };
 
   const isRentabilidad = view === 'rentabilidad';
@@ -803,18 +657,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const chartColor = isRentabilidad ? '#84cc16' : '#0ea5e9'; 
   const chartLabel = isRentabilidad ? 'Ganancia' : 'Venta Neta';
 
-  // Helper for rendering table rows to avoid complex nesting in JSX
   const renderTableRows = () => {
       if (paginatedData.length === 0) {
           return (
-            <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">
-                    No se encontraron productos para los filtros seleccionados.
-                </td>
-            </tr>
+            <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">No se encontraron productos para los filtros seleccionados.</td></tr>
           );
       }
-
       return paginatedData.map((item: any, idx: number) => {
           const prod = item as any;
           return (
@@ -822,9 +670,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 <td className="px-4 py-3.5 font-medium text-slate-700 group-hover:text-brand-700 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
                 <td className="px-4 py-3.5 text-slate-500 text-xs">{prod.categoria}</td>
                 <td className="px-4 py-3.5 text-slate-500 text-xs">
-                    <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-medium">
-                        {prod.metodoPago || 'Varios'}
-                    </span>
+                    <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-medium">{prod.metodoPago || 'Varios'}</span>
                 </td>
                 <td className="px-4 py-3.5 text-right text-slate-600">{prod.cantidad}</td>
                 <td className="px-4 py-3.5 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
@@ -840,91 +686,69 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       });
   };
 
-  // Helper for rendering General View to clean up main JSX
   const renderGeneralView = () => (
       <>
-        {/* KPIs SUPERIORES CON COMPARATIVOS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        
-        <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-brand-500 to-brand-600'} rounded-2xl shadow-lg shadow-brand-500/20 p-6 flex flex-col justify-between hover:scale-[1.02] transition-transform duration-300 relative overflow-hidden group`}>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-white/30 transition-colors"></div>
-            <div className="flex items-center justify-between mb-4 relative z-10">
-            <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
-                {isRentabilidad ? <DollarSign className="w-6 h-6 text-white" /> : <TrendingUp className="w-6 h-6 text-white" />}
+            <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-brand-500 to-brand-600'} rounded-2xl shadow-lg shadow-brand-500/20 p-6 flex flex-col justify-between hover:scale-[1.02] transition-transform duration-300 relative overflow-hidden group`}>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-white/30 transition-colors"></div>
+                <div className="flex items-center justify-between mb-4 relative z-10">
+                    <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
+                        {isRentabilidad ? <DollarSign className="w-6 h-6 text-white" /> : <TrendingUp className="w-6 h-6 text-white" />}
+                    </div>
+                    <VariacionBadge val={kpis.variacionVentas} />
+                </div>
+                <div className="relative z-10">
+                    <p className="text-white/80 text-sm font-medium tracking-wide">Venta Total (con IGV)</p>
+                    <h3 className="text-3xl font-bold text-white mt-1 tracking-tight drop-shadow-sm">S/ {kpis.totalVentas}</h3>
+                </div>
             </div>
-            <VariacionBadge val={kpis.variacionVentas} />
+
+            <div className={`rounded-2xl shadow-md border p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 bg-white ${isRentabilidad ? 'border-brand-200' : 'border-slate-100'}`}>
+                <div className="flex items-center justify-between mb-4">
+                    <div className={`p-2.5 rounded-xl ${isRentabilidad ? 'bg-brand-100 text-brand-600' : 'bg-blue-50 text-blue-600'}`}>
+                        {isRentabilidad ? <TrendingUp className="w-6 h-6" /> : <Receipt className="w-6 h-6" />}
+                    </div>
+                    {isRentabilidad && <VariacionBadge val={kpis.variacionMargen} />}
+                </div>
+                <div>
+                    <p className="text-slate-500 text-sm font-medium">{isRentabilidad ? 'Ganancia Neta' : 'Ticket Promedio Est.'}</p>
+                    <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-600' : 'text-slate-800'}`}>S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}</h3>
+                </div>
             </div>
-            <div className="relative z-10">
-            <p className="text-white/80 text-sm font-medium tracking-wide">{isRentabilidad ? 'Venta Total Acumulada' : 'Volumen de Ventas'}</p>
-            <h3 className="text-3xl font-bold text-white mt-1 tracking-tight drop-shadow-sm">S/ {kpis.totalVentas}</h3>
+
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-violet-200 transition-all hover:scale-[1.02] duration-300">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="p-2.5 bg-violet-50 rounded-xl text-violet-600"><Package className="w-6 h-6" /></div>
+                    <VariacionBadge val={kpis.variacionUnidades} />
+                </div>
+                <div><p className="text-slate-500 text-sm font-medium">Items Procesados</p><h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3></div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-orange-200 transition-all hover:scale-[1.02] duration-300">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="p-2.5 bg-orange-50 rounded-xl text-orange-600"><Store className="w-6 h-6" /></div>
+                </div>
+                <div><p className="text-slate-500 text-sm font-medium">Margen Promedio %</p><h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.margenPromedio}%</h3></div>
             </div>
         </div>
 
-        <div className={`rounded-2xl shadow-md border p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 bg-white ${isRentabilidad ? 'border-brand-200' : 'border-slate-100'}`}>
-            <div className="flex items-center justify-between mb-4">
-            <div className={`p-2.5 rounded-xl ${isRentabilidad ? 'bg-brand-100 text-brand-600' : 'bg-blue-50 text-blue-600'}`}>
-                {isRentabilidad ? <TrendingUp className="w-6 h-6" /> : <Receipt className="w-6 h-6" />}
-            </div>
-            {isRentabilidad && <VariacionBadge val={kpis.variacionMargen} />}
-            </div>
-            <div>
-            <p className="text-slate-500 text-sm font-medium">{isRentabilidad ? 'Ganancia Neta' : 'Ticket Promedio Est.'}</p>
-            <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-600' : 'text-slate-800'}`}>
-                S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}
-            </h3>
-            </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-violet-200 transition-all hover:scale-[1.02] duration-300">
-            <div className="flex items-center justify-between mb-4">
-            <div className="p-2.5 bg-violet-50 rounded-xl text-violet-600"><Package className="w-6 h-6" /></div>
-            <VariacionBadge val={kpis.variacionUnidades} />
-            </div>
-            <div>
-            <p className="text-slate-500 text-sm font-medium">Items Procesados</p>
-            <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3>
-            </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-orange-200 transition-all hover:scale-[1.02] duration-300">
-            <div className="flex items-center justify-between mb-4">
-            <div className="p-2.5 bg-orange-50 rounded-xl text-orange-600"><Store className="w-6 h-6" /></div>
-            </div>
-            <div>
-            <p className="text-slate-500 text-sm font-medium">Margen Promedio %</p>
-            <h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.margenPromedio}%</h3>
-            </div>
-        </div>
-        </div>
-
-        {/* GRAFICOS PRINCIPALES */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            {/* TENDENCIA */}
             <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
                 <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ArrowUpRight className="w-5 h-5 text-brand-500"/> Tendencia de Ventas (Diario)</h3>
                 <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={ventasPorDia} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                        <defs>
-                            <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor={chartColor} stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor={chartColor} stopOpacity={0}/>
-                            </linearGradient>
-                        </defs>
+                        <defs><linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={chartColor} stopOpacity={0.3}/><stop offset="95%" stopColor={chartColor} stopOpacity={0}/></linearGradient></defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                        <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
-                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
-                        <Tooltip 
-                            formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} 
-                            contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                        />
+                        <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dy={10} />
+                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
+                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                         <Area type="monotone" dataKey={chartDataKey} stroke={chartColor} fillOpacity={1} fill="url(#colorVentas)" strokeWidth={2} />
                     </AreaChart>
                 </ResponsiveContainer>
                 </div>
             </div>
 
-            {/* VENTAS POR CATEGORIA (O METODO DE PAGO SI ESTAMOS EN VENTAS) */}
             <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
                 <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                         {view === 'ventas' ? <CreditCard className="w-5 h-5 text-emerald-500"/> : <PieChartIcon className="w-5 h-5 text-violet-500"/>}
@@ -933,21 +757,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 <div className="h-[300px] w-full flex">
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                            <Pie
-                                data={view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={70}
-                                outerRadius={90}
-                                fill="#8884d8"
-                                paddingAngle={3}
-                                dataKey="value"
-                                stroke="#fff"
-                                strokeWidth={3}
-                            >
-                                {(view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria).map((_, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
+                            <Pie data={view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria} cx="50%" cy="50%" innerRadius={70} outerRadius={90} fill="#8884d8" paddingAngle={3} dataKey="value" stroke="#fff" strokeWidth={3}>
+                                {(view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria).map((_, index) => ( <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} /> ))}
                             </Pie>
                             <Tooltip formatter={(value: number) => `S/ ${value.toFixed(2)}`} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                             <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '11px', color: '#64748b'}} />
@@ -957,22 +768,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             </div>
         </div>
 
-        {/* COMPARATIVA POR PUNTO DE VENTA (SEDES) */}
         <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700 hover:shadow-lg transition-shadow">
-            <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-brand-500"/> Comparativa por Punto de Venta
-            </h3>
+            <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><MapPin className="w-5 h-5 text-brand-500"/> Comparativa por Punto de Venta</h3>
             <div className="h-[350px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={comparativaSedes} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
-                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} tickLine={false} dx={-10} tickFormatter={(value) => `S/${value/1000}k`} />
-                        <Tooltip 
-                            formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, '']}
-                            contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                            cursor={{fill: '#f8fafc'}} 
-                        />
+                        <XAxis dataKey="name" stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dy={10} />
+                        <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
+                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, '']} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} cursor={{fill: '#f8fafc'}} />
                         <Legend wrapperStyle={{paddingTop: '20px'}} />
                         <Bar dataKey="ventas" name="Venta Total" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="margen" name="Ganancia" fill="#84cc16" radius={[4, 4, 0, 0]} />
@@ -980,599 +784,136 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 </ResponsiveContainer>
             </div>
         </div>
-
-        {/* RANKING Y ALERTA */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><Users className="w-5 h-5 text-blue-500"/> Ranking Vendedores</h3>
-                <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={rankingVendedores} layout="vertical" margin={{ left: 20, right: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                            <XAxis type="number" hide />
-                            <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10, fill: '#64748b'}} />
-                            <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, 'Ventas']} cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                            <Bar dataKey="ventas" radius={[0, 4, 4, 0]} barSize={20} fill="#0ea5e9" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-red-500"/> Menor Rotación (Bottom 5)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {bottomProductosVolumen.map((p, idx) => (
-                        <div key={idx} className="bg-red-50 border border-red-100 rounded-xl p-3 flex flex-col hover:bg-red-100 transition-colors">
-                            <p className="text-[10px] font-bold text-red-400 uppercase mb-1">Puesto #{idx+1}</p>
-                            <p className="text-sm font-medium text-slate-800 truncate flex-1" title={p.name}>{p.name}</p>
-                            <p className="text-lg font-bold text-red-500 mt-1">S/ {p.val.toFixed(2)}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
       </>
   );
 
-  // --- RENDER ---
   return (
     <div className="p-4 md:p-6 lg:p-8 font-sans w-full relative pb-20 text-slate-700">
-      <OdooConfigModal 
-        isOpen={isConfigOpen} 
-        onClose={() => setIsConfigOpen(false)} 
-        initialConfig={{
-            url: session?.url || '',
-            db: session?.db || '',
-            username: session?.username || '',
-            apiKey: session?.apiKey || ''
-        }}
-        onSave={(config: ConnectionConfig) => {
-            console.log("Config updated", config);
-            setIsConfigOpen(false);
-        }}
-      />
+      <OdooConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} initialConfig={{ url: session?.url || '', db: session?.db || '', username: session?.username || '', apiKey: session?.apiKey || '' }} onSave={(config: ConnectionConfig) => { setIsConfigOpen(false); }} />
       
       {loading && (
-          <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-50 flex flex-col items-center justify-center h-screen fixed transition-all duration-300">
-              <div className="relative">
-                <div className="absolute inset-0 bg-brand-200 blur-xl opacity-50 animate-pulse"></div>
-                <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 border border-slate-100 relative z-10">
-                    <RefreshCw className="w-8 h-8 animate-spin text-brand-500" />
-                    <span className="font-medium text-slate-600 tracking-wide">Procesando datos...</span>
-                </div>
-              </div>
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-50 flex flex-col items-center justify-center h-screen fixed">
+              <div className="relative"><div className="absolute inset-0 bg-brand-200 blur-xl opacity-50 animate-pulse"></div><div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 border border-slate-100 relative z-10"><RefreshCw className="w-8 h-8 animate-spin text-brand-500" /><span className="font-medium text-slate-600">Sincronizando con Odoo...</span></div></div>
           </div>
       )}
 
       <div className="max-w-7xl mx-auto space-y-6 animate-fade-in-up">
-        
-        {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-2">
            <div>
-              <h1 className="text-3xl font-bold text-slate-800 tracking-tight drop-shadow-sm flex items-center gap-2">
-                {view === 'rentabilidad' ? 'Rentabilidad y Ganancias' : 
-                 view === 'ventas' ? 'Gestión de Ventas' :
-                 view === 'comparativa' ? 'Gestión de Sedes y Cajas' :
-                 view === 'pagos' ? 'Tesorería y Métodos de Pago' :
-                 view === 'reportes' ? 'Reportes Gráficos' : 'Dashboard General'}
-                 {view === 'general' && <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-700 border border-brand-200">LIVE</span>}
+              <h1 className="text-3xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                {view === 'comparativa' ? 'Rendimiento de Sedes y Cajas' : view === 'pagos' ? 'Ingresos y Tesorería' : 'Dashboard de Operaciones'}
+                {filterMode === 'hoy' && <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-brand-100 text-brand-700 border border-brand-200 animate-pulse uppercase"><Zap className="w-3 h-3 mr-1" /> Tiempo Real</span>}
               </h1>
-              <p className="text-slate-500 text-sm font-light mt-1">
-                  {session ? `Compañía: ${session.companyName || 'Todas'}` : 'Modo Demo'} | <span className="text-brand-600 font-medium">{dateRange.start}</span> al <span className="text-brand-600 font-medium">{dateRange.end}</span>
-              </p>
+              <p className="text-slate-500 text-sm font-light mt-1">Sincronizado con: <span className="text-brand-600 font-bold">{session?.companyName || 'Modo Demo'}</span> | {dateRange.start}</p>
            </div>
            
            <div className="mt-4 md:mt-0 flex gap-3">
-              {view === 'comparativa' && (
-                <button onClick={handleDownloadComparativa} className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-xl font-medium text-sm hover:bg-brand-700 transition-all shadow-md shadow-brand-200 hover:shadow-lg hover:shadow-brand-200/50">
-                  <Download className="w-4 h-4" /> Reporte Completo
-                </button>
-              )}
-              {view === 'pagos' && (
-                <button onClick={handleDownloadPagos} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-xl font-medium text-sm hover:bg-slate-900 transition-all shadow-md shadow-slate-800/20">
-                  <FileSpreadsheet className="w-4 h-4" /> Exportar Informe
-                </button>
-              )}
-              <button onClick={() => fetchData()} className="flex items-center gap-2 bg-white text-slate-600 px-4 py-2 rounded-xl border border-slate-200 font-medium text-sm hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm">
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Recargar
-              </button>
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-medium text-sm shadow-sm ${session ? 'bg-brand-50 text-brand-700 border-brand-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                <span className="relative flex h-2 w-2">
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${session ? 'bg-brand-400' : 'bg-amber-400'}`}></span>
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${session ? 'bg-brand-500' : 'bg-amber-500'}`}></span>
-                </span>
-                {session ? 'En línea' : 'Demo'}
-              </div>
+              <button onClick={() => fetchData()} className="flex items-center gap-2 bg-white text-slate-600 px-4 py-2 rounded-xl border border-slate-200 font-medium text-sm hover:bg-slate-50 shadow-sm transition-all"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Actualizar</button>
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs uppercase shadow-sm ${session ? 'bg-brand-50 text-brand-700 border-brand-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{session ? 'Online' : 'Demo'}</div>
            </div>
         </div>
         
-        {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex gap-3 items-center shadow-sm animate-in slide-in-from-top-2">
-                <AlertCircle className="w-5 h-5 shrink-0 text-red-500" />
-                <div className="flex-1"><p className="text-sm">{error}</p></div>
-            </div>
-        )}
+        {error && ( <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex gap-3 items-center shadow-sm"><AlertCircle className="w-5 h-5 text-red-500" /><p className="text-sm">{error}</p></div> )}
 
-        {/* FILTROS GLOBALES */}
         <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-5 relative overflow-hidden">
-          {/* Decorative side accent */}
-          <div className="absolute top-0 left-0 w-1 h-full bg-brand-500"></div>
-          
-          <div className="flex flex-col gap-4 relative z-10">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-500"></div>
+          <div className="flex flex-col gap-4">
             <div className="flex flex-wrap gap-4 items-end border-b border-slate-100 pb-4">
-                <div className="w-full md:w-auto">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2"><Building2 className="inline w-3 h-3 mr-1" />Compañía</label>
-                    {session?.companyName ? (
-                        <div className="w-full md:w-56 px-4 py-2.5 bg-brand-50 border border-brand-200 rounded-xl text-sm text-brand-700 font-medium flex items-center gap-2"><Building2 className="w-4 h-4" /><span className="truncate">{session.companyName}</span></div>
-                    ) : (
-                        <select disabled className="w-full md:w-56 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-400 cursor-not-allowed"><option>Demo / Todas</option></select>
-                    )}
-                </div>
-                <div className="w-full md:w-auto">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2"><Store className="inline w-3 h-3 mr-1" />Punto de Venta</label>
-                    <select value={filtros.sedeSeleccionada} onChange={(e) => setFiltros({...filtros, sedeSeleccionada: e.target.value})} className="w-full md:w-56 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all shadow-sm">
-                        {sedes.map(sede => <option key={sede} value={sede}>{sede}</option>)}
-                    </select>
-                </div>
+                <div className="w-full md:w-auto"><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Punto de Venta</label><select value={filtros.sedeSeleccionada} onChange={(e) => setFiltros({...filtros, sedeSeleccionada: e.target.value})} className="w-full md:w-56 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500">{sedes.map(sede => <option key={sede} value={sede}>{sede}</option>)}</select></div>
             </div>
-
             <div className="flex flex-wrap gap-6 items-center">
                 <div>
-                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2"><ListFilter className="inline w-3 h-3 mr-1" />Modo de Filtro</label>
+                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Periodo de Visualización</label>
                    <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-200">
-                       <button onClick={() => setFilterMode('mes')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${filterMode === 'mes' ? 'bg-white text-brand-600 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}>Por Mes</button>
-                       <button onClick={() => setFilterMode('anio')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${filterMode === 'anio' ? 'bg-white text-brand-600 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}>Por Año</button>
-                       <button onClick={() => setFilterMode('custom')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${filterMode === 'custom' ? 'bg-white text-brand-600 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}>Personalizado</button>
+                       <button onClick={() => setFilterMode('hoy')} className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${filterMode === 'hoy' ? 'bg-white text-brand-600 shadow-sm border border-slate-200' : 'text-slate-400'}`}>Hoy</button>
+                       <button onClick={() => setFilterMode('mes')} className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${filterMode === 'mes' ? 'bg-white text-brand-600 shadow-sm border border-slate-200' : 'text-slate-400'}`}>Mes</button>
+                       <button onClick={() => setFilterMode('anio')} className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${filterMode === 'anio' ? 'bg-white text-brand-600 shadow-sm border border-slate-200' : 'text-slate-400'}`}>Año</button>
+                       <button onClick={() => setFilterMode('custom')} className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${filterMode === 'custom' ? 'bg-white text-brand-600 shadow-sm border border-slate-200' : 'text-slate-400'}`}>Personalizado</button>
                    </div>
                 </div>
-                <div className="flex-1 flex items-center gap-4">
-                    {filterMode === 'mes' && (
-                        <>
-                            <div className="w-32">
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Año</label>
-                                <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all">{ANIOS.map(y => <option key={y} value={y}>{y}</option>)}</select>
-                            </div>
-                            <div className="w-40">
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Mes</label>
-                                <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all">{MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
-                            </div>
-                        </>
-                    )}
-                    {filterMode === 'custom' && (
-                        <div className="flex gap-2 items-center">
-                            <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Desde</label><input type="date" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></div>
-                            <div className="h-px w-4 bg-slate-200 mt-6"></div>
-                            <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Hasta</label><input type="date" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></div>
-                        </div>
-                    )}
-                </div>
+                {filterMode === 'mes' && (
+                    <div className="flex gap-4">
+                        <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm">{ANIOS.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                        <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm">{MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                    </div>
+                )}
+                {filterMode === 'custom' && (
+                    <div className="flex gap-2 items-center">
+                        <input type="date" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm" />
+                        <span className="text-slate-300">→</span>
+                        <input type="date" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm" />
+                    </div>
+                )}
             </div>
           </div>
         </div>
 
-        {/* --- VISTA: PAGOS (TESORERÍA) --- */}
         {view === 'pagos' ? (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                
-                {/* KPIs de Pagos */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-slate-800 text-white rounded-2xl shadow-xl shadow-slate-200 p-6 flex flex-col justify-between">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="p-3 bg-white/10 rounded-xl"><Wallet className="w-6 h-6 text-emerald-400" /></div>
-                            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Total Recaudado</span>
-                        </div>
-                        <h3 className="text-3xl font-bold tracking-tight">S/ {kpis.totalVentas}</h3>
-                        <p className="text-slate-400 text-sm mt-1">{kpis.unidadesVendidas} transacciones procesadas</p>
+                    <div className="bg-slate-800 text-white rounded-2xl shadow-xl p-6 flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-4"><div className="p-3 bg-white/10 rounded-xl"><Wallet className="w-6 h-6 text-emerald-400" /></div><span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total Recaudado</span></div>
+                        <h3 className="text-3xl font-bold">S/ {kpis.totalVentas}</h3><p className="text-slate-400 text-xs mt-1">Venta bruta (IGV incluido)</p>
                     </div>
-
                     <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="p-3 bg-brand-50 rounded-xl text-brand-600"><Target className="w-6 h-6" /></div>
-                            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Método Principal</span>
-                        </div>
-                        <h3 className="text-2xl font-bold text-slate-800">
-                            {ventasPorMetodoPago[0]?.name || 'N/A'}
-                        </h3>
-                        <p className="text-slate-500 text-sm mt-1">
-                            S/ {ventasPorMetodoPago[0]?.value.toLocaleString()} ({ventasPorMetodoPago[0] ? ((ventasPorMetodoPago[0].value / Number(kpis.totalVentas.replace(',',''))) * 100).toFixed(0) : 0}%)
-                        </p>
+                        <div className="flex items-center justify-between mb-4"><div className="p-3 bg-brand-50 rounded-xl text-brand-600"><Target className="w-6 h-6" /></div><span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Método Top</span></div>
+                        <h3 className="text-2xl font-bold text-slate-800">{ventasPorMetodoPago[0]?.name || 'N/A'}</h3><p className="text-slate-500 text-xs mt-1">S/ {ventasPorMetodoPago[0]?.value.toLocaleString()}</p>
                     </div>
-
                     <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="p-3 bg-blue-50 rounded-xl text-blue-600"><CalendarRange className="w-6 h-6" /></div>
-                            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Promedio Diario</span>
-                        </div>
-                        <h3 className="text-2xl font-bold text-slate-800">
-                             S/ {(Number(kpis.totalVentas.replace(/,/g,'')) / (pagosPorDiaStack.length || 1)).toLocaleString('es-PE', {maximumFractionDigits: 0})}
-                        </h3>
-                        <p className="text-slate-500 text-sm mt-1">Ingreso promedio por día operativo</p>
+                        <div className="flex items-center justify-between mb-4"><div className="p-3 bg-blue-50 rounded-xl text-blue-600"><CalendarRange className="w-6 h-6" /></div><span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Transacciones</span></div>
+                        <h3 className="text-2xl font-bold text-slate-800">{kpis.unidadesVendidas}</h3><p className="text-slate-500 text-xs mt-1">Operaciones realizadas</p>
                     </div>
                 </div>
-
-                {/* Gráficos de Pagos */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Gráfico 1: Evolución por Método (Stacked Bar) */}
-                    <div className="lg:col-span-2 bg-white rounded-2xl shadow-md border border-slate-100 p-6">
-                         <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                             <TrendingUp className="w-5 h-5 text-brand-600"/> Evolución de Ingresos por Día
-                         </h3>
-                         <div className="h-[350px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={pagosPorDiaStack} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="fecha" stroke="#94a3b8" tick={{fontSize: 12}} tickFormatter={(val) => val.split('-')[2]} />
-                                    <YAxis stroke="#94a3b8" tick={{fontSize: 12}} />
-                                    <Tooltip 
-                                        cursor={{fill: '#f8fafc'}}
-                                        contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                                        formatter={(val: number) => `S/ ${val.toLocaleString()}`}
-                                    />
-                                    <Legend wrapperStyle={{paddingTop: '20px'}}/>
-                                    {ventasPorMetodoPago.map((m, idx) => (
-                                        <Bar key={m.name} dataKey={m.name} stackId="a" fill={COLORS[idx % COLORS.length]} />
-                                    ))}
-                                </BarChart>
-                            </ResponsiveContainer>
-                         </div>
-                    </div>
-
-                    {/* Gráfico 2: Distribución Total */}
-                    <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
-                        <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                            <PieChartIcon className="w-5 h-5 text-brand-600"/> Distribución
-                        </h3>
-                        <div className="h-[350px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={ventasPorMetodoPago}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={60}
-                                        outerRadius={80}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                    >
-                                        {ventasPorMetodoPago.map((_, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip formatter={(value: number) => `S/ ${value.toLocaleString()}`} />
-                                    <Legend layout="vertical" verticalAlign="middle" align="right" />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Tabla Detallada de Pagos */}
-                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 overflow-hidden">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-                        <div>
-                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <CreditCard className="w-5 h-5 text-slate-600" />
-                                Detalle de Operaciones de Caja
-                            </h3>
-                            <p className="text-xs text-slate-500 font-light mt-1">
-                                Listado completo de transacciones por sesión y método de pago.
-                            </p>
-                        </div>
-                        {/* Buscador Simple */}
-                        {/* <input type="text" placeholder="Buscar sesión..." className="border rounded px-3 py-1 text-sm"/> */}
-                    </div>
-
-                    <div className="overflow-x-auto border border-slate-100 rounded-xl">
-                        <table className="w-full text-sm text-left text-slate-600">
-                            <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100 select-none">
-                                <tr>
-                                    <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600" onClick={() => handleSort('fecha')}>Fecha <SortIcon column="fecha"/></th>
-                                    <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600" onClick={() => handleSort('sesion')}>Sesión Caja <SortIcon column="sesion"/></th>
-                                    <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600" onClick={() => handleSort('metodoPago')}>Método <SortIcon column="metodoPago"/></th>
-                                    <th className="px-4 py-4 font-bold">Concepto / Producto</th>
-                                    <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600" onClick={() => handleSort('ventaNeta')}>Monto <SortIcon column="ventaNeta"/></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {(paginatedData as any[]).map((row, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{row.fechaStr}</td>
-                                        <td className="px-4 py-3 font-mono text-xs text-brand-700 font-medium bg-brand-50/50 rounded">{row.sesion}</td>
-                                        <td className="px-4 py-3">
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200">
-                                                {row.metodo}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-slate-500 truncate max-w-xs">{row.producto}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-slate-700">S/ {row.total.toFixed(2)}</td>
-                                    </tr>
-                                ))}
-                                {paginatedData.length === 0 && (
-                                    <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No hay registros de pagos para este periodo.</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                    {/* Pagination for Payment Table */}
-                    {tableSource.length > 0 && (
-                        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-6 mt-4">
-                            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                                <div>
-                                    <p className="text-sm text-slate-500">
-                                        Mostrando <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-slate-800">{Math.min(currentPage * itemsPerPage, tableSource.length)}</span> de <span className="font-bold text-slate-800">{tableSource.length}</span> registros
-                                    </p>
-                                </div>
-                                <div>
-                                    <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                                        <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
-                                        <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">Página {currentPage}</span>
-                                        <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
-                                    </nav>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
             </div>
-        ) : drillDownSede && (
-            <div className="bg-brand-50 border border-brand-200 text-brand-800 px-5 py-4 rounded-xl shadow-sm flex items-center justify-between animate-in slide-in-from-top-2">
-                <div className="flex items-center gap-4">
-                    <div className="bg-brand-100 p-2 rounded-lg"><Target className="w-5 h-5 text-brand-600" /></div>
-                    <div>
-                        <p className="text-[10px] uppercase font-bold tracking-widest text-brand-500">Visualizando Detalles de</p>
-                        <p className="font-bold text-xl leading-tight text-slate-800">{drillDownSede}</p>
-                    </div>
-                </div>
-                <button onClick={() => setDrillDownSede(null)} className="flex items-center gap-2 bg-white hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200 shadow-sm text-slate-600"><X className="w-4 h-4" /> Cerrar Detalle</button>
+        ) : drillDownSede ? (
+            <div className="bg-brand-50 border border-brand-200 text-brand-800 px-5 py-4 rounded-xl flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-4"><div className="bg-brand-100 p-2 rounded-lg"><Store className="w-5 h-5 text-brand-600" /></div><div><p className="text-[10px] uppercase font-bold text-brand-500">Punto de Venta</p><p className="font-bold text-xl text-slate-800">{drillDownSede}</p></div></div>
+                <button onClick={() => setDrillDownSede(null)} className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg text-sm font-bold border border-slate-200 transition-all hover:bg-slate-50"><X className="w-4 h-4" /> Salir del Detalle</button>
             </div>
-        )}
-
-        {/* --- VISTA COMPARATIVA (TIPO CAJONES) --- */}
-        {view === 'comparativa' && !drillDownSede ? (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-             
-             {/* CAJONES: Tarjetas Interactivas por Sede */}
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                 {kpisPorSede.map((sede, idx) => (
-                    <div key={idx} className="bg-white rounded-2xl shadow-md border border-slate-100 hover:border-brand-300 hover:shadow-lg transition-all duration-300 p-6 flex flex-col justify-between group relative overflow-hidden hover:-translate-y-1">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-brand-50 rounded-bl-[100px] transition-all group-hover:bg-brand-100"></div>
-                        
-                        <div className="flex justify-between items-start mb-4 relative z-10">
-                            <div className="p-2.5 bg-brand-50 rounded-xl border border-brand-100 group-hover:bg-brand-100 transition-colors">
-                                <Store className="w-6 h-6 text-brand-600" />
-                            </div>
-                            <button onClick={() => setDrillDownSede(sede.name)} className="text-[10px] font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 uppercase tracking-wider shadow-sm hover:shadow">
-                                Ver Cajas <ArrowUpRight className="w-3 h-3" />
-                            </button>
-                        </div>
-
-                        <h3 className="text-lg font-bold text-slate-800 mb-1 truncate" title={sede.name}>{sede.name}</h3>
-                        <p className="text-xs text-slate-400 mb-5 font-mono">{sede.transacciones} transacciones</p>
-
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-end border-b border-slate-50 pb-2">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Venta Neta</span>
-                                <span className="text-base font-bold text-slate-700">S/ {sede.ventas.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between items-end border-b border-slate-50 pb-2">
-                                <span className="text-[10px] font-bold text-red-300 uppercase tracking-widest">Costo/Pérdida</span>
-                                <span className="text-base font-medium text-red-500">- S/ {sede.costo.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between items-end pt-1">
-                                <span className="text-[10px] font-bold text-brand-500 uppercase tracking-widest">Ganancia</span>
-                                <span className="text-2xl font-bold text-brand-600">S/ {sede.margen.toLocaleString()}</span>
-                            </div>
-                        </div>
-
-                        {/* Visualizador de Margen (Barra) */}
-                        <div className="mt-6">
-                            <div className="flex justify-between text-xs mb-1.5">
-                                <span className="text-slate-500 font-medium">Rentabilidad</span>
-                                <span className={`font-bold ${sede.margenPct < 15 ? 'text-red-500' : 'text-brand-600'}`}>{sede.margenPct.toFixed(1)}%</span>
-                            </div>
-                            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                                <div 
-                                    className={`h-full rounded-full transition-all duration-1000 ${sede.margenPct < 15 ? 'bg-red-500' : 'bg-brand-500'}`} 
-                                    style={{ width: `${Math.min(sede.margenPct, 100)}%` }}
-                                ></div>
-                            </div>
-                        </div>
-                    </div>
-                 ))}
-             </div>
-
-             {/* GRÁFICOS DE ANÁLISIS COMPARATIVO */}
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* 1. Stacked Bar */}
-                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <ArrowUpDown className="w-5 h-5 text-brand-500"/> Composición Venta vs Costo
-                    </h3>
-                    <div className="h-[350px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={kpisPorSede} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                                <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11, fill: '#64748b'}} />
-                                <Tooltip 
-                                    formatter={(value: number) => `S/ ${value.toLocaleString()}`} 
-                                    cursor={{fill: '#f8fafc'}}
-                                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                                />
-                                <Legend />
-                                <Bar dataKey="margen" name="Ganancia Neta" stackId="a" fill="#84cc16" radius={[0, 4, 4, 0]} />
-                                <Bar dataKey="costo" name="Costo Mercadería" stackId="a" fill="#f43f5e" radius={[4, 0, 0, 4]} />
-                            </BarChart>
-                        </ResponsiveContainer>
+        ) : view === 'comparativa' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in slide-in-from-bottom-4">
+              {kpisPorSede.map((sede, idx) => (
+                <div key={idx} className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-xl hover:border-brand-200 transition-all group relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-brand-50 rounded-bl-full opacity-50 transition-colors group-hover:bg-brand-100"></div>
+                    <div className="flex justify-between items-start mb-4 relative z-10"><div className="p-2 bg-brand-50 rounded-lg text-brand-600"><Store className="w-5 h-5" /></div><button onClick={() => setDrillDownSede(sede.name)} className="text-[9px] font-bold text-brand-600 bg-brand-100 px-2 py-1 rounded uppercase flex items-center gap-1">Ver Cajas <ArrowUpRight className="w-3 h-3"/></button></div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-4 truncate">{sede.name}</h3>
+                    <div className="space-y-3">
+                        <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-[10px] font-bold text-slate-400 uppercase">Venta (con IGV)</span><span className="text-sm font-bold text-slate-700">S/ {sede.ventas.toLocaleString()}</span></div>
+                        <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-[10px] font-bold text-slate-400 uppercase">Margen</span><span className="text-sm font-bold text-brand-600">S/ {sede.margen.toLocaleString()}</span></div>
+                        <div className="pt-2"><div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-400">Rentabilidad</span><span className="text-brand-600">{sede.margenPct.toFixed(1)}%</span></div><div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden"><div className="bg-brand-500 h-full" style={{ width: `${Math.min(sede.margenPct, 100)}%` }}></div></div></div>
                     </div>
                 </div>
-
-                {/* 2. Scatter Plot */}
-                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <Target className="w-5 h-5 text-brand-500"/> Matriz de Rendimiento
-                    </h3>
-                    <div className="h-[350px] w-full">
-                         <ResponsiveContainer width="100%" height="100%">
-                            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                <XAxis type="number" dataKey="ventas" name="Volumen Venta" unit=" S/" tick={{fontSize: 12, fill: '#94a3b8'}} stroke="#cbd5e1" />
-                                <YAxis type="number" dataKey="margenPct" name="Margen" unit="%" tick={{fontSize: 12, fill: '#94a3b8'}} stroke="#cbd5e1" />
-                                <ZAxis type="number" dataKey="transacciones" range={[60, 400]} name="Transacciones" />
-                                <Tooltip 
-                                    cursor={{ strokeDasharray: '3 3' }} 
-                                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                                    formatter={(value: any, name: string) => [name === 'Margen' ? `${Number(value).toFixed(1)}%` : `S/ ${Number(value).toLocaleString()}`, name]} 
-                                />
-                                <Legend />
-                                <Scatter name="Sedes" data={kpisPorSede} fill="#3b82f6">
-                                    {kpisPorSede.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.margenPct > 20 ? '#84cc16' : entry.margenPct < 10 ? '#f43f5e' : '#f59e0b'} strokeWidth={1} stroke="#fff" />
-                                    ))}
-                                </Scatter>
-                            </ScatterChart>
-                        </ResponsiveContainer>
-                        <p className="text-xs text-center text-slate-400 mt-2 font-mono">
-                            * Eje X: Volumen Venta | Eje Y: % Margen | Tamaño: Nro. Transacciones
-                        </p>
-                    </div>
-                </div>
-
-             </div>
-
+              ))}
           </div>
-        ) : view !== 'pagos' ? (
-          /* --- VISTAS ANTERIORES (General, Rentabilidad, Ventas, Reportes) --- */
-          renderGeneralView()
-        ) : null}
+        ) : renderGeneralView()}
 
-        {/* TABLA DE DETALLE - Visible en General y en Comparativa (solo si hay DrillDown) */}
-        {(view !== 'pagos' && view !== 'comparativa') || (view === 'comparativa' && drillDownSede) ? (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-12 duration-1000">
-            
-            {/* NUEVA SECCIÓN: DESGLOSE DE CAJAS POR SEDE (Solo si DrillDown está activo) */}
-            {view === 'comparativa' && drillDownSede && (
-                <div className="bg-amber-50 rounded-2xl shadow-md border border-amber-100 p-6 overflow-hidden relative">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-amber-100 rounded-bl-[100px] opacity-50"></div>
-                    
-                    <h3 className="text-lg font-bold text-amber-800 flex items-center gap-2 mb-4 relative z-10">
-                        <Receipt className="w-5 h-5 text-amber-600" />
-                        Resumen de Cajas (Sesiones) en {drillDownSede}
-                    </h3>
-                    
-                    {sessionsInSede.length > 0 ? (
-                        <div className="overflow-x-auto border border-amber-100 rounded-xl bg-white relative z-10">
-                            <table className="w-full text-sm text-left text-slate-600">
-                                <thead className="text-xs text-amber-800 uppercase bg-amber-50 border-b border-amber-100 select-none">
-                                    <tr>
-                                        <th className="px-4 py-3 font-bold">Sesión ID</th>
-                                        <th className="px-4 py-3 font-bold">Responsable / Caja</th>
-                                        <th className="px-4 py-3 font-bold text-center">Apertura</th>
-                                        <th className="px-4 py-3 font-bold text-center">Transacciones</th>
-                                        <th className="px-4 py-3 font-bold text-right">Total Recaudado</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-amber-50/50">
-                                    {sessionsInSede.map((s, i) => (
-                                        <tr key={i} className="hover:bg-amber-50/30 transition-colors">
-                                            <td className="px-4 py-3 font-mono text-xs font-bold text-amber-700">{s.sesion}</td>
-                                            <td className="px-4 py-3 text-slate-700 font-medium">{s.responsable || 'Cajero General'}</td>
-                                            <td className="px-4 py-3 text-center text-xs text-slate-500 flex items-center justify-center gap-1">
-                                                <Clock className="w-3 h-3"/> {s.inicio.toLocaleDateString()} {s.inicio.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">{s.transacciones}</span>
-                                            </td>
-                                            <td className="px-4 py-3 text-right font-bold text-slate-800">S/ {s.total.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    ) : (
-                        <div className="bg-white p-4 rounded-xl text-center text-amber-700/60 text-sm">
-                            No se encontró información detallada de sesiones para esta sede en el periodo seleccionado.
-                        </div>
-                    )}
-                </div>
-            )}
-
+        {((view !== 'pagos' && view !== 'comparativa') || drillDownSede) && (
             <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 overflow-hidden">
-                <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-                    <div>
-                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <FileSpreadsheet className="w-5 h-5 text-brand-600" />
-                        {drillDownSede ? `Productos Vendidos en ${drillDownSede}` : 'Detalle Global de Productos'}
-                    </h3>
-                    <p className="text-xs text-slate-500 font-light mt-1">
-                        {drillDownSede ? 'Mostrando únicamente items vendidos en la sede seleccionada.' : 'Desglose general por item, costo real y rentabilidad.'}
-                    </p>
-                    </div>
-                    <button onClick={handleDownloadExcel} className="px-4 py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
-                    <Download className="w-4 h-4" />Descargar Excel
-                    </button>
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><FileSpreadsheet className="w-5 h-5 text-brand-600" /> Detalle de Ventas</h3>
+                    <button onClick={handleDownloadExcel} className="px-4 py-2 bg-slate-50 text-slate-600 border border-slate-200 rounded-xl text-sm font-bold hover:bg-slate-100 transition-all flex items-center gap-2"><Download className="w-4 h-4" /> Exportar</button>
                 </div>
                 <div className="overflow-x-auto border border-slate-100 rounded-xl">
-                    <table className="w-full text-sm text-left text-slate-600">
-                    <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100 select-none">
-                        <tr>
-                        <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('producto')}>Producto <SortIcon column="producto" /></th>
-                        <th className="px-4 py-4 font-bold cursor-pointer">Categoría</th>
-                        <th className="px-4 py-4 font-bold cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('metodoPago')}>Pago <SortIcon column="metodoPago" /></th>
-                        <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('cantidad')}>Unds. <SortIcon column="cantidad" /></th>
-                        <th className="px-4 py-4 font-bold text-right text-slate-400 cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('costo')}>Costo Total <SortIcon column="costo" /></th>
-                        <th className="px-4 py-4 font-bold text-right cursor-pointer hover:text-brand-600 transition-colors" onClick={() => handleSort('ventaNeta')}>Venta Neta <SortIcon column="ventaNeta" /></th>
-                        <th className="px-4 py-4 font-bold text-right text-brand-600 cursor-pointer hover:text-brand-800 transition-colors" onClick={() => handleSort('ganancia')}>Ganancia <SortIcon column="ganancia" /></th>
-                        <th className="px-4 py-4 font-bold text-right text-brand-600 cursor-pointer hover:text-brand-800 transition-colors" onClick={() => handleSort('margenPorcentaje')}>Margen % <SortIcon column="margenPorcentaje" /></th>
-                        </tr>
+                    <table className="w-full text-sm text-left">
+                    <thead className="text-[10px] text-slate-500 uppercase bg-slate-50 font-bold tracking-wider">
+                        <tr><th className="px-4 py-4">Producto</th><th className="px-4 py-4">Sede</th><th className="px-4 py-4">Pago</th><th className="px-4 py-4 text-right">Unds.</th><th className="px-4 py-4 text-right">Venta (IGV Inc.)</th><th className="px-4 py-4 text-right">Margen %</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                        {renderTableRows()}
+                        {paginatedData.map((v: any, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-4 py-3.5 font-medium text-slate-700 truncate max-w-[200px]">{v.producto}</td>
+                                <td className="px-4 py-3.5 text-slate-500 text-xs">{v.sede}</td>
+                                <td className="px-4 py-3.5"><span className="px-2 py-0.5 rounded bg-brand-50 text-brand-700 text-[10px] font-bold">{v.metodoPago}</span></td>
+                                <td className="px-4 py-3.5 text-right font-mono">{v.cantidad}</td>
+                                <td className="px-4 py-3.5 text-right font-bold text-slate-800">S/ {v.total?.toFixed(2)}</td>
+                                <td className="px-4 py-3.5 text-right"><span className="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-100 text-brand-700">{v.margenPorcentaje}%</span></td>
+                            </tr>
+                        ))}
                     </tbody>
                     </table>
                 </div>
-
-                {/* Pagination Controls */}
-                {tableSource.length > 0 && (
-                    <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-6 mt-4">
-                        <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                            <div>
-                                <p className="text-sm text-slate-500">
-                                    Mostrando <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-slate-800">{Math.min(currentPage * itemsPerPage, tableSource.length)}</span> de <span className="font-bold text-slate-800">{tableSource.length}</span> resultados
-                                </p>
-                            </div>
-                            <div>
-                                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                                    <button
-                                        onClick={() => handlePageChange(currentPage - 1)}
-                                        disabled={currentPage === 1}
-                                        className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        <span className="sr-only">Anterior</span>
-                                        <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                                    </button>
-                                    <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200 focus:outline-offset-0">
-                                        Página {currentPage} de {totalPages}
-                                    </span>
-                                    <button
-                                        onClick={() => handlePageChange(currentPage + 1)}
-                                        disabled={currentPage === totalPages}
-                                        className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        <span className="sr-only">Siguiente</span>
-                                        <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                                    </button>
-                                </nav>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
-            </div>
-        ) : null}
-
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { ArrowRight, Loader2, AlertTriangle, ShieldCheck, Citrus, Building2, Lock, UserCog } from 'lucide-react';
+import { ArrowRight, Loader2, AlertTriangle, ShieldCheck, Citrus, Building2, Lock, UserCog, Rocket } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { OdooSession } from '../types';
 import { getClientByCode, verifyAdminPassword } from '../services/clientManager';
@@ -180,9 +181,18 @@ const Login: React.FC<LoginProps> = ({ onLogin, onAdminLogin }) => {
             </div>
         </div>
 
-        <div className="mt-12 text-[10px] text-slate-400 font-mono relative z-10 flex flex-col gap-1">
-            <p>&copy; 2025 LEMON BI Analytics v2.3 (Supabase)</p>
-            <p className="opacity-70">Desarrollado por <span className="font-bold text-slate-500">GAORSYSTEM PERU</span></p>
+        {/* FOOTER BRANDING ACTUALIZADO SEGÚN IMAGEN */}
+        <div className="mt-12 relative z-10 flex flex-col gap-3">
+            <p className="text-[10px] text-slate-400 font-mono opacity-70">&copy; 2025 LEMON BI Analytics v2.4 (Supabase)</p>
+            <a href="https://gaorsystem.vercel.app/" target="_blank" rel="noreferrer" className="flex items-center gap-2 group transition-all hover:scale-[1.02] origin-left">
+                <div className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
+                    <Rocket className="w-6 h-6 text-violet-600 fill-emerald-500/10" />
+                </div>
+                <div className="text-xl font-bold tracking-tight">
+                    <span className="text-slate-800">Gaor</span>
+                    <span className="text-violet-600">System</span>
+                </div>
+            </a>
         </div>
       </div>
 

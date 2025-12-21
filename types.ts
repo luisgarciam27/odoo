@@ -1,4 +1,5 @@
 
+
 export interface Producto {
   id: number;
   nombre: string;
@@ -10,7 +11,7 @@ export interface Venta {
   fecha: Date;
   sede: string;
   compania: string;
-  sesion: string; // Nuevo campo para la Sesión del POS (Ej: POS/2024/01/55)
+  sesion: string;
   producto: string;
   categoria: string;
   vendedor: string;
@@ -30,37 +31,22 @@ export interface Filtros {
   fechaFin: string;
 }
 
-export interface KPI {
-  totalVentas: string;
-  variacionVentas: number;
-  totalMargen: string;
-  variacionMargen: number;
-  margenPromedio: string;
-  unidadesVendidas: number;
-  variacionUnidades: number;
-  ticketPromedio: string;
-}
-
+// Fix: Added missing AgrupadoPorDia interface to fix import error in Dashboard.tsx
 export interface AgrupadoPorDia {
   fecha: string;
   ventas: number;
   margen: number;
-  [key: string]: any;
 }
 
-export interface AgrupadoPorSede {
-  sede: string;
-  ventas: number;
-  margen: number;
-  [key: string]: any;
-}
-
-export interface AgrupadoProducto {
-  producto: string;
-  cantidad: number;
-  ventas: number;
-  margen: number;
-  [key: string]: any;
+export interface ClientConfig {
+  code: string;
+  url: string;
+  db: string;
+  username: string;
+  apiKey: string;
+  companyFilter: string;
+  whatsappNumbers?: string;
+  isActive: boolean; // Control de envío n8n
 }
 
 export interface OdooSession {
@@ -72,15 +58,4 @@ export interface OdooSession {
   useProxy: boolean;
   companyId?: number;
   companyName?: string;
-}
-
-// Nueva interfaz para la configuración de clientes
-export interface ClientConfig {
-  code: string; // El código de acceso (ej: REQUESALUD)
-  url: string;
-  db: string;
-  username: string;
-  apiKey: string;
-  companyFilter: string;
-  whatsappNumbers?: string; // Lista de números separados por coma
 }

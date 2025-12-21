@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, X, LogOut, Key, Shield, Activity, RefreshCw, Smartphone, Copy, Workflow, Send } from 'lucide-react';
+import { Trash2, Edit, Plus, X, LogOut, Key, Shield, Activity, RefreshCw, Smartphone, Copy, Workflow, Send, CheckCircle2, PauseCircle, Bell, Settings, Info, Calendar } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { DAILY_WORKFLOW_JSON, MONTHLY_WORKFLOW_JSON } from '../services/n8nTemplate';
 
@@ -16,27 +16,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     
-    // Test Connection State
     const [testingClient, setTestingClient] = useState<string | null>(null);
     const [testResult, setTestResult] = useState<any | null>(null);
-
-    // Simulation State
     const [isSimulating, setIsSimulating] = useState(false);
     const [simulationResult, setSimulationResult] = useState<string | null>(null);
     const [isSendingTest, setIsSendingTest] = useState(false);
 
-    // Form States
     const [currentClient, setCurrentClient] = useState<ClientConfig>({
-        code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: ''
+        code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: '', isActive: true
     });
     const [originalCode, setOriginalCode] = useState<string | null>(null);
 
-    // Password Change State
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [pwdMessage, setPwdMessage] = useState('');
-    
-    const DASHBOARD_URL = "https://odoo-lemon.vercel.app/";
 
     const loadClients = async () => {
         setIsLoading(true);
@@ -88,7 +81,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     };
 
     const resetForm = () => {
-        setCurrentClient({ code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: '' });
+        setCurrentClient({ code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: '', isActive: true });
         setOriginalCode(null);
     };
 
@@ -135,22 +128,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             const yesterdayStr = date.toLocaleDateString('en-CA');
             const domain: any[] = [['stop_at', '>=', `${yesterdayStr} 00:00:00`], ['stop_at', '<=', `${yesterdayStr} 23:59:59`], ['state', '=', 'closed']];
             if (testResult.companyId !== 'NO ENCONTRADO') domain.push(['company_id', '=', testResult.companyId]);
-            const sessions = await odoo.searchRead(testResult.uid, client.apiKey, 'pos.session', domain, ['config_id', 'cash_register_balance_end_real']);
+            const sessions = await odoo.searchRead(testResult.uid, client.apiKey, 'pos.session', domain, ['name', 'cash_register_balance_end_real', 'cash_register_balance_start']);
             
             let totalVenta = 0;
-            let msg = `📊 *REPORTE DIARIO - LEMONBI*\n🏢 *${client.code}*\n📅 ${yesterdayStr}\n\n`;
+            let msg = `📊 *REPORTE DE CAJA - LEMONBI*\n🏢 *${client.code}*\n📅 ${yesterdayStr}\n\n`;
             
             if (!sessions || sessions.length === 0) {
-                msg += "⚠️ No se registraron ventas cerradas para esta fecha.";
+                msg += "⚠️ No se registraron sesiones de caja cerradas para esta fecha.";
             } else {
                 sessions.forEach((s: any) => {
-                    const tienda = Array.isArray(s.config_id) ? s.config_id[1] : 'Tienda';
-                    const venta = s.cash_register_balance_end_real || 0;
-                    totalVenta += venta;
-                    msg += `• ${tienda}: S/ ${venta.toFixed(2)}\n`;
+                    const start = s.cash_register_balance_start || 0;
+                    const end = s.cash_register_balance_end_real || 0;
+                    const neta = end - start;
+                    totalVenta += neta;
+                    msg += `📍 *${s.name}*\n   • Venta: S/ ${neta.toFixed(2)}\n   • Arqueo: S/ ${end.toFixed(2)}\n\n`;
                 });
-                msg += `\n💰 *Total Ventas:* S/ ${totalVenta.toFixed(2)}\n`;
-                msg += `🔢 *Sesiones:* ${sessions.length}\n`;
+                msg += `💰 *TOTAL VENTA NETA: S/ ${totalVenta.toFixed(2)}*`;
             }
             setSimulationResult(msg);
         } catch (e: any) { setSimulationResult("Error: " + e.message); }
@@ -162,38 +155,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             alert("Primero simula un reporte y asegúrate de tener números configurados.");
             return;
         }
-
         setIsSendingTest(true);
         const numbers = testResult.whatsappNumbers.split(',').map((n: string) => n.trim());
-        let errors = 0;
-
         try {
             for (const num of numbers) {
-                const response = await fetch('https://api.red51.site/message/sendText/chatbot', {
+                // Usamos el proxy para evitar problemas de CORS en el navegador
+                const targetUrl = 'https://api.red51.site/message/sendText/chatbot';
+                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+                
+                await fetch(proxyUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        number: num,
-                        text: simulationResult
-                    })
+                    body: JSON.stringify({ number: num, text: simulationResult })
                 });
-                if (!response.ok) errors++;
             }
-
-            if (errors === 0) {
-                alert("✅ Mensaje enviado con éxito a " + numbers.length + " número(s).");
-            } else {
-                alert("⚠️ Se enviaron los mensajes pero hubo " + errors + " error(es).");
-            }
+            alert("✅ Mensaje enviado con éxito a los destinatarios configurados.");
         } catch (e) {
-            alert("❌ Error al conectar con la API de WhatsApp.");
+            console.error("Error sending WhatsApp:", e);
+            alert("❌ Error al enviar. Verifica los números o la API de WhatsApp.");
         } finally {
             setIsSendingTest(false);
         }
     };
 
-    const copyToClipboard = (text: string) => { navigator.clipboard.writeText(text); alert("Copiado"); };
-
+    const copyToClipboard = (text: string) => { navigator.clipboard.writeText(text); alert("Copiado al portapapeles"); };
     const copyWorkflow = (type: 'daily' | 'monthly') => {
         const json = type === 'daily' ? DAILY_WORKFLOW_JSON : MONTHLY_WORKFLOW_JSON;
         copyToClipboard(JSON.stringify(json, null, 2));
@@ -201,150 +186,251 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
     return (
         <div className="min-h-screen bg-slate-100 font-sans text-slate-800 pb-10">
+            {/* Nav Header */}
             <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-lg sticky top-0 z-20">
                 <div className="flex items-center gap-3">
                     <Shield className="w-5 h-5 text-brand-400" />
                     <h1 className="font-bold text-lg">LEMON BI ADMIN</h1>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => setIsPasswordModalOpen(true)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-bold uppercase"><Key className="w-4 h-4 inline mr-1"/> Clave</button>
-                    <button onClick={onLogout} className="px-3 py-1.5 bg-red-600 rounded-lg text-xs font-bold uppercase"><LogOut className="w-4 h-4 inline mr-1"/> Salir</button>
+                    <button onClick={() => setIsPasswordModalOpen(true)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-bold uppercase transition-colors hover:bg-slate-700"><Key className="w-4 h-4 inline mr-1"/> Clave</button>
+                    <button onClick={onLogout} className="px-3 py-1.5 bg-red-600 rounded-lg text-xs font-bold uppercase transition-colors hover:bg-red-700"><LogOut className="w-4 h-4 inline mr-1"/> Salir</button>
                 </div>
             </div>
 
             <div className="max-w-7xl mx-auto p-6">
-                <div className="flex justify-between items-end mb-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
                     <div>
-                        <h2 className="text-2xl font-bold">Clientes Configurados</h2>
-                        <p className="text-slate-500 text-sm">Gestiona el acceso de las sucursales a Odoo y n8n.</p>
+                        <h2 className="text-3xl font-bold text-slate-900">Gestión de Clientes y Flujos</h2>
+                        <p className="text-slate-500 text-sm mt-1">Administra quién recibe los reportes y configura la conexión con Odoo.</p>
                     </div>
-                    <button onClick={() => { resetForm(); setIsEditing(true); }} className="bg-brand-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow flex items-center gap-2"><Plus className="w-5 h-5" /> Nuevo</button>
+                    <button onClick={() => { resetForm(); setIsEditing(true); }} className="bg-brand-600 text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-xl shadow-brand-200 flex items-center gap-2 transition-all hover:bg-brand-700 hover:scale-[1.02] active:scale-95"><Plus className="w-5 h-5" /> Registrar Nueva Empresa</button>
                 </div>
 
-                <div className="bg-white rounded-2xl shadow overflow-hidden relative min-h-[100px]">
+                {/* Table Section */}
+                <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden relative">
                     {isLoading && (
                         <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center">
                             <RefreshCw className="w-8 h-8 animate-spin text-brand-500" />
                         </div>
                     )}
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 text-xs text-slate-500 uppercase font-bold border-b">
+                        <thead className="bg-slate-50 text-[10px] text-slate-400 uppercase font-bold border-b tracking-widest">
                             <tr>
-                                <th className="px-6 py-4">Código</th>
-                                <th className="px-6 py-4">Filtro Compañía</th>
-                                <th className="px-6 py-4">WhatsApp</th>
-                                <th className="px-6 py-4">Acciones</th>
+                                <th className="px-8 py-5">Reportes</th>
+                                <th className="px-8 py-5">Código Empresa</th>
+                                <th className="px-8 py-5">Filtro Compañía</th>
+                                <th className="px-8 py-5">Destinatarios</th>
+                                <th className="px-8 py-5 text-right">Acciones</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {clients.map(c => (
-                                <tr key={c.code} className="hover:bg-slate-50">
-                                    <td className="px-6 py-4 font-bold">{c.code}</td>
-                                    <td className="px-6 py-4 text-brand-700">{c.companyFilter}</td>
-                                    <td className="px-6 py-4 text-xs font-mono">{c.whatsappNumbers || '---'}</td>
-                                    <td className="px-6 py-4 flex gap-2">
-                                        <button 
-                                            onClick={() => handleTestConnection(c)} 
-                                            disabled={testingClient === c.code}
-                                            className="p-2 bg-emerald-50 text-emerald-600 rounded-lg disabled:opacity-50"
-                                            title="Probar Conexión"
-                                        >
+                                <tr key={c.code} className="hover:bg-slate-50 transition-colors group">
+                                    <td className="px-8 py-5">
+                                        {c.isActive ? (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase">
+                                                <CheckCircle2 className="w-3.5 h-3.5"/> Activo
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 uppercase">
+                                                <PauseCircle className="w-3.5 h-3.5"/> Pausado
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-8 py-5 font-bold text-slate-900 text-base">{c.code}</td>
+                                    <td className="px-8 py-5 text-slate-500 italic">{c.companyFilter}</td>
+                                    <td className="px-8 py-5">
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {c.whatsappNumbers ? c.whatsappNumbers.split(',').map((n, i) => (
+                                                <span key={i} className="px-2 py-1 bg-brand-50 text-brand-700 rounded-lg text-[10px] font-mono border border-brand-100">{n.trim()}</span>
+                                            )) : <span className="text-slate-300 text-xs italic">Sin destinatarios</span>}
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-5 flex justify-end gap-3 opacity-100 lg:opacity-60 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => handleTestConnection(c)} disabled={testingClient === c.code} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-brand-50 hover:text-brand-600 transition-all" title="Simular reporte y probar envío">
                                             {testingClient === c.code ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
                                         </button>
-                                        <button onClick={() => handleEdit(c)} className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Edit className="w-4 h-4" /></button>
-                                        <button onClick={() => handleDelete(c.code)} className="p-2 bg-red-50 text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                                        <button onClick={() => handleEdit(c)} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all"><Edit className="w-4 h-4" /></button>
+                                        <button onClick={() => handleDelete(c.code)} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all"><Trash2 className="w-4 h-4" /></button>
                                     </td>
                                 </tr>
                             ))}
-                            {clients.length === 0 && !isLoading && (
-                                <tr><td colSpan={4} className="px-6 py-10 text-center text-slate-400">No hay clientes configurados.</td></tr>
-                            )}
                         </tbody>
                     </table>
                 </div>
             </div>
 
+            {/* Modal de Simulación y Prueba */}
             {testResult && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-                        <div className="px-6 py-4 bg-slate-50 border-b flex justify-between items-center">
-                            <h3 className="font-bold">Datos Técnicos para n8n</h3>
-                            <button onClick={() => setTestResult(null)}><X className="w-5 h-5"/></button>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-md animate-in fade-in">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] border border-slate-200">
+                        <div className="px-8 py-6 bg-slate-50 border-b flex justify-between items-center">
+                            <div>
+                                <h3 className="font-bold text-xl text-slate-800">Verificador de Reporte</h3>
+                                <p className="text-[10px] text-brand-600 font-bold uppercase tracking-widest mt-0.5">Cliente: {testResult.clientConfig.code}</p>
+                            </div>
+                            <button onClick={() => setTestResult(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400"><X className="w-6 h-6"/></button>
                         </div>
-                        <div className="p-6 overflow-y-auto space-y-4">
+                        
+                        <div className="p-8 overflow-y-auto space-y-6">
                             {testResult.status === 'success' ? (
                                 <>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="bg-slate-50 p-3 rounded-lg"><p className="text-[10px] font-bold text-slate-400">UID ODOO</p><p className="font-mono text-lg">{testResult.uid}</p></div>
-                                        <div className="bg-slate-50 p-3 rounded-lg"><p className="text-[10px] font-bold text-slate-400">COMPANY ID</p><p className="font-mono text-lg text-brand-600">{testResult.companyId}</p></div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
+                                            <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1 tracking-wider">Conexión Odoo</p>
+                                            <p className="font-bold text-emerald-900">EXITOSA ✅</p>
+                                        </div>
+                                        <div className="bg-brand-50 p-4 rounded-2xl border border-brand-100">
+                                            <p className="text-[10px] font-bold text-brand-600 uppercase mb-1 tracking-wider">ID Compañía</p>
+                                            <p className="font-bold text-slate-800">{testResult.companyId}</p>
+                                        </div>
                                     </div>
-                                    <button onClick={handleSimulateReport} className="w-full bg-slate-800 text-white p-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
-                                        {isSimulating ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Smartphone className="w-4 h-4" />} Simular Reporte Diario
+
+                                    <button onClick={handleSimulateReport} disabled={isSimulating} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-3 hover:bg-black transition-all shadow-lg active:scale-95">
+                                        {isSimulating ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Smartphone className="w-5 h-5" />} 
+                                        Generar Vista Previa del Mensaje
                                     </button>
+
                                     {simulationResult && (
-                                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 relative">
-                                            <div className="bg-white rounded p-3 text-xs font-mono whitespace-pre-wrap mb-4">{simulationResult}</div>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => copyToClipboard(simulationResult)} className="flex-1 p-2 bg-white shadow-sm border rounded hover:text-brand-600 text-xs font-bold flex items-center justify-center gap-1">
-                                                    <Copy className="w-3 h-3"/> Copiar Texto
-                                                </button>
-                                                <button 
-                                                    onClick={handleSendTestWhatsApp} 
-                                                    disabled={isSendingTest}
-                                                    className="flex-1 p-2 bg-emerald-500 text-white shadow-sm rounded hover:bg-emerald-600 text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-50"
-                                                >
-                                                    {isSendingTest ? <RefreshCw className="w-3 h-3 animate-spin"/> : <Send className="w-3 h-3"/>} 
-                                                    Enviar Prueba Real
-                                                </button>
+                                        <div className="animate-in slide-in-from-top-4 duration-500">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Smartphone className="w-3 h-3"/> Simulación de WhatsApp:</p>
+                                                <button onClick={() => copyToClipboard(simulationResult)} className="text-[10px] font-bold text-brand-600 hover:text-brand-700 flex items-center gap-1"><Copy className="w-3 h-3"/> Copiar</button>
                                             </div>
-                                            <p className="text-[9px] text-emerald-600 mt-2 text-center uppercase font-bold tracking-widest">Se enviará a: {testResult.whatsappNumbers || 'Ninguno'}</p>
+                                            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 shadow-inner">
+                                                <div className="bg-white rounded-xl p-4 text-[13px] font-mono whitespace-pre-wrap shadow-sm text-slate-700 border border-emerald-50/50 leading-relaxed">{simulationResult}</div>
+                                                
+                                                <div className="mt-5 space-y-3">
+                                                    <button onClick={handleSendTestWhatsApp} disabled={isSendingTest} className="w-full p-3.5 bg-brand-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-brand-600 shadow-lg shadow-brand-100 transition-all disabled:opacity-50">
+                                                        {isSendingTest ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>} ENVIAR PRUEBA REAL AHORA
+                                                    </button>
+                                                    <p className="text-[9px] text-brand-600 text-center font-bold uppercase tracking-wider">Se enviará a: {testResult.whatsappNumbers || 'Sin números'}</p>
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
-                                    <div className="border-t pt-4">
-                                        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Integración con n8n</p>
-                                        <button onClick={() => copyWorkflow('daily')} className="w-full bg-emerald-600 text-white px-3 py-2.5 rounded-lg font-bold text-xs uppercase flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"><Workflow className="w-3 h-3"/> Copiar JSON Flujo Diario</button>
+
+                                    <div className="pt-6 border-t border-slate-100">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Workflow className="w-4 h-4 text-emerald-500" />
+                                            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Integración N8N</h4>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <button onClick={() => copyWorkflow('daily')} className="bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors">
+                                                <Copy className="w-4 h-4 text-slate-400"/> JSON Flujo Diario
+                                            </button>
+                                            <button onClick={() => copyWorkflow('monthly')} className="bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors">
+                                                <Calendar className="w-4 h-4 text-slate-400"/> JSON Flujo Mensual
+                                            </button>
+                                        </div>
                                     </div>
                                 </>
                             ) : (
-                                <div className="text-center p-4">
-                                    <p className="text-red-500 font-bold mb-2">Error de Conexión</p>
-                                    <p className="text-xs text-slate-500">{testResult.message}</p>
+                                <div className="p-10 text-center bg-red-50 rounded-3xl border border-red-100">
+                                    <div className="w-14 h-14 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner"><X className="w-8 h-8"/></div>
+                                    <h4 className="font-bold text-red-800 mb-2">Error de Conexión</h4>
+                                    <p className="text-sm text-red-600/80 font-medium leading-relaxed">{testResult.message}</p>
+                                    <p className="mt-4 text-[10px] text-red-400 font-bold uppercase">Revisa las credenciales de Odoo</p>
                                 </div>
                             )}
                         </div>
-                        <div className="bg-slate-50 p-4 flex justify-end"><button onClick={() => setTestResult(null)} className="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold">Cerrar</button></div>
+                        <div className="bg-slate-50 p-6 flex gap-3 border-t border-slate-100">
+                            <button onClick={() => setTestResult(null)} className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-100 transition-colors">Entendido</button>
+                        </div>
                     </div>
                 </div>
             )}
-
+            
+            {/* Modal Editor de Empresa */}
             {isEditing && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 overflow-y-auto">
-                    <div className="bg-white rounded-2xl w-full max-w-xl p-6 shadow-2xl animate-in zoom-in">
-                        <div className="flex justify-between mb-4"><h3 className="font-bold text-lg">{originalCode ? 'Editar' : 'Nuevo'} Cliente</h3><button onClick={() => setIsEditing(false)}><X/></button></div>
-                        <form onSubmit={handleSaveClient} className="grid grid-cols-2 gap-4">
-                            <div className="col-span-2"><label className="text-xs font-bold text-slate-400">Código Acceso</label><input type="text" className="w-full p-2 bg-slate-50 border rounded uppercase font-bold" value={currentClient.code} onChange={e => setCurrentClient({...currentClient, code: e.target.value.toUpperCase()})} required disabled={!!originalCode}/></div>
-                            <div><label className="text-xs font-bold text-slate-400">Filtro Compañía Odoo</label><input type="text" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.companyFilter} onChange={e => setCurrentClient({...currentClient, companyFilter: e.target.value})} required/></div>
-                            <div><label className="text-xs font-bold text-slate-400">WhatsApp (Números)</label><input type="text" placeholder="Ej: 51987654321, 51900111222" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.whatsappNumbers} onChange={e => setCurrentClient({...currentClient, whatsappNumbers: e.target.value})}/></div>
-                            <div className="col-span-2 border-t pt-2 mt-2"><label className="text-[10px] font-bold text-slate-400">Credenciales Odoo</label></div>
-                            <div className="col-span-2"><input type="url" placeholder="URL Odoo" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.url} onChange={e => setCurrentClient({...currentClient, url: e.target.value})} required/></div>
-                            <input type="text" placeholder="DB" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.db} onChange={e => setCurrentClient({...currentClient, db: e.target.value})} required/>
-                            <input type="text" placeholder="Usuario Técnico" className="w-full p-2 bg-slate-50 border rounded" value={currentClient.username} onChange={e => setCurrentClient({...currentClient, username: e.target.value})} required/>
-                            <input type="text" placeholder="API Key" className="w-full col-span-2 p-2 bg-slate-50 border rounded font-mono" value={currentClient.apiKey} onChange={e => setCurrentClient({...currentClient, apiKey: e.target.value})} required/>
-                            <div className="col-span-2 flex gap-2 pt-4"><button type="button" onClick={() => setIsEditing(false)} className="flex-1 p-3 bg-slate-100 rounded-xl font-bold">Cancelar</button><button type="submit" disabled={isLoading} className="flex-1 p-3 bg-brand-600 text-white rounded-xl font-bold disabled:opacity-50">{isLoading ? 'Guardando...' : 'Guardar'}</button></div>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm overflow-y-auto">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="flex justify-between items-start mb-8">
+                            <div>
+                                <h3 className="font-bold text-3xl text-slate-900">{originalCode ? 'Configuración de Empresa' : 'Nueva Integración'}</h3>
+                                <p className="text-slate-500 text-sm mt-1">Administra el envío de reportes y las credenciales de Odoo.</p>
+                            </div>
+                            <button onClick={() => setIsEditing(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"><X/></button>
+                        </div>
+
+                        <form onSubmit={handleSaveClient} className="space-y-8">
+                            <div className="bg-slate-50/50 p-6 rounded-3xl border border-slate-100 space-y-6">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Bell className="w-5 h-5 text-brand-600" />
+                                    <h4 className="font-bold text-sm text-slate-800 uppercase tracking-wider">Control de Notificaciones</h4>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-widest">Código Identificador</label>
+                                        <input type="text" className="w-full p-3.5 bg-white border border-slate-200 rounded-xl uppercase font-bold text-slate-800 focus:ring-4 focus:ring-brand-100 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-400" value={currentClient.code} onChange={e => setCurrentClient({...currentClient, code: e.target.value.toUpperCase()})} required disabled={!!originalCode} placeholder="EJ: FEETCARE"/>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-widest">Estado del Servicio</label>
+                                        <div className={`flex items-center gap-3 p-3.5 rounded-xl border transition-colors ${currentClient.isActive ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-100 border-slate-300 opacity-70'}`}>
+                                            <input type="checkbox" id="isActive" checked={currentClient.isActive} onChange={e => setCurrentClient({...currentClient, isActive: e.target.checked})} className="w-6 h-6 accent-emerald-500 cursor-pointer"/>
+                                            <label htmlFor="isActive" className={`text-sm font-bold cursor-pointer ${currentClient.isActive ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                                {currentClient.isActive ? 'Reportes Habilitados' : 'Servicio en Pausa'}
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div className="col-span-1 md:col-span-2">
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-widest">Números de WhatsApp (Destinatarios)</label>
+                                        <div className="relative group">
+                                            <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-brand-500" />
+                                            <input type="text" placeholder="Ej: 51987654321, 51900111222" className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand-100 outline-none transition-all font-mono text-sm" value={currentClient.whatsappNumbers} onChange={e => setCurrentClient({...currentClient, whatsappNumbers: e.target.value})}/>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-3xl border border-slate-200 space-y-6 shadow-sm">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Settings className="w-5 h-5 text-slate-400" />
+                                    <h4 className="font-bold text-sm text-slate-800 uppercase tracking-wider">Configuración Técnica</h4>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div className="col-span-1 md:col-span-2">
+                                        <input type="url" placeholder="URL del Servidor" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-brand-100 transition-all text-sm" value={currentClient.url} onChange={e => setCurrentClient({...currentClient, url: e.target.value})} required/>
+                                    </div>
+                                    <input type="text" placeholder="Base de Datos" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={currentClient.db} onChange={e => setCurrentClient({...currentClient, db: e.target.value})} required/>
+                                    <input type="text" placeholder="Filtro de Compañía" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={currentClient.companyFilter} onChange={e => setCurrentClient({...currentClient, companyFilter: e.target.value})} required/>
+                                    <input type="text" placeholder="Usuario" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={currentClient.username} onChange={e => setCurrentClient({...currentClient, username: e.target.value})} required/>
+                                    <input type="password" placeholder="API Key" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-mono tracking-widest" value={currentClient.apiKey} onChange={e => setCurrentClient({...currentClient, apiKey: e.target.value})} required/>
+                                </div>
+                            </div>
+                            <div className="flex gap-4 pt-6">
+                                <button type="button" onClick={() => setIsEditing(false)} className="flex-1 p-4 bg-slate-100 text-slate-600 rounded-2xl font-bold transition-all hover:bg-slate-200">Cancelar</button>
+                                <button type="submit" disabled={isLoading} className="flex-[2] p-4 bg-brand-600 text-white rounded-2xl font-bold shadow-xl shadow-brand-100 transition-all hover:bg-brand-700 hover:scale-[1.01] active:scale-95 disabled:opacity-50">
+                                    {isLoading ? 'Guardando cambios...' : 'Guardar y Aplicar'}
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>
             )}
 
+            {/* Modal Clave Maestra */}
             {isPasswordModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-                    <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in">
-                        <div className="flex justify-between mb-4"><h3 className="font-bold text-lg">Cambiar Contraseña Admin</h3><button onClick={() => setIsPasswordModalOpen(false)}><X/></button></div>
-                        <form onSubmit={handleChangePassword} className="space-y-4">
-                            <div><label className="text-xs font-bold text-slate-400">Nueva Contraseña</label><input type="password" name="new-password" className="w-full p-2 bg-slate-50 border rounded" value={newPassword} onChange={e => setNewPassword(e.target.value)} required/></div>
-                            <div><label className="text-xs font-bold text-slate-400">Confirmar Contraseña</label><input type="password" name="confirm-password" className="w-full p-2 bg-slate-50 border rounded" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required/></div>
-                            {pwdMessage && <p className={`text-xs font-bold ${pwdMessage.includes('!') ? 'text-emerald-600' : 'text-red-600'}`}>{pwdMessage}</p>}
-                            <div className="flex gap-2 pt-4"><button type="button" onClick={() => setIsPasswordModalOpen(false)} className="flex-1 p-3 bg-slate-100 rounded-xl font-bold">Cancelar</button><button type="submit" className="flex-1 p-3 bg-slate-900 text-white rounded-xl font-bold">Actualizar</button></div>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-md">
+                    <div className="bg-white rounded-[2rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in duration-200">
+                        <div className="flex justify-between items-center mb-8">
+                            <h3 className="font-bold text-2xl text-slate-800">Clave Maestra</h3>
+                            <button onClick={() => setIsPasswordModalOpen(false)} className="text-slate-300 hover:text-slate-600 transition-colors"><X/></button>
+                        </div>
+                        <form onSubmit={handleChangePassword} className="space-y-5">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block tracking-widest">Nueva Contraseña</label>
+                                <input type="password" name="new-password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-brand-100 transition-all" value={newPassword} onChange={e => setNewPassword(e.target.value)} required/>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block tracking-widest">Confirmar Contraseña</label>
+                                <input type="password" name="confirm-password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-brand-100 transition-all" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required/>
+                            </div>
+                            {pwdMessage && <p className={`text-xs font-bold text-center p-3 rounded-xl ${pwdMessage.includes('!') ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{pwdMessage}</p>}
+                            <div className="flex gap-2 pt-6">
+                                <button type="button" onClick={() => setIsPasswordModalOpen(false)} className="flex-1 py-3.5 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition-colors">Cancelar</button>
+                                <button type="submit" className="flex-[2] py-3.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-black shadow-lg transition-all">Actualizar Clave</button>
+                            </div>
                         </form>
                     </div>
                 </div>

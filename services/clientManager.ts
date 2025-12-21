@@ -1,7 +1,7 @@
+
 import { supabase } from './supabaseClient';
 import { ClientConfig } from '../types';
 
-// --- GESTIÓN DE ADMIN (PASSWORD LOCAL) ---
 const ADMIN_PWD_KEY = 'LEMON_BI_ADMIN_PWD';
 const DEFAULT_ADMIN_PWD = 'Luis2021.';
 
@@ -13,8 +13,6 @@ export const verifyAdminPassword = (password: string): boolean => {
 export const changeAdminPassword = (newPassword: string) => {
     localStorage.setItem(ADMIN_PWD_KEY, newPassword);
 };
-
-// --- GESTIÓN DE CLIENTES (SUPABASE) ---
 
 export const getClients = async (): Promise<ClientConfig[]> => {
     const { data, error } = await supabase
@@ -34,7 +32,8 @@ export const getClients = async (): Promise<ClientConfig[]> => {
         username: row.odoo_username,
         apiKey: row.odoo_api_key,
         companyFilter: row.filtro_compania,
-        whatsappNumbers: row.whatsapp_numeros
+        whatsappNumbers: row.whatsapp_numeros,
+        isActive: row.estado ?? true
     }));
 };
 
@@ -54,7 +53,8 @@ export const getClientByCode = async (code: string): Promise<ClientConfig | null
         username: data.odoo_username,
         apiKey: data.odoo_api_key,
         companyFilter: data.filtro_compania,
-        whatsappNumbers: data.whatsapp_numeros
+        whatsappNumbers: data.whatsapp_numeros,
+        isActive: data.estado ?? true
     };
 };
 
@@ -66,12 +66,12 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         odoo_username: client.username,
         odoo_api_key: client.apiKey,
         filtro_compania: client.companyFilter,
-        whatsapp_numeros: client.whatsappNumbers
+        whatsapp_numeros: client.whatsappNumbers,
+        estado: client.isActive
     };
 
     try {
         if (isNew) {
-            // Check duplicados
             const existing = await getClientByCode(client.code);
             if (existing) return { success: false, message: 'El código de empresa ya existe.' };
 

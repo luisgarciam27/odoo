@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
@@ -10,7 +11,8 @@ import {
   Citrus,
   X,
   CreditCard,
-  Store
+  Store,
+  Rocket
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -115,10 +117,18 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
           </button>
 
           <div className="mt-4 pt-4 border-t border-slate-200 text-center">
-             <p className="text-[10px] text-slate-400 font-mono">
-               Desarrollado por <br/>
-               <a href="https://gaorsystem.vercel.app/" target="_blank" rel="noreferrer" className="font-bold hover:text-brand-600 transition-colors">GAORSYSTEM PERU</a>
-             </p>
+             <a href="https://gaorsystem.vercel.app/" target="_blank" rel="noreferrer" className="flex flex-col items-center gap-2 group transition-all">
+                <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-white rounded-lg shadow-sm border border-slate-100 flex items-center justify-center">
+                        <Rocket className="w-3.5 h-3.5 text-violet-600" />
+                    </div>
+                    <div className="text-sm font-bold tracking-tight">
+                        <span className="text-slate-800">Gaor</span>
+                        <span className="text-violet-600">System</span>
+                    </div>
+                </div>
+                <p className="text-[9px] text-slate-400 font-mono hover:text-brand-600 transition-colors uppercase font-bold tracking-tighter">Powered by GaorSystem Peru</p>
+             </a>
           </div>
         </div>
       </aside>
