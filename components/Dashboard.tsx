@@ -1,18 +1,16 @@
 
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
-  CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ScatterChart, Scatter, ZAxis, Area, AreaChart 
+  CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, Area, AreaChart 
 } from 'recharts';
-// Fix: Corrected 'zap' to 'Zap' in the lucide-react import to resolve the name error on line 803
-import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Building2, Store, Download, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, Receipt, X, Target, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon, MapPin, CreditCard, Wallet, CalendarRange, Clock, Zap } from 'lucide-react';
+// Fix: Added 'X' to the lucide-react imports to resolve the missing icon error.
+import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Store, Download, FileSpreadsheet, ArrowUp, ArrowDown, Receipt, Target, PieChart as PieChartIcon, MapPin, CreditCard, Wallet, CalendarRange, Zap, X } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
-import OdooConfigModal, { ConnectionConfig } from './OdooConfigModal';
+import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
 // @ts-ignore
 import * as XLSX from 'xlsx';
 
-// --- GENERADOR DE DATOS (MOCK) ---
 const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
   const estructura = [
       { compania: 'BOTICAS MULTIFARMA S.A.C.', sedes: ['Multifarmas', 'Cristo Rey', 'Lomas', 'Tienda 4'] },
@@ -98,11 +96,6 @@ interface DashboardProps {
     view?: string;
 }
 
-type SortKey = 'producto' | 'cantidad' | 'transacciones' | 'costo' | 'ventaNeta' | 'ventaBruta' | 'ganancia' | 'margenPorcentaje' | 'metodoPago' | 'sesion' | 'fecha';
-interface SortConfig {
-  key: SortKey;
-  direction: 'asc' | 'desc';
-}
 type FilterMode = 'hoy' | 'mes' | 'anio' | 'custom';
 
 const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
@@ -110,12 +103,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'fecha', direction: 'desc' });
   const [drillDownSede, setDrillDownSede] = useState<string | null>(null);
 
-  const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth(); 
 
@@ -169,7 +159,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       setError(null);
       setDrillDownSede(null); 
       
-      // Buffer amplio para asegurar traer datos correctos de zonas horarias
       const bufferStart = new Date(dateRange.start);
       bufferStart.setDate(bufferStart.getDate() - 1); 
       const bufferEnd = new Date(dateRange.end);
@@ -188,26 +177,17 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       }
 
       const client = new OdooClient(session.url, session.db, session.useProxy);
-      const modelOrder = 'pos.order';
-      const fieldsOrder = ['date_order', 'config_id', 'lines', 'company_id', 'user_id', 'pos_reference', 'name', 'payment_ids', 'session_id'];
-
       const domain: any[] = [
         ['state', '!=', 'cancel'], 
         ['date_order', '>=', `${queryStart} 00:00:00`],
         ['date_order', '<=', `${queryEnd} 23:59:59`]
       ];
 
-      if (session.companyId) {
-          domain.push(['company_id', '=', session.companyId]);
-      }
-
-      const options: any = { limit: 10000, order: 'date_order desc' }; 
+      if (session.companyId) domain.push(['company_id', '=', session.companyId]);
 
       try {
           const context = session.companyId ? { allowed_company_ids: [session.companyId] } : {};
-          if (session.companyId) options.context = context;
-
-          const ordersRaw: any[] = await client.searchRead(session.uid, session.apiKey, modelOrder, domain, fieldsOrder, options);
+          const ordersRaw: any[] = await client.searchRead(session.uid, session.apiKey, 'pos.order', domain, ['date_order', 'config_id', 'lines', 'company_id', 'user_id', 'pos_reference', 'name', 'payment_ids', 'session_id'], { limit: 10000, order: 'date_order desc', context });
 
           if (!ordersRaw || ordersRaw.length === 0) {
              setVentasData([]);
@@ -230,55 +210,29 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               return result;
           };
 
-          const subOptions = { context };
-
-          // --- FETCH ORDER LINES ---
           const lineChunks = chunkArray(allLineIds, 1000);
           let allLinesData: any[] = [];
-          // CRITICO: Añadido price_subtotal_incl para coincidir con Odoo (incluye impuestos)
-          const fieldsLine = ['product_id', 'qty', 'price_subtotal', 'price_subtotal_incl']; 
-
           for (const chunk of lineChunks) {
-              const linesData = await client.searchRead(session.uid, session.apiKey, 'pos.order.line', [['id', 'in', chunk]], fieldsLine, subOptions);
+              const linesData = await client.searchRead(session.uid, session.apiKey, 'pos.order.line', [['id', 'in', chunk]], ['product_id', 'qty', 'price_subtotal_incl'], { context });
               if (linesData) allLinesData = allLinesData.concat(linesData);
           }
 
-          // --- FETCH PRODUCTS INFO ---
           const productIds = new Set(allLinesData.map((l: any) => Array.isArray(l.product_id) ? l.product_id[0] : null).filter(id => id));
           let productMap = new Map<number, {cost: number, cat: string}>();
-
           if (productIds.size > 0) {
               const productChunks = chunkArray(Array.from(productIds), 1000);
               for (const pChunk of productChunks) {
-                  const productsData = await client.searchRead(session.uid, session.apiKey, 'product.product', [['id', 'in', pChunk]], ['standard_price', 'categ_id'], subOptions);
-                  if (productsData) {
-                      productsData.forEach((p: any) => {
-                          productMap.set(p.id, {
-                              cost: p.standard_price || 0,
-                              cat: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General'
-                          });
-                      });
-                  }
+                  const productsData = await client.searchRead(session.uid, session.apiKey, 'product.product', [['id', 'in', pChunk]], ['standard_price', 'categ_id'], { context });
+                  if (productsData) productsData.forEach((p: any) => productMap.set(p.id, { cost: p.standard_price || 0, cat: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General' }));
               }
           }
 
-          // --- FETCH PAYMENTS INFO ---
           let paymentMap = new Map<number, string>();
           if (allPaymentIds.length > 0) {
               const paymentChunks = chunkArray(allPaymentIds, 1000);
               for (const payChunk of paymentChunks) {
-                  const paymentsData = await client.searchRead(session.uid, session.apiKey, 'pos.payment', [['id', 'in', payChunk]], ['payment_method_id', 'pos_order_id'], subOptions);
-                  if (paymentsData) {
-                      paymentsData.forEach((p: any) => {
-                          if (p.pos_order_id && p.payment_method_id) {
-                              const orderId = p.pos_order_id[0];
-                              const methodName = p.payment_method_id[1];
-                              if (!paymentMap.has(orderId)) {
-                                  paymentMap.set(orderId, methodName);
-                              }
-                          }
-                      });
-                  }
+                  const paymentsData = await client.searchRead(session.uid, session.apiKey, 'pos.payment', [['id', 'in', payChunk]], ['payment_method_id', 'pos_order_id'], { context });
+                  if (paymentsData) paymentsData.forEach((p: any) => { if (p.pos_order_id && p.payment_method_id) paymentMap.set(p.pos_order_id[0], p.payment_method_id[1]); });
               }
           }
 
@@ -299,35 +253,19 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                       if (line) {
                           const productId = Array.isArray(line.product_id) ? line.product_id[0] : 0;
                           const productName = Array.isArray(line.product_id) ? line.product_id[1] : 'Producto Desconocido';
-                          
-                          // CORRECCIÓN: Usar price_subtotal_incl para igualar el tablero de Odoo
                           const ventaBruta = line.price_subtotal_incl || 0; 
                           const prodInfo = productMap.get(productId) || { cost: 0, cat: 'Varios' };
-                          const unitCost = prodInfo.cost; 
-
-                          const costoTotal = unitCost * (line.qty || 1);
+                          const costoTotal = prodInfo.cost * (line.qty || 1);
                           const margen = ventaBruta - costoTotal; 
 
                           mappedVentas.push({
-                              fecha: orderDate,
-                              sede,
-                              compania,
-                              vendedor,
-                              sesion,
-                              producto: productName,
-                              categoria: prodInfo.cat,
-                              metodoPago, 
-                              cantidad: line.qty || 1,
-                              total: ventaBruta, 
-                              costo: costoTotal,
-                              margen,
+                              fecha: orderDate, sede, compania, vendedor, sesion, producto: productName, categoria: prodInfo.cat, metodoPago, cantidad: line.qty || 1, total: ventaBruta, costo: costoTotal, margen,
                               margenPorcentaje: ventaBruta > 0 ? ((margen / ventaBruta) * 100).toFixed(1) : '0.0',
                           });
                       }
                   });
               }
           });
-
           setVentasData(mappedVentas);
       } catch (err: any) {
           setError(`Error de Conexión: ${err.message || "Fallo en consulta XML-RPC"}`);
@@ -337,10 +275,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       }
   }, [session, dateRange]); 
 
-  useEffect(() => {
-      fetchData();
-  }, [fetchData]); 
-
+  useEffect(() => { fetchData(); }, [fetchData]); 
 
   const filteredData = useMemo(() => {
     const startStr = dateRange.start;
@@ -349,7 +284,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
         const vDate = v.fecha.toLocaleDateString('en-CA'); 
         return vDate >= startStr && vDate <= endStr;
     });
-
     if (filtros.sedeSeleccionada !== 'Todas') datos = datos.filter(v => v.sede === filtros.sedeSeleccionada);
     if (!session && filtros.companiaSeleccionada !== 'Todas') datos = datos.filter(v => v.compania.includes(filtros.companiaSeleccionada));
     if (drillDownSede) datos = datos.filter(v => v.sede === drillDownSede);
@@ -361,46 +295,31 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       const currentEnd = new Date(dateRange.end);
       const diffTime = Math.abs(currentEnd.getTime() - currentStart.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-      
-      const prevEnd = new Date(currentStart);
-      prevEnd.setDate(prevEnd.getDate() - 1);
-      const prevStart = new Date(prevEnd);
-      prevStart.setDate(prevStart.getDate() - diffDays);
-
+      const prevEnd = new Date(currentStart); prevEnd.setDate(prevEnd.getDate() - 1);
+      const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - diffDays);
       const pStartStr = prevStart.toLocaleDateString('en-CA');
       const pEndStr = prevEnd.toLocaleDateString('en-CA');
 
-      let datos = ventasData.filter(v => {
-          const vDate = v.fecha.toLocaleDateString('en-CA'); 
-          return vDate >= pStartStr && vDate <= pEndStr;
-      });
-
+      let datos = ventasData.filter(v => { const vDate = v.fecha.toLocaleDateString('en-CA'); return vDate >= pStartStr && vDate <= pEndStr; });
       if (filtros.sedeSeleccionada !== 'Todas') datos = datos.filter(v => v.sede === filtros.sedeSeleccionada);
       if (!session && filtros.companiaSeleccionada !== 'Todas') datos = datos.filter(v => v.compania.includes(filtros.companiaSeleccionada));
       if (drillDownSede) datos = datos.filter(v => v.sede === drillDownSede);
-      
       return datos;
   }, [ventasData, dateRange, filtros, session, drillDownSede]);
 
-
   const sedes = useMemo(() => {
       let base = ventasData;
-      if (!session && filtros.companiaSeleccionada !== 'Todas') {
-         base = ventasData.filter(v => v.compania.includes(filtros.companiaSeleccionada));
-      }
+      if (!session && filtros.companiaSeleccionada !== 'Todas') base = ventasData.filter(v => v.compania.includes(filtros.companiaSeleccionada));
       return ['Todas', ...Array.from(new Set(base.map(v => v.sede)))];
   }, [ventasData, filtros.companiaSeleccionada, session]);
-
 
   const kpis = useMemo(() => {
     const totalVentas = filteredData.reduce((sum, v) => sum + v.total, 0);
     const totalMargen = filteredData.reduce((sum, v) => sum + v.margen, 0);
     const unidades = filteredData.length;
-    
     const prevVentas = previousPeriodData.reduce((sum, v) => sum + v.total, 0);
     const prevMargen = previousPeriodData.reduce((sum, v) => sum + v.margen, 0);
     const prevUnidades = previousPeriodData.length;
-
     const calcVar = (curr: number, prev: number) => prev > 0 ? ((curr - prev) / prev) * 100 : 0;
 
     return {
@@ -419,16 +338,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     const agrupado: Record<string, { name: string; ventas: number; costo: number; margen: number; transacciones: number; margenPct: number }> = {};
     filteredData.forEach(v => {
         if (!agrupado[v.sede]) agrupado[v.sede] = { name: v.sede, ventas: 0, costo: 0, margen: 0, transacciones: 0, margenPct: 0 };
-        agrupado[v.sede].ventas += v.total;
-        agrupado[v.sede].costo += v.costo;
-        agrupado[v.sede].margen += v.margen;
-        agrupado[v.sede].transacciones += 1;
+        agrupado[v.sede].ventas += v.total; agrupado[v.sede].costo += v.costo; agrupado[v.sede].margen += v.margen; agrupado[v.sede].transacciones += 1;
     });
-
-    return Object.values(agrupado).map(item => ({
-        ...item,
-        margenPct: item.ventas > 0 ? (item.margen / item.ventas) * 100 : 0
-    })).sort((a, b) => b.ventas - a.ventas);
+    return Object.values(agrupado).map(item => ({ ...item, margenPct: item.ventas > 0 ? (item.margen / item.ventas) * 100 : 0 })).sort((a, b) => b.ventas - a.ventas);
   }, [filteredData]);
 
   const ventasPorDia = useMemo(() => {
@@ -436,8 +348,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
     filteredData.forEach(v => {
       const fecha = v.fecha.toLocaleDateString('en-CA');
       if (!agrupado[fecha]) agrupado[fecha] = { fecha, ventas: 0, margen: 0 };
-      agrupado[fecha].ventas += v.total;
-      agrupado[fecha].margen += v.margen;
+      agrupado[fecha].ventas += v.total; agrupado[fecha].margen += v.margen;
     });
     return Object.values(agrupado).sort((a, b) => a.fecha.localeCompare(b.fecha));
   }, [filteredData]);
@@ -447,172 +358,44 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       filteredData.forEach(v => {
           const sede = v.sede || 'Sin Sede';
           if (!agg[sede]) agg[sede] = { name: sede, ventas: 0, margen: 0 };
-          agg[sede].ventas += v.total;
-          agg[sede].margen += v.margen;
+          agg[sede].ventas += v.total; agg[sede].margen += v.margen;
       });
       return Object.values(agg).sort((a, b) => b.ventas - a.ventas);
   }, [filteredData]);
 
-
-  const bottomProductosVolumen = useMemo(() => {
-      const agg: Record<string, number> = {};
-      filteredData.forEach(v => {
-          agg[v.producto] = (agg[v.producto] || 0) + v.total;
-      });
-      return Object.entries(agg).map(([name, val]) => ({ name, val })).sort((a, b) => a.val - b.val).slice(0, 5);
-  }, [filteredData]);
-
   const ventasPorCategoria = useMemo(() => {
       const agg: Record<string, number> = {};
-      filteredData.forEach(v => {
-          const cat = v.categoria || 'Sin Categoría';
-          agg[cat] = (agg[cat] || 0) + v.total;
-      });
+      filteredData.forEach(v => { const cat = v.categoria || 'Sin Categoría'; agg[cat] = (agg[cat] || 0) + v.total; });
       return Object.entries(agg).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [filteredData]);
 
   const ventasPorMetodoPago = useMemo(() => {
       const agg: Record<string, number> = {};
-      filteredData.forEach(v => {
-          const metodo = v.metodoPago || 'No definido';
-          agg[metodo] = (agg[metodo] || 0) + v.total;
-      });
+      filteredData.forEach(v => { const metodo = v.metodoPago || 'No definido'; agg[metodo] = (agg[metodo] || 0) + v.total; });
       return Object.entries(agg).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [filteredData]);
 
-  const rankingVendedores = useMemo(() => {
-      const agg: Record<string, number> = {};
-      filteredData.forEach(v => {
-          const vend = v.vendedor || 'Sistema';
-          agg[vend] = (agg[vend] || 0) + v.total;
-      });
-      return Object.entries(agg).map(([name, ventas]) => ({ name, ventas })).sort((a, b) => b.ventas - a.ventas);
-  }, [filteredData]);
-
-  const pagosData = useMemo(() => {
-      if (view !== 'pagos') return [];
-      return filteredData.map(v => ({
-          fecha: v.fecha,
-          fechaStr: v.fecha.toLocaleDateString('es-PE'),
-          sesion: v.sesion,
-          sede: v.sede,
-          metodo: v.metodoPago,
-          producto: v.producto,
-          total: v.total
-      })).sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
-
-  }, [filteredData, view]);
-
-  const pagosPorDiaStack = useMemo(() => {
-      if (view !== 'pagos') return [];
-      const agg: Record<string, any> = {};
-      const methods = new Set<string>(filteredData.map(v => v.metodoPago));
-      
-      filteredData.forEach(v => {
-          const f = v.fecha.toLocaleDateString('en-CA');
-          if(!agg[f]) {
-              agg[f] = { fecha: f };
-              methods.forEach(m => agg[f][m] = 0);
-          }
-          const metodo = v.metodoPago as string;
-          agg[f][metodo] = (agg[f][metodo] || 0) + v.total;
-      });
-      return Object.values(agg).sort((a: any, b: any) => a.fecha.localeCompare(b.fecha));
-  }, [filteredData, view]);
-
-  const sessionsInSede = useMemo(() => {
-      if (!drillDownSede) return [];
-      const agg: Record<string, { sesion: string; responsable: string; total: number; transacciones: number; inicio: Date; fin: Date }> = {};
-      
-      filteredData.forEach(v => {
-          if(v.sede !== drillDownSede) return;
-
-          if (!agg[v.sesion]) {
-              agg[v.sesion] = { 
-                  sesion: v.sesion, 
-                  responsable: v.vendedor, 
-                  total: 0, 
-                  transacciones: 0,
-                  inicio: v.fecha,
-                  fin: v.fecha
-              };
-          }
-          agg[v.sesion].total += v.total;
-          agg[v.sesion].transacciones += 1; 
-          if (v.fecha < agg[v.sesion].inicio) agg[v.sesion].inicio = v.fecha;
-          if (v.fecha > agg[v.sesion].fin) agg[v.sesion].fin = v.fecha;
-      });
-      
-      return Object.values(agg).sort((a, b) => b.inicio.getTime() - a.inicio.getTime());
-  }, [filteredData, drillDownSede]);
-
-
-  const reporteProductos = useMemo(() => {
-    if (view === 'pagos') {
-        return pagosData;
-    }
-
-    const agrupado: Record<string, any> = {};
-    filteredData.forEach(v => {
-      const key = `${v.producto}-${v.metodoPago}`;
-      
-      if (!agrupado[key]) {
-          agrupado[key] = { 
-              producto: v.producto,
-              categoria: v.categoria || 'General', 
-              metodoPago: v.metodoPago,
-              cantidad: 0, 
-              transacciones: 0,
-              costo: 0,
-              ventaNeta: 0, 
-              ganancia: 0
-          };
-      }
-      agrupado[key].cantidad += v.cantidad;
-      agrupado[key].transacciones += 1;
-      agrupado[key].costo += v.costo;
-      agrupado[key].ventaNeta += v.total; 
-      agrupado[key].ganancia += v.margen;
-    });
-
-    return Object.values(agrupado)
-        .map(p => ({
-            ...p,
-            margenPorcentaje: p.ventaNeta > 0 ? (p.ganancia / p.ventaNeta) * 100 : 0
-        }))
-        .sort((a: any, b: any) => {
-            const key = sortConfig.key as string;
-            const valA = a[key];
-            const valB = b[key];
-            if (valA === undefined || valB === undefined) return 0;
-            if (typeof valA === 'string') {
-                return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-            }
-            return sortConfig.direction === 'asc' ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
-        });
-  }, [filteredData, sortConfig, view, pagosData]);
-
-  const tableSource = view === 'pagos' ? pagosData : reporteProductos;
-
-  useEffect(() => { setCurrentPage(1); }, [tableSource.length, sortConfig, view]);
-  const totalPages = Math.ceil(tableSource.length / itemsPerPage);
-  const paginatedData = tableSource.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  
-  const handlePageChange = (newPage: number) => { if (newPage >= 1 && newPage <= totalPages) setCurrentPage(newPage); };
-
-  const handleSort = (key: SortKey) => {
-      setSortConfig(current => ({
-          key,
-          direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc'
-      }));
+  const handleDownloadExcel = () => {
+    try {
+        const wb = XLSX.utils.book_new();
+        const headers = [["PRODUCTO", "SEDE", "MÉTODO DE PAGO", "UNIDADES", "VENTA NETA (S/)", "MARGEN %"]];
+        const body = filteredData.map(p => [p.producto, p.sede, p.metodoPago, p.cantidad, p.total, p.margenPorcentaje]);
+        const ws = XLSX.utils.aoa_to_sheet([...headers, ...body]);
+        XLSX.utils.book_append_sheet(wb, ws, "Ventas");
+        XLSX.writeFile(wb, `Reporte_LemonBI_${dateRange.start}.xlsx`);
+    } catch (e) { alert("Error al generar el reporte."); }
   };
 
-  const SortIcon = ({ column }: { column: SortKey }) => {
-      if (sortConfig.key !== column) return <ArrowUpDown className="w-3 h-3 text-slate-300 ml-1 inline" />;
-      return sortConfig.direction === 'asc' 
-          ? <ArrowUp className="w-3 h-3 text-brand-600 ml-1 inline" />
-          : <ArrowDown className="w-3 h-3 text-brand-600 ml-1 inline" />;
-  };
+  const isRentabilidad = view === 'rentabilidad';
+  const chartDataKey = isRentabilidad ? 'margen' : 'ventas'; 
+  const chartColor = isRentabilidad ? '#84cc16' : '#0ea5e9'; 
+  const chartLabel = isRentabilidad ? 'Ganancia' : 'Venta Neta';
+
+  const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const ANIOS = [2023, 2024, 2025];
+  const COLORS = ['#84cc16', '#0ea5e9', '#f59e0b', '#ec4899', '#8b5cf6', '#10b981', '#f43f5e', '#6366f1'];
+
+  const paginatedData = useMemo(() => filteredData.slice(0, itemsPerPage), [filteredData]);
 
   const VariacionBadge = ({ val }: { val: number }) => {
       if (isNaN(val)) return null;
@@ -625,72 +408,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
       );
   };
 
-  const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  const ANIOS = [2023, 2024, 2025];
-  const COLORS = ['#84cc16', '#0ea5e9', '#f59e0b', '#ec4899', '#8b5cf6', '#10b981', '#f43f5e', '#6366f1'];
-
-  const handleDownloadPagos = () => {
-    try {
-        const wb = XLSX.utils.book_new();
-        const titulo = [["REPORTE DE INGRESOS POR MÉTODO DE PAGO Y SESIÓN"]];
-        const headers = [["FECHA", "SEDE", "SESIÓN CAJA", "MÉTODO DE PAGO", "PRODUCTO / CONCEPTO", "MONTO (S/)"]];
-        const body = pagosData.map((row: any) => [row.fechaStr, row.sede, row.sesion, row.metodo, row.producto, row.total]);
-        const ws = XLSX.utils.aoa_to_sheet([...titulo, [""], ...headers, ...body]);
-        XLSX.utils.book_append_sheet(wb, ws, "Pagos Detalle");
-        XLSX.writeFile(wb, `Reporte_Pagos_${dateRange.start}.xlsx`);
-    } catch (e) { console.error(e); alert("Error generando Excel de pagos."); }
-  };
-
-  const handleDownloadExcel = () => {
-    try {
-        const wb = XLSX.utils.book_new();
-        const headers = [["PRODUCTO", "CATEGORÍA", "MÉTODO DE PAGO", "UNIDADES", "COSTO TOTAL (S/)", "VENTA NETA (S/)", "GANANCIA (S/)", "MARGEN %"]];
-        const body = (reporteProductos as any[]).map(p => [p.producto, p.categoria, p.metodoPago, p.cantidad, p.costo, p.ventaNeta, p.ganancia, p.margenPorcentaje / 100]);
-        const ws = XLSX.utils.aoa_to_sheet([...headers, ...body]);
-        XLSX.utils.book_append_sheet(wb, ws, "Productos");
-        XLSX.writeFile(wb, `Reporte_Productos_${dateRange.start}.xlsx`);
-    } catch (e) { alert("Error al generar el reporte de productos."); }
-  };
-
-  const isRentabilidad = view === 'rentabilidad';
-  const chartDataKey = isRentabilidad ? 'margen' : 'ventas'; 
-  const chartColor = isRentabilidad ? '#84cc16' : '#0ea5e9'; 
-  const chartLabel = isRentabilidad ? 'Ganancia' : 'Venta Neta';
-
-  const renderTableRows = () => {
-      if (paginatedData.length === 0) {
-          return (
-            <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">No se encontraron productos para los filtros seleccionados.</td></tr>
-          );
-      }
-      return paginatedData.map((item: any, idx: number) => {
-          const prod = item as any;
-          return (
-            <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                <td className="px-4 py-3.5 font-medium text-slate-700 group-hover:text-brand-700 transition-colors max-w-xs truncate" title={prod.producto}>{prod.producto}</td>
-                <td className="px-4 py-3.5 text-slate-500 text-xs">{prod.categoria}</td>
-                <td className="px-4 py-3.5 text-slate-500 text-xs">
-                    <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-medium">{prod.metodoPago || 'Varios'}</span>
-                </td>
-                <td className="px-4 py-3.5 text-right text-slate-600">{prod.cantidad}</td>
-                <td className="px-4 py-3.5 text-right text-slate-400">S/ {prod.costo.toFixed(2)}</td>
-                <td className="px-4 py-3.5 text-right font-bold text-slate-800">S/ {prod.ventaNeta.toFixed(2)}</td>
-                <td className="px-4 py-3.5 text-right font-medium text-brand-600">S/ {prod.ganancia.toFixed(2)}</td>
-                <td className="px-4 py-3.5 text-right font-medium text-brand-600">
-                    <span className={`px-2 py-1 rounded-md text-xs font-bold ${prod.margenPorcentaje < 20 ? 'bg-red-100 text-red-600' : 'bg-brand-100 text-brand-700'}`}>
-                        {prod.margenPorcentaje.toFixed(1)}%
-                    </span>
-                </td>
-            </tr>
-          );
-      });
-  };
-
   const renderGeneralView = () => (
       <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-brand-500 to-brand-600'} rounded-2xl shadow-lg shadow-brand-500/20 p-6 flex flex-col justify-between hover:scale-[1.02] transition-transform duration-300 relative overflow-hidden group`}>
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-white/30 transition-colors"></div>
+            <div className={`bg-gradient-to-br ${isRentabilidad ? 'from-slate-700 to-slate-800' : 'from-brand-500 to-brand-600'} rounded-2xl shadow-lg p-6 flex flex-col justify-between hover:scale-[1.02] transition-transform relative overflow-hidden group`}>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
                 <div className="flex items-center justify-between mb-4 relative z-10">
                     <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
                         {isRentabilidad ? <DollarSign className="w-6 h-6 text-white" /> : <TrendingUp className="w-6 h-6 text-white" />}
@@ -699,11 +421,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 </div>
                 <div className="relative z-10">
                     <p className="text-white/80 text-sm font-medium tracking-wide">Venta Total (con IGV)</p>
-                    <h3 className="text-3xl font-bold text-white mt-1 tracking-tight drop-shadow-sm">S/ {kpis.totalVentas}</h3>
+                    <h3 className="text-3xl font-bold text-white mt-1 tracking-tight">S/ {kpis.totalVentas}</h3>
                 </div>
             </div>
-
-            <div className={`rounded-2xl shadow-md border p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 bg-white ${isRentabilidad ? 'border-brand-200' : 'border-slate-100'}`}>
+            <div className={`rounded-2xl shadow-md border p-6 flex flex-col justify-between hover:scale-[1.02] transition-all bg-white ${isRentabilidad ? 'border-brand-200' : 'border-slate-100'}`}>
                 <div className="flex items-center justify-between mb-4">
                     <div className={`p-2.5 rounded-xl ${isRentabilidad ? 'bg-brand-100 text-brand-600' : 'bg-blue-50 text-blue-600'}`}>
                         {isRentabilidad ? <TrendingUp className="w-6 h-6" /> : <Receipt className="w-6 h-6" />}
@@ -715,25 +436,22 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                     <h3 className={`text-3xl font-bold mt-1 tracking-tight ${isRentabilidad ? 'text-brand-600' : 'text-slate-800'}`}>S/ {isRentabilidad ? kpis.totalMargen : kpis.ticketPromedio}</h3>
                 </div>
             </div>
-
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-violet-200 transition-all hover:scale-[1.02] duration-300">
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300">
                 <div className="flex items-center justify-between mb-4">
                     <div className="p-2.5 bg-violet-50 rounded-xl text-violet-600"><Package className="w-6 h-6" /></div>
                     <VariacionBadge val={kpis.variacionUnidades} />
                 </div>
                 <div><p className="text-slate-500 text-sm font-medium">Items Procesados</p><h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.unidadesVendidas}</h3></div>
             </div>
-
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:border-orange-200 transition-all hover:scale-[1.02] duration-300">
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 flex flex-col justify-between hover:scale-[1.02] transition-all duration-300">
                 <div className="flex items-center justify-between mb-4">
                     <div className="p-2.5 bg-orange-50 rounded-xl text-orange-600"><Store className="w-6 h-6" /></div>
                 </div>
                 <div><p className="text-slate-500 text-sm font-medium">Margen Promedio %</p><h3 className="text-3xl font-bold text-slate-800 mt-1 tracking-tight">{kpis.margenPromedio}%</h3></div>
             </div>
         </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
                 <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ArrowUpRight className="w-5 h-5 text-brand-500"/> Tendencia de Ventas (Diario)</h3>
                 <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -742,17 +460,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                         <XAxis dataKey="fecha" tickFormatter={(value) => new Date(value + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })} stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dy={10} />
                         <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
-                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, chartLabel]} contentStyle={{borderRadius: '12px', border: 'none'}} />
                         <Area type="monotone" dataKey={chartDataKey} stroke={chartColor} fillOpacity={1} fill="url(#colorVentas)" strokeWidth={2} />
                     </AreaChart>
                 </ResponsiveContainer>
                 </div>
             </div>
-
-            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-lg transition-shadow">
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
                 <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        {view === 'ventas' ? <CreditCard className="w-5 h-5 text-emerald-500"/> : <PieChartIcon className="w-5 h-5 text-violet-500"/>}
-                        {view === 'ventas' ? 'Distribución por Método de Pago' : 'Participación por Categoría'}
+                    {view === 'ventas' ? <CreditCard className="w-5 h-5 text-emerald-500"/> : <PieChartIcon className="w-5 h-5 text-violet-500"/>}
+                    {view === 'ventas' ? 'Distribución por Método de Pago' : 'Participación por Categoría'}
                 </h3>
                 <div className="h-[300px] w-full flex">
                     <ResponsiveContainer width="100%" height="100%">
@@ -760,15 +477,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                             <Pie data={view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria} cx="50%" cy="50%" innerRadius={70} outerRadius={90} fill="#8884d8" paddingAngle={3} dataKey="value" stroke="#fff" strokeWidth={3}>
                                 {(view === 'ventas' ? ventasPorMetodoPago : ventasPorCategoria).map((_, index) => ( <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} /> ))}
                             </Pie>
-                            <Tooltip formatter={(value: number) => `S/ ${value.toFixed(2)}`} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                            <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '11px', color: '#64748b'}} />
+                            <Tooltip formatter={(value: number) => `S/ ${value.toFixed(2)}`} contentStyle={{borderRadius: '12px', border: 'none'}} />
+                            <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '11px'}} />
                         </PieChart>
                     </ResponsiveContainer>
                 </div>
             </div>
         </div>
-
-        <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 animate-in fade-in slide-in-from-bottom-8 duration-700 hover:shadow-lg transition-shadow">
+        <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
             <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><MapPin className="w-5 h-5 text-brand-500"/> Comparativa por Punto de Venta</h3>
             <div className="h-[350px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -776,7 +492,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                         <XAxis dataKey="name" stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dy={10} />
                         <YAxis stroke="#94a3b8" tick={{fontSize: 12}} axisLine={false} dx={-10} tickFormatter={(value) => `S/${value}`} />
-                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, '']} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} cursor={{fill: '#f8fafc'}} />
+                        <Tooltip formatter={(value: number) => [`S/ ${Number(value).toFixed(2)}`, '']} contentStyle={{borderRadius: '12px', border: 'none'}} />
                         <Legend wrapperStyle={{paddingTop: '20px'}} />
                         <Bar dataKey="ventas" name="Venta Total" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="margen" name="Ganancia" fill="#84cc16" radius={[4, 4, 0, 0]} />
@@ -789,15 +505,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 font-sans w-full relative pb-20 text-slate-700">
-      <OdooConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} initialConfig={{ url: session?.url || '', db: session?.db || '', username: session?.username || '', apiKey: session?.apiKey || '' }} onSave={(config: ConnectionConfig) => { setIsConfigOpen(false); }} />
-      
+      <OdooConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} initialConfig={{ url: session?.url || '', db: session?.db || '', username: session?.username || '', apiKey: session?.apiKey || '' }} onSave={() => setIsConfigOpen(false)} />
       {loading && (
           <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-50 flex flex-col items-center justify-center h-screen fixed">
-              <div className="relative"><div className="absolute inset-0 bg-brand-200 blur-xl opacity-50 animate-pulse"></div><div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 border border-slate-100 relative z-10"><RefreshCw className="w-8 h-8 animate-spin text-brand-500" /><span className="font-medium text-slate-600">Sincronizando con Odoo...</span></div></div>
+              <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 border border-slate-100 relative z-10"><RefreshCw className="w-8 h-8 animate-spin text-brand-500" /><span className="font-medium text-slate-600">Sincronizando con Odoo...</span></div>
           </div>
       )}
-
-      <div className="max-w-7xl mx-auto space-y-6 animate-fade-in-up">
+      <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-2">
            <div>
               <h1 className="text-3xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
@@ -806,15 +520,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               </h1>
               <p className="text-slate-500 text-sm font-light mt-1">Sincronizado con: <span className="text-brand-600 font-bold">{session?.companyName || 'Modo Demo'}</span> | {dateRange.start}</p>
            </div>
-           
            <div className="mt-4 md:mt-0 flex gap-3">
               <button onClick={() => fetchData()} className="flex items-center gap-2 bg-white text-slate-600 px-4 py-2 rounded-xl border border-slate-200 font-medium text-sm hover:bg-slate-50 shadow-sm transition-all"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Actualizar</button>
               <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs uppercase shadow-sm ${session ? 'bg-brand-50 text-brand-700 border-brand-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{session ? 'Online' : 'Demo'}</div>
            </div>
         </div>
-        
         {error && ( <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex gap-3 items-center shadow-sm"><AlertCircle className="w-5 h-5 text-red-500" /><p className="text-sm">{error}</p></div> )}
-
         <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-5 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-500"></div>
           <div className="flex flex-col gap-4">
@@ -847,7 +558,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
             </div>
           </div>
         </div>
-
         {view === 'pagos' ? (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -871,14 +581,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
                 <button onClick={() => setDrillDownSede(null)} className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg text-sm font-bold border border-slate-200 transition-all hover:bg-slate-50"><X className="w-4 h-4" /> Salir del Detalle</button>
             </div>
         ) : view === 'comparativa' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in slide-in-from-bottom-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {kpisPorSede.map((sede, idx) => (
                 <div key={idx} className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 hover:shadow-xl hover:border-brand-200 transition-all group relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-20 h-20 bg-brand-50 rounded-bl-full opacity-50 transition-colors group-hover:bg-brand-100"></div>
-                    <div className="flex justify-between items-start mb-4 relative z-10"><div className="p-2 bg-brand-50 rounded-lg text-brand-600"><Store className="w-5 h-5" /></div><button onClick={() => setDrillDownSede(sede.name)} className="text-[9px] font-bold text-brand-600 bg-brand-100 px-2 py-1 rounded uppercase flex items-center gap-1">Ver Cajas <ArrowUpRight className="w-3 h-3"/></button></div>
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-brand-50 rounded-bl-full opacity-50 group-hover:bg-brand-100"></div>
+                    <div className="flex justify-between items-start mb-4 relative z-10"><div className="p-2 bg-brand-50 rounded-lg text-brand-600"><Store className="w-5 h-5" /></div><button onClick={() => setDrillDownSede(sede.name)} className="text-[9px] font-bold text-brand-600 bg-brand-100 px-2 py-1 rounded uppercase flex items-center gap-1">Ver Detalle <ArrowUpRight className="w-3 h-3"/></button></div>
                     <h3 className="text-lg font-bold text-slate-800 mb-4 truncate">{sede.name}</h3>
                     <div className="space-y-3">
-                        <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-[10px] font-bold text-slate-400 uppercase">Venta (con IGV)</span><span className="text-sm font-bold text-slate-700">S/ {sede.ventas.toLocaleString()}</span></div>
+                        <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-[10px] font-bold text-slate-400 uppercase">Venta</span><span className="text-sm font-bold text-slate-700">S/ {sede.ventas.toLocaleString()}</span></div>
                         <div className="flex justify-between border-b border-slate-50 pb-2"><span className="text-[10px] font-bold text-slate-400 uppercase">Margen</span><span className="text-sm font-bold text-brand-600">S/ {sede.margen.toLocaleString()}</span></div>
                         <div className="pt-2"><div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-400">Rentabilidad</span><span className="text-brand-600">{sede.margenPct.toFixed(1)}%</span></div><div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden"><div className="bg-brand-500 h-full" style={{ width: `${Math.min(sede.margenPct, 100)}%` }}></div></div></div>
                     </div>
@@ -886,7 +596,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               ))}
           </div>
         ) : renderGeneralView()}
-
         {((view !== 'pagos' && view !== 'comparativa') || drillDownSede) && (
             <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-6">

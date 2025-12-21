@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient, changeAdminPassword } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, X, LogOut, Key, Shield, Activity, RefreshCw, Smartphone, Copy, Workflow, Send, CheckCircle2, PauseCircle, Bell, Settings, Info, Calendar } from 'lucide-react';
+import { Trash2, Edit, Plus, X, LogOut, Key, Shield, Activity, RefreshCw, Smartphone, Copy, Workflow, Send, CheckCircle2, PauseCircle, Bell, Settings, Calendar } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { DAILY_WORKFLOW_JSON, MONTHLY_WORKFLOW_JSON } from '../services/n8nTemplate';
 
@@ -159,7 +159,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         const numbers = testResult.whatsappNumbers.split(',').map((n: string) => n.trim());
         try {
             for (const num of numbers) {
-                // Usamos el proxy para evitar problemas de CORS en el navegador
                 const targetUrl = 'https://api.red51.site/message/sendText/chatbot';
                 const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
                 
@@ -186,7 +185,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
     return (
         <div className="min-h-screen bg-slate-100 font-sans text-slate-800 pb-10">
-            {/* Nav Header */}
             <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-lg sticky top-0 z-20">
                 <div className="flex items-center gap-3">
                     <Shield className="w-5 h-5 text-brand-400" />
@@ -197,7 +195,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     <button onClick={onLogout} className="px-3 py-1.5 bg-red-600 rounded-lg text-xs font-bold uppercase transition-colors hover:bg-red-700"><LogOut className="w-4 h-4 inline mr-1"/> Salir</button>
                 </div>
             </div>
-
             <div className="max-w-7xl mx-auto p-6">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
                     <div>
@@ -206,8 +203,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     </div>
                     <button onClick={() => { resetForm(); setIsEditing(true); }} className="bg-brand-600 text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-xl shadow-brand-200 flex items-center gap-2 transition-all hover:bg-brand-700 hover:scale-[1.02] active:scale-95"><Plus className="w-5 h-5" /> Registrar Nueva Empresa</button>
                 </div>
-
-                {/* Table Section */}
                 <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden relative">
                     {isLoading && (
                         <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center">
@@ -247,8 +242,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                             )) : <span className="text-slate-300 text-xs italic">Sin destinatarios</span>}
                                         </div>
                                     </td>
-                                    <td className="px-8 py-5 flex justify-end gap-3 opacity-100 lg:opacity-60 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => handleTestConnection(c)} disabled={testingClient === c.code} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-brand-50 hover:text-brand-600 transition-all" title="Simular reporte y probar envío">
+                                    <td className="px-8 py-5 flex justify-end gap-3">
+                                        <button onClick={() => handleTestConnection(c)} disabled={testingClient === c.code} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-brand-50 hover:text-brand-600 transition-all">
                                             {testingClient === c.code ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
                                         </button>
                                         <button onClick={() => handleEdit(c)} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all"><Edit className="w-4 h-4" /></button>
@@ -260,8 +255,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     </table>
                 </div>
             </div>
-
-            {/* Modal de Simulación y Prueba */}
             {testResult && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-md animate-in fade-in">
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] border border-slate-200">
@@ -272,7 +265,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                             </div>
                             <button onClick={() => setTestResult(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400"><X className="w-6 h-6"/></button>
                         </div>
-                        
                         <div className="p-8 overflow-y-auto space-y-6">
                             {testResult.status === 'success' ? (
                                 <>
@@ -286,12 +278,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                             <p className="font-bold text-slate-800">{testResult.companyId}</p>
                                         </div>
                                     </div>
-
                                     <button onClick={handleSimulateReport} disabled={isSimulating} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-3 hover:bg-black transition-all shadow-lg active:scale-95">
                                         {isSimulating ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Smartphone className="w-5 h-5" />} 
                                         Generar Vista Previa del Mensaje
                                     </button>
-
                                     {simulationResult && (
                                         <div className="animate-in slide-in-from-top-4 duration-500">
                                             <div className="flex items-center justify-between mb-2">
@@ -300,7 +290,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                             </div>
                                             <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 shadow-inner">
                                                 <div className="bg-white rounded-xl p-4 text-[13px] font-mono whitespace-pre-wrap shadow-sm text-slate-700 border border-emerald-50/50 leading-relaxed">{simulationResult}</div>
-                                                
                                                 <div className="mt-5 space-y-3">
                                                     <button onClick={handleSendTestWhatsApp} disabled={isSendingTest} className="w-full p-3.5 bg-brand-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-brand-600 shadow-lg shadow-brand-100 transition-all disabled:opacity-50">
                                                         {isSendingTest ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>} ENVIAR PRUEBA REAL AHORA
@@ -310,7 +299,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                             </div>
                                         </div>
                                     )}
-
                                     <div className="pt-6 border-t border-slate-100">
                                         <div className="flex items-center gap-2 mb-3">
                                             <Workflow className="w-4 h-4 text-emerald-500" />
@@ -331,7 +319,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                     <div className="w-14 h-14 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner"><X className="w-8 h-8"/></div>
                                     <h4 className="font-bold text-red-800 mb-2">Error de Conexión</h4>
                                     <p className="text-sm text-red-600/80 font-medium leading-relaxed">{testResult.message}</p>
-                                    <p className="mt-4 text-[10px] text-red-400 font-bold uppercase">Revisa las credenciales de Odoo</p>
                                 </div>
                             )}
                         </div>
@@ -341,8 +328,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     </div>
                 </div>
             )}
-            
-            {/* Modal Editor de Empresa */}
             {isEditing && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm overflow-y-auto">
                     <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl animate-in zoom-in duration-300">
@@ -353,7 +338,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                             </div>
                             <button onClick={() => setIsEditing(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"><X/></button>
                         </div>
-
                         <form onSubmit={handleSaveClient} className="space-y-8">
                             <div className="bg-slate-50/50 p-6 rounded-3xl border border-slate-100 space-y-6">
                                 <div className="flex items-center gap-2 mb-2">
@@ -375,7 +359,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                         </div>
                                     </div>
                                     <div className="col-span-1 md:col-span-2">
-                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-widest">Números de WhatsApp (Destinatarios)</label>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-widest">Números de WhatsApp</label>
                                         <div className="relative group">
                                             <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-brand-500" />
                                             <input type="text" placeholder="Ej: 51987654321, 51900111222" className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand-100 outline-none transition-all font-mono text-sm" value={currentClient.whatsappNumbers} onChange={e => setCurrentClient({...currentClient, whatsappNumbers: e.target.value})}/>
@@ -408,11 +392,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     </div>
                 </div>
             )}
-
-            {/* Modal Clave Maestra */}
             {isPasswordModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-md">
-                    <div className="bg-white rounded-[2rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in duration-200">
+                    <div className="bg-white rounded-[2rem] w-full max-sm p-10 shadow-2xl animate-in zoom-in duration-200">
                         <div className="flex justify-between items-center mb-8">
                             <h3 className="font-bold text-2xl text-slate-800">Clave Maestra</h3>
                             <button onClick={() => setIsPasswordModalOpen(false)} className="text-slate-300 hover:text-slate-600 transition-colors"><X/></button>
