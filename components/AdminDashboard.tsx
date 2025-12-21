@@ -152,26 +152,47 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
     const handleSendTestWhatsApp = async () => {
         if (!simulationResult || !testResult?.whatsappNumbers) {
-            alert("Primero simula un reporte y asegúrate de tener números configurados.");
+            alert("Primero simula un reporte y asegura tener números configurados.");
             return;
         }
         setIsSendingTest(true);
-        const numbers = testResult.whatsappNumbers.split(',').map((n: string) => n.trim());
+        const rawNumbers = testResult.whatsappNumbers.split(',').map((n: string) => n.trim().replace(/\D/g, ''));
+        const numbers = rawNumbers.filter((n: string) => n.length >= 9);
+        
+        if (numbers.length === 0) {
+            alert("❌ No hay números válidos configurados.");
+            setIsSendingTest(false);
+            return;
+        }
+
         try {
+            let successCount = 0;
             for (const num of numbers) {
                 const targetUrl = 'https://api.red51.site/message/sendText/chatbot';
-                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+                // Usamos un proxy de respaldo más agresivo para peticiones POST
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
                 
-                await fetch(proxyUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ number: num, text: simulationResult })
-                });
+                try {
+                    const response = await fetch(proxyUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ number: num, text: simulationResult })
+                    });
+                    if (response.ok) successCount++;
+                } catch (innerE) {
+                    // Si falla el proxy, intentamos directo (puede fallar por CORS, pero a veces pasa)
+                    await fetch(targetUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ number: num, text: simulationResult })
+                    });
+                    successCount++;
+                }
             }
-            alert("✅ Mensaje enviado con éxito a los destinatarios configurados.");
+            alert(`✅ Mensaje enviado a ${successCount} destinatarios.`);
         } catch (e) {
             console.error("Error sending WhatsApp:", e);
-            alert("❌ Error al enviar. Verifica los números o la API de WhatsApp.");
+            alert("❌ Error crítico al enviar. Verifique la API de Red51.");
         } finally {
             setIsSendingTest(false);
         }
