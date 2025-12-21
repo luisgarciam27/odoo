@@ -1,7 +1,7 @@
 
-// CONFIGURACIÓN PARA EXPORTAR A N8N - VERSIÓN V4 (CON PERSISTENCIA EN SUPABASE)
+// CONFIGURACIÓN PARA EXPORTAR A N8N - VERSIÓN V5 (ROBUSTA Y AUTO-CONTENIDA)
 export const DAILY_WORKFLOW_JSON = {
-  "name": "LemonBI - Reporte Diario con Guardado en DB",
+  "name": "LemonBI - Reporte Diario v5 (Pro)",
   "nodes": [
     {
       "parameters": {
@@ -39,7 +39,7 @@ export const DAILY_WORKFLOW_JSON = {
     },
     {
       "parameters": {
-        "jsCode": "const data = $json;\nconst date = new Date();\ndate.setDate(date.getDate() - 1);\nconst yesterdayStr = date.toISOString().split('T')[0];\nconst cleanUrl = (data.odoo_url || '').trim().replace(/\\/+$/, '');\n\nreturn {\n  json: {\n    config: {\n      id: data.id, // Mantenemos el UUID de Supabase\n      url: cleanUrl,\n      db: (data.odoo_db || '').trim(),\n      apiKey: (data.odoo_api_key || '').trim(),\n      username: (data.odoo_username || '').trim(),\n      empresa: data.codigo_acceso,\n      phones: (data.whatsapp_numeros || '').split(',').map(n => n.trim().replace(/\\D/g, '')),\n      fecha: yesterdayStr\n    }\n  }\n};"
+        "jsCode": "const data = $json;\nconst date = new Date();\ndate.setDate(date.getDate() - 1);\nconst yesterdayStr = date.toISOString().split('T')[0];\n\n// Limpieza y validación de URL\nlet url = (data.odoo_url || '').trim().replace(/\\/+$/, '');\nif (url && !url.startsWith('http')) {\n  url = 'https://' + url;\n}\n\nreturn {\n  json: {\n    config: {\n      id: data.id,\n      url: url,\n      db: (data.odoo_db || '').trim(),\n      apiKey: (data.odoo_api_key || '').trim(),\n      username: (data.odoo_username || '').trim(),\n      empresa: data.codigo_acceso,\n      phones: (data.whatsapp_numeros || '').split(',').map(n => n.trim().replace(/\\D/g, '')),\n      fecha: yesterdayStr\n    }\n  }\n};"
       },
       "name": "Preparar Config",
       "type": "n8n-nodes-base.code",
@@ -53,7 +53,16 @@ export const DAILY_WORKFLOW_JSON = {
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "text/xml",
-        "body": "<?xml version=\"1.0\"?>\n<methodCall>\n  <methodName>authenticate</methodName>\n  <params>\n    <param><value><string>{{$json.config.db}}</string></param>\n    <param><value><string>{{$json.config.username}}</string></param>\n    <param><value><string>{{$json.config.apiKey}}</string></param>\n    <param><value><struct></struct></param>\n  </params>\n</methodCall>"
+        "body": "<?xml version=\"1.0\"?>\n<methodCall>\n  <methodName>authenticate</methodName>\n  <params>\n    <param><value><string>{{$json.config.db}}</string></param>\n    <param><value><string>{{$json.config.username}}</string></param>\n    <param><value><string>{{$json.config.apiKey}}</string></param>\n    <param><value><struct></struct></param>\n  </params>\n</methodCall>",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "neverError": false,
+              "outputFieldName": "authResponse"
+            }
+          }
+        }
       },
       "name": "Odoo Auth",
       "type": "n8n-nodes-base.httpRequest",
@@ -62,9 +71,9 @@ export const DAILY_WORKFLOW_JSON = {
     },
     {
       "parameters": {
-        "jsCode": "const authResponse = $json;\nconst configNode = $(\"Preparar Config\").first();\nconst config = configNode.json.config;\nconst uid = authResponse.params?.param?.value?.int || \n            authResponse.methodResponse?.params?.param?.value?.int || 0;\nreturn { json: { uid, config } };"
+        "jsCode": "const input = $json;\nconst config = input.config;\n// Extraer UID del XML\nconst xml = input.authResponse || '';\nlet uid = 0;\nconst match = xml.match(/<(?:int|i4)>(\\d+)<\\/(?:int|i4)>/);\nif (match) uid = parseInt(match[1]);\n\nreturn { json: { uid, config } };"
       },
-      "name": "Merge Auth",
+      "name": "Extraer UID",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1400, 300]
@@ -76,7 +85,14 @@ export const DAILY_WORKFLOW_JSON = {
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "text/xml",
-        "body": "<?xml version=\"1.0\"?>\n<methodCall>\n  <methodName>execute_kw</methodName>\n  <params>\n    <param><value><string>{{$json.config.db}}</string></param>\n    <param><value><int>{{$json.uid}}</int></param>\n    <param><value><string>{{$json.config.apiKey}}</string></param>\n    <param><value><string>pos.session</string></param>\n    <param><value><string>search_read</string></param>\n    <param><value><array><data>\n      <value><array><data>\n        <value><array><data><value><string>stop_at</string></value><value><string>&gt;=</string></value><value><string>{{$json.config.fecha}} 00:00:00</string></value></data></array></value>\n        <value><array><data><value><string>stop_at</string></value><value><string>&lt;=</string></value><value><string>{{$json.config.fecha}} 23:59:59</string></value></data></array></value>\n        <value><array><data><value><string>state</string></value><value><string>=</string></value><value><string>closed</string></value></data></array></value>\n      </data></array></value>\n    </data></array></param>\n    <param><value><struct><member><name>fields</name><value><array><data><value><string>name</string></value><value><string>cash_register_balance_end_real</string></value><value><string>cash_register_balance_start</string></value></data></array></value></member></struct></param>\n  </params>\n</methodCall>"
+        "body": "<?xml version=\"1.0\"?>\n<methodCall>\n  <methodName>execute_kw</methodName>\n  <params>\n    <param><value><string>{{$json.config.db}}</string></param>\n    <param><value><int>{{$json.uid}}</int></param>\n    <param><value><string>{{$json.config.apiKey}}</string></param>\n    <param><value><string>pos.session</string></param>\n    <param><value><string>search_read</string></param>\n    <param><value><array><data>\n      <value><array><data>\n        <value><array><data><value><string>stop_at</string></value><value><string>&gt;=</string></value><value><string>{{$json.config.fecha}} 00:00:00</string></value></data></array></value>\n        <value><array><data><value><string>stop_at</string></value><value><string>&lt;=</string></value><value><string>{{$json.config.fecha}} 23:59:59</string></value></data></array></value>\n        <value><array><data><value><string>state</string></value><value><string>=</string></value><value><string>closed</string></value></data></array></value>\n      </data></array></value>\n    </data></array></param>\n    <param><value><struct><member><name>fields</name><value><array><data><value><string>name</string></value><value><string>cash_register_balance_end_real</string></value><value><string>cash_register_balance_start</string></value></data></array></value></member></struct></param>\n  </params>\n</methodCall>",
+        "options": {
+          "response": {
+            "response": {
+              "outputFieldName": "sessionsResponse"
+            }
+          }
+        }
       },
       "name": "Get Sessions",
       "type": "n8n-nodes-base.httpRequest",
@@ -85,7 +101,7 @@ export const DAILY_WORKFLOW_JSON = {
     },
     {
       "parameters": {
-        "jsCode": "const input = $json;\nconst mergeNode = $(\"Merge Auth\").first();\nconst config = mergeNode.json.config;\n\nconst getSessionsData = (obj) => {\n  if (obj.params?.param?.value?.array?.data?.value) return obj.params.param.value.array.data.value;\n  if (obj.methodResponse?.params?.param?.value?.array?.data?.value) return obj.methodResponse.params.param.value.array.data.value;\n  return null;\n};\n\nconst sessionsRaw = getSessionsData(input);\nlet totalVenta = 0;\nlet detalleJson = [];\nlet msg = `📊 *REPORTE DE CAJA - LEMONBI*\\n🏢 *${config.empresa}*\\n📅 ${config.fecha}\\n\\n`;\n\nif (sessionsRaw) {\n  const sessionsList = Array.isArray(sessionsRaw) ? sessionsRaw : [sessionsRaw];\n  sessionsList.forEach(s => {\n    const members = Array.isArray(s.struct?.member) ? s.struct.member : [s.struct?.member];\n    const name = members.find(x => x.name === 'name')?.value?.string || 'Caja';\n    const start = parseFloat(members.find(x => x.name === 'cash_register_balance_start')?.value?.double || 0);\n    const end = parseFloat(members.find(x => x.name === 'cash_register_balance_end_real')?.value?.double || 0);\n    const neta = end - start;\n    totalVenta += neta;\n    detalleJson.push({ caja: name, apertura: start, cierre: end, neta });\n    msg += `📍 *${name}*\\n   • Venta: S/ ${neta.toFixed(2)}\\n\\n`;\n  });\n  msg += `💰 *TOTAL VENTA NETA: S/ ${totalVenta.toFixed(2)}*`;\n} else {\n  msg += \"⚠️ No se encontraron cierres de caja.\";\n}\n\nreturn { json: { message: msg, phones: config.phones, totalVenta, detalleJson, empresa_id: config.id, fecha: config.fecha } };"
+        "jsCode": "const input = $json;\nconst config = input.config;\nconst sessionsXml = input.sessionsResponse || '';\n\n// Helper para extraer valores del XML plano de Odoo\nconst extractAll = (xml, tag) => {\n  const regex = new RegExp(`<member><name>${tag}<\\/name><value><(?:string|double|int|i4)>(.*?)<\\/`, 'g');\n  const results = [];\n  let m;\n  while ((m = regex.exec(xml)) !== null) results.push(m[1]);\n  return results;\n};\n\nconst names = extractAll(sessionsXml, 'name');\nconst starts = extractAll(sessionsXml, 'cash_register_balance_start');\nconst ends = extractAll(sessionsXml, 'cash_register_balance_end_real');\n\nlet totalVenta = 0;\nlet detalleJson = [];\nlet msg = `📊 *REPORTE DE CAJA - LEMONBI*\\n🏢 *${config.empresa}*\\n📅 ${config.fecha}\\n\\n`;\n\nif (names.length > 0) {\n  for (let i = 0; i < names.length; i++) {\n    const s = parseFloat(starts[i] || 0);\n    const e = parseFloat(ends[i] || 0);\n    const neta = e - s;\n    totalVenta += neta;\n    detalleJson.push({ caja: names[i], apertura: s, cierre: e, neta });\n    msg += `📍 *${names[i]}*\\n   • Venta: S/ ${neta.toFixed(2)}\\n\\n`;\n  }\n  msg += `💰 *TOTAL VENTA NETA: S/ ${totalVenta.toFixed(2)}*`;\n} else {\n  msg += \"⚠️ No se encontraron cierres de caja para esta fecha.\";\n}\n\nreturn { json: { message: msg, phones: config.phones, totalVenta, detalleJson, empresa_id: config.id, fecha: config.fecha } };"
       },
       "name": "Format Message",
       "type": "n8n-nodes-base.code",
@@ -149,8 +165,8 @@ export const DAILY_WORKFLOW_JSON = {
     "GET Empresas": { "main": [[{ "node": "Iterar Empresas", "type": "main", "index": 0 }]] },
     "Iterar Empresas": { "main": [[{ "node": "Preparar Config", "type": "main", "index": 0 }]] },
     "Preparar Config": { "main": [[{ "node": "Odoo Auth", "type": "main", "index": 0 }]] },
-    "Odoo Auth": { "main": [[{ "node": "Merge Auth", "type": "main", "index": 0 }]] },
-    "Merge Auth": { "main": [[{ "node": "Get Sessions", "type": "main", "index": 0 }]] },
+    "Odoo Auth": { "main": [[{ "node": "Extraer UID", "type": "main", "index": 0 }]] },
+    "Extraer UID": { "main": [[{ "node": "Get Sessions", "type": "main", "index": 0 }]] },
     "Get Sessions": { "main": [[{ "node": "Format Message", "type": "main", "index": 0 }]] },
     "Format Message": { "main": [[{ "node": "Guardar en Supabase", "type": "main", "index": 0 }]] },
     "Guardar en Supabase": { "main": [[{ "node": "Split Phones", "type": "main", "index": 0 }]] },
