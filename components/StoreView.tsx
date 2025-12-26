@@ -43,9 +43,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       
       if (categoryNames.length > 0) {
         // Buscamos todas las categorías indicadas
-        const catDomain = ['|'.repeat(categoryNames.length - 1), ...categoryNames.flatMap(name => [['name', 'ilike', name]])].flat();
-        // Nota: Odoo domain syntax para múltiples ORs es un poco especial, 
-        // simplificamos buscando una por una o usando un domain plano si es solo una.
         const categories = await client.searchRead(session.uid, session.apiKey, 'product.category', 
           categoryNames.length === 1 ? [['name', 'ilike', categoryNames[0]]] : [['name', 'in', categoryNames]], 
           ['id']
@@ -72,7 +69,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         precio: p.list_price,
         costo: 0,
         categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
-        stock: p.qty_available,
+        stock: p.qty_available || 0,
         imagen: p.image_128
       })));
     } catch (e) {
@@ -86,7 +83,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     return productos.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [productos, searchTerm]);
 
-  const featuredProducts = useMemo(() => productos.filter(p => p.stock > 0).slice(0, 4), [productos]);
+  const featuredProducts = useMemo(() => productos.filter(p => (p.stock || 0) > 0).slice(0, 4), [productos]);
 
   const addToCart = (p: Producto) => {
     setCart(prev => {
@@ -297,7 +294,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                      ) : (
                        <ImageIcon className="w-12 h-12 text-slate-200" />
                      )}
-                     {p.stock !== undefined && p.stock <= 0 ? (
+                     {p.stock !== undefined && (p.stock || 0) <= 0 ? (
                        <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center">
                          <span className="bg-slate-800 text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-tighter">Sin Stock</span>
                        </div>
@@ -306,7 +303,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                           <button onClick={() => addToCart(p)} className="p-2.5 bg-white text-slate-800 rounded-xl shadow-lg hover:bg-slate-50 active:scale-90 transition-all"><Plus className="w-5 h-5"/></button>
                        </div>
                      )}
-                     {p.precio < 15 && p.stock > 0 && (
+                     {p.precio < 15 && (p.stock || 0) > 0 && (
                         <div className="absolute top-3 left-3 bg-brand-500 text-white text-[9px] font-bold px-2 py-1 rounded-lg uppercase tracking-widest shadow-lg" style={{backgroundColor: brandColor}}>Promo</div>
                      )}
                    </div>
@@ -320,9 +317,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                        </div>
                        <button 
                          onClick={() => addToCart(p)}
-                         disabled={p.stock !== undefined && p.stock <= 0}
+                         disabled={p.stock !== undefined && (p.stock || 0) <= 0}
                          className="p-3 text-white rounded-2xl shadow-xl active:scale-90 disabled:bg-slate-200 disabled:shadow-none transition-all"
-                         style={{backgroundColor: p.stock !== undefined && p.stock <= 0 ? '#e2e8f0' : brandColor, boxShadow: `0 10px 15px -3px ${brandColor}30`}}
+                         style={{backgroundColor: p.stock !== undefined && (p.stock || 0) <= 0 ? '#e2e8f0' : brandColor, boxShadow: `0 10px 15px -3px ${brandColor}30`}}
                        >
                          <ShoppingCart className="w-5 h-5" />
                        </button>
