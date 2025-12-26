@@ -50,12 +50,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const configCategory = (config.tiendaCategoriaNombre || '').trim();
       let data: any[] = [];
 
-      // ESTRATEGIA DE BÚSQUEDA AGRESIVA (A PRUEBA DE ERRORES)
-      
-      // Paso 1: Intentar buscar por el nombre de la categoría si se especificó una
+      // 1. Intentar por Categoría Configurada
       if (configCategory && configCategory.toUpperCase() !== 'TODAS') {
         try {
-          // Primero buscamos el ID de la categoría para evitar errores de tipo many2one
           const cats = await client.searchRead(session.uid, session.apiKey, 'product.category', [['name', 'ilike', configCategory]], ['id']);
           if (cats && cats.length > 0) {
             const catIds = cats.map((c: any) => c.id);
@@ -65,17 +62,16 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             );
           }
         } catch (e) {
-          console.warn("Fallo búsqueda por ID de categoría, intentando modo texto...");
+          console.warn("Error en categoría, reintentando general...");
         }
       }
 
-      // Paso 2: Si no hay resultados o no hay categoría, traer TODO lo que se pueda vender
-      // Importante: Quitamos el filtro de compañía si no devuelve nada, ya que muchos productos no tienen compañía asignada
+      // 2. Fallback: Carga General (Si falla lo anterior o no hay resultados)
       if (data.length === 0) {
         data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
           [['sale_ok', '=', true]], 
           fields, 
-          { limit: 400, order: 'image_128 desc, display_name asc' }
+          { limit: 500, order: 'image_128 desc, display_name asc' }
         );
       }
 
@@ -95,7 +91,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       }));
       setProductos(mapped);
     } catch (e) {
-      console.error("Error fatal cargando catálogo:", e);
+      console.error("Error cargando catálogo:", e);
     } finally {
       setLoading(false);
     }
@@ -387,7 +383,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                            {config.sedes_recojo?.map(s => <option key={s.id} value={s.id}>{s.nombre} - {s.direccion}</option>)}
                         </select>
                       )}
-                      <textarea placeholder="Notas adicionales..." className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none h-24 shadow-sm" value={customerData.notes} onChange={e => setCustomerData({...customerData, notes: e.target.value})}></textarea>
+                      <textarea placeholder="Notas adicionales..." className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none h-24 shadow-sm" value={customerData.notas} onChange={e => setCustomerData({...customerData, notas: e.target.value})}></textarea>
                    </div>
                 </div>
               ) : (
