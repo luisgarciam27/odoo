@@ -194,8 +194,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filteredProducts.map(p => {
-                  const isIndividuallyHidden = hiddenIds.includes(p.id);
-                  const isActuallyVisible = !isIndividuallyHidden;
+                  const isActuallyVisible = !hiddenIds.includes(p.id);
                   return (
                     <tr key={p.id} className={`group hover:bg-slate-50/80 transition-all ${!isActuallyVisible ? 'opacity-50 grayscale bg-slate-50/50' : ''}`}>
                       <td className="px-10 py-5">
