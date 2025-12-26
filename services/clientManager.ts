@@ -23,13 +23,20 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     companyFilter: row.filtro_compania,
     whatsappNumbers: row.whatsapp_numeros,
     isActive: row.estado ?? true,
+    // Marca
+    nombreComercial: row.nombre_comercial || row.codigo_acceso,
+    logoUrl: row.logo_url || '',
+    colorPrimario: row.color_primario || '#84cc16',
+    // Tienda
     showStore: row.tienda_habilitada ?? true,
     storeCategories: row.tienda_categorias || '',
     tiendaCategoriaNombre: row.tienda_categoria_nombre || 'Catalogo',
     yapeNumber: row.yape_numero || '',
     yapeName: row.yape_nombre || '',
+    yapeQR: row.yape_qr || '',
     plinNumber: row.plin_numero || '',
-    plinName: row.plin_nombre || ''
+    plinName: row.plin_nombre || '',
+    plinQR: row.plin_qr || ''
 });
 
 export const getClients = async (): Promise<ClientConfig[]> => {
@@ -67,13 +74,20 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         filtro_compania: client.companyFilter,
         whatsapp_numeros: client.whatsappNumbers,
         estado: client.isActive,
+        // Marca
+        nombre_comercial: client.nombreComercial,
+        logo_url: client.logoUrl,
+        color_primario: client.colorPrimario,
+        // Tienda
         tienda_habilitada: client.showStore,
         tienda_categorias: client.storeCategories,
         tienda_categoria_nombre: client.tiendaCategoriaNombre || 'Catalogo',
         yape_numero: client.yapeNumber,
         yape_nombre: client.yapeName,
+        yape_qr: client.yapeQR,
         plin_numero: client.plinNumber,
-        plin_nombre: client.plinName
+        plin_nombre: client.plinName,
+        plin_qr: client.plinQR
     };
 
     try {

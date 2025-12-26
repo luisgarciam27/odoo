@@ -48,6 +48,10 @@ export interface ClientConfig {
   companyFilter: string;
   whatsappNumbers?: string;
   isActive: boolean;
+  // Campos de Marca
+  nombreComercial?: string;
+  logoUrl?: string;
+  colorPrimario?: string;
   // Campos para la tienda
   showStore?: boolean;
   storeCategories?: string; // IDs manuales (opcional)

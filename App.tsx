@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard';
 import Login from './components/Login';
@@ -8,6 +7,8 @@ import StoreView from './components/StoreView';
 import { OdooSession, ClientConfig } from './types';
 import { getClientByCode } from './services/clientManager';
 import { OdooClient } from './services/odoo';
+// Import Loader2 icon from lucide-react
+import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -16,6 +17,7 @@ const App: React.FC = () => {
   const [clientConfig, setClientConfig] = useState<ClientConfig | null>(null);
   const [currentView, setCurrentView] = useState('general');
   const [isStoreMode, setIsStoreMode] = useState(false);
+  const [isStoreLoading, setIsStoreLoading] = useState(false);
 
   // Verificar modo tienda por URL
   useEffect(() => {
@@ -27,10 +29,10 @@ const App: React.FC = () => {
   }, []);
 
   const initStoreMode = async (code: string) => {
+    setIsStoreLoading(true);
     const config = await getClientByCode(code);
     if (config && config.isActive) {
       setClientConfig(config);
-      // Autenticación técnica para la tienda
       try {
         const client = new OdooClient(config.url, config.db, true);
         const uid = await client.authenticate(config.username, config.apiKey);
@@ -53,6 +55,7 @@ const App: React.FC = () => {
         alert("Error al conectar con la tienda. Intente más tarde.");
       }
     }
+    setIsStoreLoading(false);
   };
 
   const handleLogin = (session: OdooSession | null, config: ClientConfig) => {
@@ -75,11 +78,18 @@ const App: React.FC = () => {
     setIsAuthenticated(false);
     setIsStoreMode(false);
     setCurrentView('general');
-    // Limpiar parámetro de URL si existe
     window.history.pushState({}, '', window.location.pathname);
   };
 
-  // Modo Tienda Pública Directa
+  if (isStoreLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
+        <Loader2 className="w-10 h-10 animate-spin text-brand-500 mb-4" />
+        <p className="font-bold text-slate-600 animate-pulse uppercase tracking-widest text-xs">Cargando Catálogo...</p>
+      </div>
+    );
+  }
+
   if (isStoreMode && clientConfig && odooSession) {
     return <StoreView session={odooSession} config={clientConfig} />;
   }
