@@ -7,6 +7,7 @@ export interface Producto {
   categoria?: string;
   stock?: number;
   imagen?: string; 
+  descripcion_venta?: string;
   // Campos Médicos/Veterinarios
   registro_sanitario?: string;
   laboratorio?: string;
@@ -37,7 +38,7 @@ export interface ClientConfig {
   storeCategories?: string;
   tiendaCategoriaNombre?: string;
   hiddenProducts?: number[];
-  hiddenCategories?: string[]; // Nueva propiedad
+  hiddenCategories?: string[];
   yapeNumber?: string;
   yapeName?: string;
   yapeQR?: string; 
