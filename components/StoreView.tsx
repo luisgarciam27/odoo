@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, Loader2, Citrus, Plus, Minus, Info, CheckCircle2, RefreshCw, MapPin, Truck, CreditCard, Upload, MessageCircle, Bell } from 'lucide-react';
+import { ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, Loader2, Citrus, Plus, Minus, Info, CheckCircle2, MapPin, Truck, CreditCard, Upload, MessageCircle, Bell } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
 import { supabase } from '../services/supabaseClient';
@@ -42,35 +42,40 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     setLoading(true);
     const client = new OdooClient(session.url, session.db, true);
     try {
-      const configCategory = (config.tiendaCategoriaNombre || '').trim();
-      
-      // Intentamos una búsqueda que garantice resultados
       const fields = [
         'display_name', 'list_price', 'qty_available', 'categ_id', 'image_128', 
         'description_sale', 'x_registro_sanitario', 'x_laboratorio', 'x_principio_activo'
       ];
 
+      const configCategory = (config.tiendaCategoriaNombre || '').trim();
       let data: any[] = [];
 
-      // 1. Intentar por categoría si existe
+      // Intento 1: Por categoría específica
       if (configCategory && configCategory.toUpperCase() !== 'TODAS') {
         try {
           data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
             [['sale_ok', '=', true], ['categ_id', 'ilike', configCategory]], 
             fields, { limit: 500 }
           );
-        } catch(e) { console.error("Error buscando por categoría", e); }
+        } catch (e) { console.error("Error en búsqueda por categoría", e); }
       }
 
-      // 2. Si no hay datos, cargar TODO lo que se pueda vender
+      // Intento 2: Si no hay resultados o no hay categoría, traer catálogo general (Sale OK)
       if (data.length === 0) {
-        const globalDomain: any[] = [['sale_ok', '=', true]];
+        const domain: any[] = [['sale_ok', '=', true]];
+        // Intentar filtrar por compañía si está disponible, pero ser flexible
         if (session.companyId) {
-          globalDomain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
+          domain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
         }
-        data = await client.searchRead(session.uid, session.apiKey, 'product.product', globalDomain, fields, 
-          { limit: 500, order: 'image_128 desc, display_name asc' }
+        
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, 
+          { limit: 400, order: 'image_128 desc, display_name asc' }
         );
+      }
+
+      // Si aún así no hay nada, traer los primeros 100 productos de venta sin filtros de compañía
+      if (data.length === 0) {
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 100 });
       }
 
       const mapped = data.map((p: any) => ({
@@ -83,7 +88,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         imagen: p.image_128,
         descripcion_venta: p.description_sale || '',
         registro_sanitario: p.x_registro_sanitario || '',
-        laboratorio: p.x_laboratorio || (Array.isArray(p.categ_id) ? p.categ_id[1] : ''),
+        laboratorio: p.x_laboratorio || (Array.isArray(p.categ_id) ? p.categ_id[1] : 'Genérico'),
         principio_activo: p.x_principio_activo || '',
         presentacion: p.display_name.split(',').pop()?.trim() || ''
       }));
@@ -188,7 +193,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-8 space-y-12">
         <div className="relative max-w-2xl mx-auto">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-          <input type="text" placeholder="Buscar en el catálogo..." className="w-full pl-16 pr-6 py-5 bg-white border-none rounded-3xl shadow-xl outline-none focus:ring-2 transition-all text-lg font-medium" style={{'--tw-ring-color': brandColor} as any} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <input type="text" placeholder="Buscar productos..." className="w-full pl-16 pr-6 py-5 bg-white border-none rounded-3xl shadow-xl outline-none focus:ring-2 transition-all text-lg font-medium" style={{'--tw-ring-color': brandColor} as any} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
 
         {loading ? (
@@ -198,11 +203,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         ) : filteredProducts.length === 0 ? (
           <div className="py-20 flex flex-col items-center justify-center text-center">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6 text-slate-300"><Package className="w-12 h-12" /></div>
-            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Catálogo próximamente</h3>
-            <p className="text-slate-400 text-sm mt-2 font-medium">Estamos actualizando nuestra lista de productos.</p>
+            <h3 className="text-xl font-black text-slate-800 uppercase">Catálogo Próximamente</h3>
+            <p className="text-slate-400 text-sm mt-2 font-medium">Estamos actualizando nuestra lista de productos para brindarte la mejor atención.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 animate-in fade-in duration-500">
             {filteredProducts.map(p => (
               <div key={p.id} onClick={() => setSelectedProduct(p)} className="group relative bg-white rounded-[2.5rem] p-4 border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 cursor-pointer flex flex-col">
                 <div className="aspect-square bg-slate-50 rounded-[2rem] mb-4 overflow-hidden relative border border-slate-50 flex items-center justify-center">
@@ -230,19 +235,19 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                  <Citrus className="w-8 h-8 text-brand-500" />
                  <span className="font-black text-xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
               </div>
-              <p className="text-sm text-slate-400 leading-relaxed font-medium">Cuidado experto para tu bienestar.</p>
+              <p className="text-sm text-slate-400 leading-relaxed font-medium">Cuidado experto para tu bienestar y salud diaria.</p>
            </div>
            <div className="space-y-6">
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-300">Servicios</h4>
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-300">Servicios Online</h4>
               <ul className="space-y-3">
-                 <li className="flex items-center justify-center md:justify-start gap-3 text-sm font-bold text-slate-600"><Truck className="w-4 h-4 text-brand-500"/> Delivery Rápido</li>
-                 <li className="flex items-center justify-center md:justify-start gap-3 text-sm font-bold text-slate-600"><MapPin className="w-4 h-4 text-brand-500"/> Recojo en Tienda</li>
+                 <li className="flex items-center justify-center md:justify-start gap-3 text-sm font-bold text-slate-600"><Truck className="w-4 h-4 text-brand-500"/> Delivery a Domicilio</li>
+                 <li className="flex items-center justify-center md:justify-start gap-3 text-sm font-bold text-slate-600"><MapPin className="w-4 h-4 text-brand-500"/> Recojo en Local</li>
               </ul>
            </div>
            <div className="space-y-6">
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-300">Atención</h4>
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-300">Contacto Directo</h4>
               <a href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || ''}`} className="inline-flex items-center gap-3 bg-emerald-500 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase shadow-xl hover:brightness-110 transition-all">
-                 <MessageCircle className="w-5 h-5"/> WhatsApp
+                 <MessageCircle className="w-5 h-5"/> Consultar WhatsApp
               </a>
            </div>
         </div>
@@ -257,16 +262,19 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           <div className="relative bg-white w-full max-w-6xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col lg:flex-row animate-in zoom-in-95 max-h-[95vh]">
             <button onClick={() => setSelectedProduct(null)} className="absolute top-6 right-6 p-3 bg-white shadow-lg rounded-full z-10 hover:bg-slate-50 transition-all"><X className="w-6 h-6"/></button>
             
+            {/* Imagen Izquierda */}
             <div className="w-full lg:w-1/2 bg-slate-50 flex flex-col items-center justify-center p-8 lg:p-20 relative min-h-[400px]">
                <div className="w-full aspect-square bg-white rounded-[3rem] shadow-inner p-10 flex items-center justify-center border border-slate-100">
                   {selectedProduct.imagen ? <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="max-h-full max-w-full object-contain" alt=""/> : <ImageIcon className="w-32 h-32 text-slate-100"/>}
                </div>
                
+               {/* Badge lateral con la categoría */}
                <div className="absolute right-0 top-1/2 -translate-y-1/2 h-4/5 w-16 bg-brand-500 rounded-l-3xl flex items-center justify-center overflow-hidden">
                   <span className="text-white font-black uppercase text-xl tracking-widest origin-center -rotate-90 whitespace-nowrap opacity-40">{selectedProduct.categoria}</span>
                </div>
             </div>
 
+            {/* Info Derecha */}
             <div className="w-full lg:w-1/2 p-8 lg:p-14 overflow-y-auto bg-white border-l border-slate-50">
                <div className="mb-8">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">{selectedProduct.laboratorio || 'PRODUCTO ODOO'} {selectedProduct.presentacion && ` • ${selectedProduct.presentacion.toUpperCase()}`}</span>
@@ -289,13 +297,15 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     </div>
                   </div>
 
+                  {/* Banner promocional */}
                   <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-4 mb-8">
                      <div className="bg-rose-500 p-2.5 rounded-full text-white animate-pulse"><Bell className="w-5 h-5"/></div>
-                     <p className="text-xs font-black text-rose-600 uppercase tracking-tight leading-tight">¡Cómpralo y participa del sorteo de 1 año de productos!</p>
+                     <p className="text-xs font-black text-rose-600 uppercase tracking-tight leading-tight">¡Cómpralo y participa del sorteo de 1 año de productos gratis!</p>
                   </div>
 
+                  {/* Descripción de Odoo formateada */}
                   <div className="mb-10">
-                     <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Información y Beneficios</h4>
+                     <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Detalles y Beneficios</h4>
                      {selectedProduct.descripcion_venta ? (
                        <ul className="space-y-3">
                          {selectedProduct.descripcion_venta.split('\n').filter(line => line.trim()).map((line, i) => (
@@ -306,10 +316,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                          ))}
                        </ul>
                      ) : (
-                       <p className="text-sm italic text-slate-400">Sin descripción disponible.</p>
+                       <p className="text-sm italic text-slate-400 font-medium">Información pendiente de actualización.</p>
                      )}
                   </div>
 
+                  {/* Ficha Técnica Rápida */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                         <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Registro Sanitario</p>
@@ -327,7 +338,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                        className="flex-1 py-5 text-white rounded-[2rem] font-black shadow-2xl active:scale-95 transition-all uppercase tracking-widest text-xs" 
                        style={{backgroundColor: brandColor}}
                      >
-                       Agregar al carrito
+                       Añadir a mi pedido
                      </button>
                   </div>
                </div>
@@ -341,7 +352,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={() => setIsCartOpen(false)}></div>
           <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-500">
             <div className="p-8 border-b border-slate-50 flex items-center justify-between">
-              <h2 className="text-2xl font-black text-slate-900">Tu Pedido</h2>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Mi Pedido</h2>
               <button onClick={() => setIsCartOpen(false)} className="p-3 text-slate-400 bg-slate-50 rounded-2xl"><X /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -376,17 +387,17 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                       </button>
                    </div>
                    <div className="space-y-3">
-                      <input type="text" placeholder="Tu Nombre" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2" value={customerData.nombre} onChange={e => setCustomerData({...customerData, nombre: e.target.value})} />
-                      <input type="tel" placeholder="Tu WhatsApp" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2" value={customerData.telefono} onChange={e => setCustomerData({...customerData, telefono: e.target.value})} />
+                      <input type="text" placeholder="Tu Nombre" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 shadow-sm" style={{'--tw-ring-color': brandColor} as any} value={customerData.nombre} onChange={e => setCustomerData({...customerData, nombre: e.target.value})} />
+                      <input type="tel" placeholder="Tu WhatsApp" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 shadow-sm" style={{'--tw-ring-color': brandColor} as any} value={customerData.telefono} onChange={e => setCustomerData({...customerData, telefono: e.target.value})} />
                       {customerData.metodoEntrega === 'delivery' ? (
-                        <input type="text" placeholder="Dirección de Envío" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2" value={customerData.direccion} onChange={e => setCustomerData({...customerData, direccion: e.target.value})} />
+                        <input type="text" placeholder="Dirección de Envío" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 shadow-sm" style={{'--tw-ring-color': brandColor} as any} value={customerData.direccion} onChange={e => setCustomerData({...customerData, direccion: e.target.value})} />
                       ) : (
-                        <select className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 appearance-none" value={customerData.sedeId} onChange={e => setCustomerData({...customerData, sedeId: e.target.value})}>
+                        <select className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 appearance-none shadow-sm" style={{'--tw-ring-color': brandColor} as any} value={customerData.sedeId} onChange={e => setCustomerData({...customerData, sedeId: e.target.value})}>
                            <option value="">Selecciona una tienda...</option>
                            {config.sedes_recojo?.map(s => <option key={s.id} value={s.id}>{s.nombre} - {s.direccion}</option>)}
                         </select>
                       )}
-                      <textarea placeholder="Notas adicionales..." className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none h-24" value={customerData.notas} onChange={e => setCustomerData({...customerData, notas: e.target.value})}></textarea>
+                      <textarea placeholder="Notas adicionales..." className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none h-24 shadow-sm" value={customerData.notas} onChange={e => setCustomerData({...customerData, notas: e.target.value})}></textarea>
                    </div>
                 </div>
               ) : (
@@ -438,18 +449,18 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             </div>
             {cart.length > 0 && (
               <div className="p-8 border-t border-slate-100 bg-white space-y-4">
-                <div className="flex justify-between items-end"><span className="text-slate-400 font-black uppercase text-[10px]">Total</span><span className="text-3xl font-black text-slate-900">S/ {cartTotal.toFixed(2)}</span></div>
+                <div className="flex justify-between items-end"><span className="text-slate-400 font-black uppercase text-[10px]">Total de Compra</span><span className="text-3xl font-black text-slate-900">S/ {cartTotal.toFixed(2)}</span></div>
                 <div className="flex gap-2">
                   {checkoutStep !== 'catalog' && (
                     <button onClick={() => { if (checkoutStep === 'payment') setCheckoutStep('shipping'); else setCheckoutStep('catalog'); }} className="p-5 bg-slate-100 rounded-3xl text-slate-500 font-black transition-all active:scale-95"><ArrowLeft className="w-6 h-6"/></button>
                   )}
                   {checkoutStep === 'catalog' ? (
-                    <button onClick={() => setCheckoutStep('shipping')} className="flex-1 py-5 text-white rounded-3xl font-black shadow-xl transition-all active:scale-95" style={{backgroundColor: brandColor}}>SIGUIENTE</button>
+                    <button onClick={() => setCheckoutStep('shipping')} className="flex-1 py-5 text-white rounded-3xl font-black shadow-xl transition-all active:scale-95 uppercase tracking-widest text-xs" style={{backgroundColor: brandColor}}>Paso Siguiente</button>
                   ) : checkoutStep === 'shipping' ? (
-                    <button onClick={() => setCheckoutStep('payment')} disabled={!customerData.nombre || !customerData.telefono} className="flex-1 py-5 text-white rounded-3xl font-black shadow-xl transition-all active:scale-95 disabled:opacity-30" style={{backgroundColor: brandColor}}>PAGAR AHORA</button>
+                    <button onClick={() => setCheckoutStep('payment')} disabled={!customerData.nombre || !customerData.telefono} className="flex-1 py-5 text-white rounded-3xl font-black shadow-xl transition-all active:scale-95 disabled:opacity-30 uppercase tracking-widest text-xs" style={{backgroundColor: brandColor}}>Ir al Pago</button>
                   ) : (
-                    <button onClick={handleSubmitOrder} disabled={isSubmitting || !paymentMethod || !comprobante} className="flex-1 py-5 bg-slate-900 text-white rounded-3xl font-black transition-all active:scale-95 disabled:opacity-30 flex items-center justify-center">
-                      {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'FINALIZAR PEDIDO'}
+                    <button onClick={handleSubmitOrder} disabled={isSubmitting || !paymentMethod || !comprobante} className="flex-1 py-5 bg-slate-900 text-white rounded-3xl font-black transition-all active:scale-95 disabled:opacity-30 flex items-center justify-center uppercase tracking-widest text-xs">
+                      {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Confirmar Pedido'}
                     </button>
                   )}
                 </div>
@@ -460,10 +471,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       )}
 
       {checkoutStep === 'success' && (
-        <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
-           <div className="w-32 h-32 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-8 animate-bounce"><CheckCircle2 className="w-16 h-16"/></div>
-           <h2 className="text-4xl font-black text-slate-900 mb-4">¡Pedido Recibido!</h2>
-           <button onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setCart([]); }} className="px-12 py-5 bg-slate-900 text-white rounded-[2rem] font-black transition-all active:scale-95">VOLVER AL INICIO</button>
+        <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
+           <div className="w-32 h-32 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-8 animate-bounce shadow-xl shadow-emerald-100"><CheckCircle2 className="w-16 h-16"/></div>
+           <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">¡Pedido Recibido!</h2>
+           <p className="text-slate-500 mb-10 max-w-sm font-medium">Muchas gracias por tu compra. Nos pondremos en contacto contigo vía WhatsApp para confirmar la entrega.</p>
+           <button onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setCart([]); }} className="px-12 py-5 bg-slate-900 text-white rounded-[2rem] font-black transition-all active:scale-95 shadow-xl uppercase tracking-widest text-xs">Volver al Inicio</button>
         </div>
       )}
     </div>
