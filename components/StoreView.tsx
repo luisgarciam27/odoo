@@ -35,16 +35,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     setLoading(true);
     const client = new OdooClient(session.url, session.db, true);
     try {
-      // Soporte para múltiples categorías separadas por comas
       const categoryNames = (config.tiendaCategoriaNombre || 'Catalogo')
         .split(',')
         .map(c => c.trim())
         .filter(c => c.length > 0);
 
       let categoryIds: number[] = [];
-      
       if (categoryNames.length > 0) {
-        // Buscamos todas las categorías indicadas
         const categories = await client.searchRead(session.uid, session.apiKey, 'product.category', 
           categoryNames.length === 1 ? [['name', 'ilike', categoryNames[0]]] : [['name', 'in', categoryNames]], 
           ['id']
@@ -53,11 +50,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       }
 
       const domain: any[] = [['sale_ok', '=', true]];
-      
       if (categoryIds.length > 0) {
         domain.push(['categ_id', 'child_of', categoryIds]);
       }
-
       if (session.companyId) domain.push(['company_id', '=', session.companyId]);
 
       const data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, 
@@ -82,7 +77,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   };
 
   const filteredProducts = useMemo(() => {
-    // Aplicamos filtro de productos ocultos manualmente por el cliente
+    // FILTRO CRÍTICO: No mostramos productos cuyo ID esté en la lista de ocultos
     return productos
       .filter(p => !hiddenIds.includes(p.id))
       .filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -384,7 +379,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                   <div className="space-y-4">
                     <input type="text" placeholder="Nombre completo" className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2" style={{'--tw-ring-color': brandColor} as any} value={customerData.nombre} onChange={e => setCustomerData({...customerData, nombre: e.target.value})} />
                     <input type="tel" placeholder="WhatsApp" className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2" style={{'--tw-ring-color': brandColor} as any} value={customerData.telefono} onChange={e => setCustomerData({...customerData, telefono: e.target.value})} />
-                    <input type="text" placeholder="Dirección detallada" className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2" style={{'--tw-ring-color': brandColor} as any} value={customerData.direccion} onChange={e => setCustomerData({...customerData, direccion: e.target.value})} />
+                    <input type="text" placeholder="Dirección detallada" className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none h-24 resize-none focus:ring-2" style={{'--tw-ring-color': brandColor} as any} value={customerData.direccion} onChange={e => setCustomerData({...customerData, direccion: e.target.value})} />
                     <textarea placeholder="Notas adicionales..." className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none h-24 resize-none focus:ring-2" style={{'--tw-ring-color': brandColor} as any} value={customerData.notas} onChange={e => setCustomerData({...customerData, notas: e.target.value})}></textarea>
                   </div>
                 </div>

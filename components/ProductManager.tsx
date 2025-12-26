@@ -102,9 +102,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
     } else {
       alert("Error al guardar cambios");
     }
-    setSaving(true);
-    // Simular pequeño retraso para UI
-    setTimeout(() => setSaving(false), 500);
+    setSaving(false);
   };
 
   const stats = {
@@ -117,15 +115,15 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 pb-24">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión de Catálogo</h2>
-          <p className="text-slate-500 text-sm mt-1">Elige qué productos de Odoo quieres mostrar en tu tienda online.</p>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión de Publicación</h2>
+          <p className="text-slate-500 text-sm mt-1">Selecciona qué productos quieres que vean tus clientes en la web.</p>
         </div>
         <div className="flex gap-3">
           <button 
             onClick={fetchProducts}
             className="flex items-center gap-2 px-4 py-2.5 bg-white text-slate-600 rounded-xl font-bold text-sm border border-slate-200 hover:bg-slate-50 transition-all shadow-sm"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Actualizar de Odoo
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sincronizar Odoo
           </button>
           <button 
             onClick={handleSave}
@@ -142,14 +140,14 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-brand-50 rounded-2xl text-brand-600"><Package className="w-6 h-6"/></div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total en Catálogo</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">En Odoo</p>
             <h4 className="text-2xl font-bold text-slate-800">{stats.total}</h4>
           </div>
         </div>
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600"><Eye className="w-6 h-6"/></div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Visibles</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Publicados Web</p>
             <h4 className="text-2xl font-bold text-emerald-600">{stats.publicados}</h4>
           </div>
         </div>
@@ -168,7 +166,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
             <input 
               type="text" 
-              placeholder="Buscar producto..." 
+              placeholder="Buscar por nombre..." 
               className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-medium"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -191,10 +189,10 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
             <thead className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
               <tr>
                 <th className="px-8 py-5">Producto</th>
-                <th className="px-8 py-5">Categoría Odoo</th>
+                <th className="px-8 py-5">Categoría</th>
                 <th className="px-8 py-5">Precio</th>
                 <th className="px-8 py-5">Stock</th>
-                <th className="px-8 py-5 text-right">Acción</th>
+                <th className="px-8 py-5 text-right">Estado / Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -205,10 +203,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
                       <div className="w-10 h-10 bg-slate-100 rounded-lg"></div>
                       <div className="h-4 bg-slate-100 rounded w-48"></div>
                     </td>
-                    <td className="px-8 py-5"><div className="h-4 bg-slate-100 rounded w-24"></div></td>
-                    <td className="px-8 py-5"><div className="h-4 bg-slate-100 rounded w-16"></div></td>
-                    <td className="px-8 py-5"><div className="h-4 bg-slate-100 rounded w-12"></div></td>
-                    <td className="px-8 py-5"></td>
+                    <td colSpan={4}></td>
                   </tr>
                 ))
               ) : filteredProducts.length === 0 ? (
@@ -219,41 +214,44 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map(p => (
-                  <tr key={p.id} className={`hover:bg-slate-50 transition-colors group ${hiddenIds.includes(p.id) ? 'opacity-60 grayscale-[0.5]' : ''}`}>
-                    <td className="px-8 py-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center overflow-hidden border border-slate-100 group-hover:border-brand-100 transition-all">
-                          {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-cover" /> : <Package className="w-5 h-5 text-slate-200"/>}
+                filteredProducts.map(p => {
+                  const isHidden = hiddenIds.includes(p.id);
+                  return (
+                    <tr key={p.id} className={`hover:bg-slate-50 transition-colors group ${isHidden ? 'bg-slate-50/50' : ''}`}>
+                      <td className="px-8 py-4">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-100 transition-all ${isHidden ? 'grayscale opacity-50' : ''}`}>
+                            {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-cover" /> : <Package className="w-5 h-5 text-slate-200"/>}
+                          </div>
+                          <span className={`font-bold text-sm ${isHidden ? 'text-slate-400' : 'text-slate-800'}`}>{p.nombre}</span>
                         </div>
-                        <span className="font-bold text-slate-800 text-sm">{p.nombre}</span>
-                      </div>
-                    </td>
-                    <td className="px-8 py-4">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-600 uppercase">
-                        <Tag className="w-3 h-3"/> {p.categoria}
-                      </span>
-                    </td>
-                    <td className="px-8 py-4 font-mono font-bold text-slate-700">S/ {p.precio.toFixed(2)}</td>
-                    <td className="px-8 py-4">
-                      <span className={`text-xs font-bold ${p.stock > 0 ? 'text-emerald-600' : 'text-red-400'}`}>
-                        {p.stock} <span className="text-[10px] text-slate-400 font-normal ml-0.5">unds</span>
-                      </span>
-                    </td>
-                    <td className="px-8 py-4 text-right">
-                      <button 
-                        onClick={() => toggleVisibility(p.id)}
-                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${
-                          hiddenIds.includes(p.id) 
-                          ? 'bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600' 
-                          : 'bg-brand-50 text-brand-600 hover:bg-red-50 hover:text-red-500'
-                        }`}
-                      >
-                        {hiddenIds.includes(p.id) ? <><Eye className="w-3.5 h-3.5"/> Mostrar</> : <><EyeOff className="w-3.5 h-3.5"/> Ocultar</>}
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="px-8 py-4">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-500 uppercase">
+                          <Tag className="w-3 h-3"/> {p.categoria}
+                        </span>
+                      </td>
+                      <td className="px-8 py-4 font-mono font-bold text-slate-700">S/ {p.precio.toFixed(2)}</td>
+                      <td className="px-8 py-4">
+                        <span className={`text-xs font-bold ${p.stock > 0 ? 'text-emerald-600' : 'text-red-400'}`}>
+                          {p.stock} <span className="text-[10px] text-slate-400 font-normal ml-0.5">uds</span>
+                        </span>
+                      </td>
+                      <td className="px-8 py-4 text-right">
+                        <button 
+                          onClick={() => toggleVisibility(p.id)}
+                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all shadow-sm ${
+                            isHidden 
+                            ? 'bg-white text-slate-400 border border-slate-200 hover:border-emerald-300 hover:text-emerald-600' 
+                            : 'bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-red-50 hover:text-red-500 hover:border-red-100'
+                          }`}
+                        >
+                          {isHidden ? <><EyeOff className="w-3.5 h-3.5"/> Oculto</> : <><Eye className="w-3.5 h-3.5"/> Publicado</>}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -263,7 +261,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
       {showSuccess && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-8 py-4 rounded-3xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-10 duration-500 z-50">
           <CheckCircle2 className="w-6 h-6 text-brand-400" />
-          <p className="font-bold">¡Catálogo actualizado con éxito!</p>
+          <p className="font-bold">¡Catálogo actualizado correctamente!</p>
         </div>
       )}
     </div>
