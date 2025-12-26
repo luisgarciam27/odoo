@@ -33,7 +33,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const brandColor = config.colorPrimario || '#84cc16';
-  const hiddenIds = config.hiddenProducts || [];
+  
+  // Sincronización robusta de filtros (asegurar tipos Number para IDs)
+  const hiddenIds = useMemo(() => Array.isArray(config.hiddenProducts) ? config.hiddenProducts.map(Number) : [], [config.hiddenProducts]);
+  const hiddenCats = useMemo(() => Array.isArray(config.hiddenCategories) ? config.hiddenCategories : [], [config.hiddenCategories]);
 
   useEffect(() => {
     fetchProducts();
@@ -44,21 +47,17 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     const client = new OdooClient(session.url, session.db, true);
     try {
       const categoryNames = (config.tiendaCategoriaNombre || 'Catalogo').split(',').map(c => c.trim()).filter(c => c.length > 0);
-      
       const domain: any[] = [['sale_ok', '=', true]];
       if (session.companyId) domain.push(['company_id', '=', session.companyId]);
-      
-      if (categoryNames.length > 0) {
-        domain.push(['categ_id', 'child_of', categoryNames]);
-      }
+      if (categoryNames.length > 0) domain.push(['categ_id', 'child_of', categoryNames]);
 
       const data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, 
         ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_128', 'x_registro_sanitario', 'x_laboratorio', 'x_principio_activo'], 
-        { limit: 200, order: 'qty_available desc' }
+        { limit: 300, order: 'qty_available desc' }
       );
 
       setProductos(data.map((p: any) => ({
-        id: p.id,
+        id: Number(p.id), // Asegurar Number
         nombre: p.display_name,
         precio: p.list_price,
         costo: 0,
@@ -78,9 +77,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
   const filteredProducts = useMemo(() => {
     return productos
-      .filter(p => !hiddenIds.includes(p.id))
+      .filter(p => !hiddenIds.includes(p.id)) // Filtrar por ID individual
+      .filter(p => !hiddenCats.includes(p.categoria || '')) // Filtrar por Categoría completa
       .filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [productos, searchTerm, hiddenIds]);
+  }, [productos, searchTerm, hiddenIds, hiddenCats]);
 
   const addToCart = (p: Producto, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();

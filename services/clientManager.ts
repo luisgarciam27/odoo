@@ -14,10 +14,6 @@ export const changeAdminPassword = (newPassword: string) => {
     localStorage.setItem(ADMIN_PWD_KEY, newPassword);
 };
 
-/**
- * Mapea de forma segura los datos de la fila de Supabase a la configuración del cliente.
- * Usa valores por defecto si las columnas no existen o son nulas.
- */
 const mapRowToConfig = (row: any): ClientConfig => ({
     code: row.codigo_acceso,
     url: row.odoo_url,
@@ -27,22 +23,20 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     companyFilter: row.filtro_compania,
     whatsappNumbers: row.whatsapp_numeros,
     isActive: row.estado ?? true,
-    // Marca (con fallbacks para evitar errores si las columnas faltan)
     nombreComercial: row.nombre_comercial || row.codigo_acceso,
     logoUrl: row.logo_url || '',
     colorPrimario: row.color_primario || '#84cc16',
-    // Tienda
     showStore: row.tienda_habilitada ?? true,
     storeCategories: row.tienda_categorias || '',
     tiendaCategoriaNombre: row.tienda_categoria_nombre || 'Catalogo',
-    hiddenProducts: row.productos_ocultos || [],
+    hiddenProducts: Array.isArray(row.productos_ocultos) ? row.productos_ocultos.map(Number) : [],
+    hiddenCategories: Array.isArray(row.categorias_ocultas) ? row.categorias_ocultas : [],
     yapeNumber: row.yape_numero || '',
     yapeName: row.yape_nombre || '',
     yapeQR: row.yape_qr || '',
     plinNumber: row.plin_numero || '',
     plinName: row.plin_nombre || '',
     plinQR: row.plin_qr || '',
-    // Salud y Logística
     sedes_recojo: Array.isArray(row.sedes_recojo) ? row.sedes_recojo : [],
     campos_medicos_visibles: Array.isArray(row.campos_medicos_visibles) ? row.campos_medicos_visibles : ["registro", "laboratorio", "principio"]
 });
@@ -66,17 +60,13 @@ export const getClientByCode = async (code: string): Promise<ClientConfig | null
         .from('empresas')
         .select('*')
         .eq('codigo_acceso', code)
-        .maybeSingle(); // Usar maybeSingle para evitar errores si no existe
+        .maybeSingle();
     
     if (error || !data) return null;
     return mapRowToConfig(data);
 };
 
-/**
- * Guarda el cliente intentando limpiar el payload para evitar errores de columnas inexistentes
- */
 export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<{ success: boolean; message?: string }> => {
-    // Definimos el payload completo
     const fullPayload: any = {
         codigo_acceso: client.code,
         odoo_url: client.url,
@@ -86,14 +76,13 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         filtro_compania: client.companyFilter,
         whatsapp_numeros: client.whatsappNumbers,
         estado: client.isActive,
-        // Marca
         nombre_comercial: client.nombreComercial,
         logo_url: client.logoUrl,
         color_primario: client.colorPrimario,
-        // Tienda
         tienda_habilitada: client.showStore,
         tienda_categoria_nombre: client.tiendaCategoriaNombre || 'Catalogo',
         productos_ocultos: client.hiddenProducts || [],
+        categorias_ocultas: client.hiddenCategories || [],
         yape_numero: client.yapeNumber,
         yape_nombre: client.yapeName,
         yape_qr: client.yapeQR,
@@ -109,41 +98,13 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
             const { error } = await supabase.from('empresas').insert([fullPayload]);
             if (error) throw error;
         } else {
-            // Si el error es específicamente de "column not found", intentamos guardar solo lo básico
             const { error } = await supabase.from('empresas').update(fullPayload).eq('codigo_acceso', client.code);
-            
-            if (error) {
-                if (error.message.includes('column') || error.code === '42703') {
-                    console.warn('Detectada discrepancia de esquema. Intentando guardado parcial...');
-                    // Intentamos guardar solo columnas básicas que sabemos que existen
-                    const basicPayload = {
-                        odoo_url: client.url,
-                        odoo_db: client.db,
-                        odoo_username: client.username,
-                        odoo_api_key: client.apiKey,
-                        filtro_compania: client.companyFilter,
-                        whatsapp_numeros: client.whatsappNumbers,
-                        estado: client.isActive
-                    };
-                    const { error: secondError } = await supabase.from('empresas').update(basicPayload).eq('codigo_acceso', client.code);
-                    if (secondError) throw secondError;
-                    return { 
-                        success: true, 
-                        message: 'Guardado parcialmente. Algunas funciones de personalización requieren actualizar la base de datos Supabase.' 
-                    };
-                }
-                throw error;
-            }
+            if (error) throw error;
         }
         return { success: true };
     } catch (error: any) {
         console.error('Error saving client:', error);
-        return { 
-            success: false, 
-            message: error.message.includes('column') 
-                ? 'Error de base de datos: Faltan columnas en Supabase. Por favor, ejecute el script de migración SQL.' 
-                : (error.message || 'Error al guardar.') 
-        };
+        return { success: false, message: error.message || 'Error al guardar.' };
     }
 };
 

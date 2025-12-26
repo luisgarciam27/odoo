@@ -11,6 +11,7 @@ export interface Producto {
   registro_sanitario?: string;
   laboratorio?: string;
   principio_activo?: string;
+  principio_activo_id?: number;
   presentacion?: string;
 }
 
@@ -36,15 +37,15 @@ export interface ClientConfig {
   storeCategories?: string;
   tiendaCategoriaNombre?: string;
   hiddenProducts?: number[];
+  hiddenCategories?: string[]; // Nueva propiedad
   yapeNumber?: string;
   yapeName?: string;
   yapeQR?: string; 
   plinNumber?: string;
   plinName?: string;
   plinQR?: string;
-  // Configuración Salud y Logística
   sedes_recojo?: SedeStore[];
-  campos_medicos_visibles?: string[]; // ["registro", "laboratorio", "principio"]
+  campos_medicos_visibles?: string[];
 }
 
 export interface OdooSession {
