@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Package, Eye, EyeOff, Save, RefreshCw, CheckCircle2, AlertCircle, Loader2, Tag, Filter, Check, XCircle, Layers } from 'lucide-react';
+import { Search, Package, Eye, EyeOff, Save, RefreshCw, CheckCircle2, Loader2, Layers } from 'lucide-react';
 import { Producto, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
 import { saveClient } from '../services/clientManager';
