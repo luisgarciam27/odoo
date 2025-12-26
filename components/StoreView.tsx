@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShoppingCart, Package, Search, ChevronRight, X, Image as ImageIcon, ArrowLeft, Loader2, Citrus, Plus, Minus, MapPin, Truck, Info, Beaker, Pill, ClipboardList, CheckCircle2 } from 'lucide-react';
+import { ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, Loader2, Citrus, Plus, Minus, MapPin, Truck, Info, Beaker, Pill, ClipboardList, CheckCircle2, QrCode, CreditCard, Upload } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
 import { supabase } from '../services/supabaseClient';
@@ -44,10 +44,15 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     const client = new OdooClient(session.url, session.db, true);
     try {
       const categoryNames = (config.tiendaCategoriaNombre || 'Catalogo').split(',').map(c => c.trim()).filter(c => c.length > 0);
+      
       const domain: any[] = [['sale_ok', '=', true]];
       if (session.companyId) domain.push(['company_id', '=', session.companyId]);
+      
+      // Si hay categorías definidas, filtrar por ellas (name ilike o in)
+      if (categoryNames.length > 0) {
+        domain.push(['categ_id', 'child_of', categoryNames]);
+      }
 
-      // Mapeo dinámico de campos médicos de Odoo
       const data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, 
         ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_128', 'x_registro_sanitario', 'x_laboratorio', 'x_principio_activo'], 
         { limit: 200, order: 'qty_available desc' }
@@ -131,18 +136,18 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       if (supaError) throw supaError;
 
-      // Sincronizar con Odoo
       const odoo = new OdooClient(session.url, session.db, true);
       await odoo.create(session.uid, session.apiKey, 'sale.order', {
         partner_id: 1, 
         order_line: cart.map(item => [0, 0, { product_id: item.producto.id, product_uom_qty: item.cantidad, price_unit: item.producto.precio }]),
-        note: `🛒 PEDIDO WEB #${supaOrder.id}\n📍 Entrega: ${customerData.metodoEntrega === 'pickup' ? 'RECOJO EN ' + sedeNombre : customerData.direccion}`,
+        note: `🛒 PEDIDO WEB #${supaOrder.id}\n👤 Cliente: ${customerData.nombre}\n📍 Entrega: ${customerData.metodoEntrega === 'pickup' ? 'RECOJO EN ' + sedeNombre : customerData.direccion}\n💳 Pago: ${paymentMethod.toUpperCase()}\n🖼️ Comprobante: ${publicUrl}`,
         company_id: session.companyId
       });
 
       setCheckoutStep('success');
       setCart([]);
     } catch (e: any) {
+      console.error(e);
       alert("Error al procesar pedido.");
     } finally {
       setIsSubmitting(false);
@@ -151,7 +156,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
   return (
     <div className="min-h-screen bg-white font-sans text-slate-800 pb-20 overflow-x-hidden">
-      {/* Navbar Minimalista */}
       <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-40 px-6 py-5 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
           {onBack && <button onClick={onBack} className="p-2 text-slate-400 hover:text-slate-900 transition-all"><ArrowLeft/></button>}
@@ -167,7 +171,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       </nav>
 
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-12">
-        {/* Buscador Interactivo */}
         <div className="relative max-w-2xl mx-auto">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
           <input 
@@ -180,7 +183,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           />
         </div>
 
-        {/* Listado con Animación */}
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
             {[1,2,3,4,5].map(i => <div key={i} className="bg-slate-50 rounded-[2.5rem] aspect-[3/4] animate-pulse"></div>)}
@@ -211,7 +213,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </div>
 
-      {/* Detalle de Producto / Modal Salud */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedProduct(null)}></div>
@@ -258,7 +259,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
-      {/* Carrito Lateral */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={() => setIsCartOpen(false)}></div>
@@ -274,7 +274,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               ) : checkoutStep === 'catalog' ? (
                 cart.map(item => (
                   <div key={item.producto.id} className="flex gap-4 items-center bg-slate-50 p-4 rounded-3xl border border-slate-100">
-                    <div className="w-16 h-16 bg-white rounded-xl overflow-hidden shadow-sm">{item.producto.imagen && <img src={`data:image/png;base64,${item.producto.imagen}`} className="w-full h-full object-cover" />}</div>
+                    <div className="w-16 h-16 bg-white rounded-xl overflow-hidden shadow-sm">{item.producto.imagen && <img src={`data:image/png;base64,${item.producto.imagen}`} className="w-full h-full object-cover" alt=""/>}</div>
                     <div className="flex-1">
                       <h4 className="text-xs font-black text-slate-800 line-clamp-1">{item.producto.nombre}</h4>
                       <p className="text-sm font-black text-brand-600">S/ {item.producto.precio.toFixed(2)}</p>
@@ -287,9 +287,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     </div>
                   </div>
                 ))
-              ) : (
+              ) : checkoutStep === 'shipping' ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-5">
-                   {/* Selector Logística */}
                    <div className="grid grid-cols-2 gap-3">
                       <button onClick={() => setCustomerData({...customerData, metodoEntrega: 'delivery'})} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${customerData.metodoEntrega === 'delivery' ? 'bg-brand-50 border-brand-500' : 'bg-white border-slate-100'}`}>
                          <Truck className={`w-6 h-6 ${customerData.metodoEntrega === 'delivery' ? 'text-brand-600' : 'text-slate-300'}`} />
@@ -316,6 +315,52 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                       <textarea placeholder="Notas adicionales..." className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none h-24" value={customerData.notas} onChange={e => setCustomerData({...customerData, notas: e.target.value})}></textarea>
                    </div>
                 </div>
+              ) : (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-5">
+                   <h3 className="text-lg font-black text-slate-800 flex items-center gap-2"><CreditCard className="w-6 h-6 text-brand-500" /> Método de Pago</h3>
+                   <div className="grid grid-cols-1 gap-3">
+                      {[
+                        { id: 'yape', label: 'Yape', number: config.yapeNumber, qr: config.yapeQR },
+                        { id: 'plin', label: 'Plin', number: config.plinNumber, qr: config.plinQR },
+                        { id: 'transferencia', label: 'Transferencia', number: 'BCP/Interbank' }
+                      ].map(method => (
+                        <button 
+                          key={method.id} 
+                          onClick={() => setPaymentMethod(method.id as any)}
+                          className={`p-4 rounded-2xl border-2 text-left transition-all ${paymentMethod === method.id ? 'bg-brand-50 border-brand-500' : 'bg-white border-slate-100'}`}
+                        >
+                           <div className="flex justify-between items-center">
+                             <span className="font-black uppercase text-xs">{method.label}</span>
+                             {paymentMethod === method.id && <CheckCircle2 className="w-5 h-5 text-brand-600" />}
+                           </div>
+                           {method.number && <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase">{method.number}</p>}
+                           {paymentMethod === method.id && method.qr && (
+                             <img src={method.qr} className="mt-4 w-32 h-32 mx-auto rounded-xl border border-slate-100" alt="QR" />
+                           )}
+                        </button>
+                      ))}
+                   </div>
+                   
+                   <div className="p-6 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50 text-center relative group">
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="absolute inset-0 opacity-0 cursor-pointer" 
+                        onChange={e => setComprobante(e.target.files?.[0] || null)}
+                      />
+                      {comprobante ? (
+                        <div className="flex flex-col items-center gap-2 text-brand-600">
+                          <CheckCircle2 className="w-10 h-10" />
+                          <p className="text-xs font-black truncate max-w-full">{comprobante.name}</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 text-slate-400">
+                           <Upload className="w-10 h-10" />
+                           <p className="text-xs font-black uppercase tracking-widest">Subir Comprobante</p>
+                        </div>
+                      )}
+                   </div>
+                </div>
               )}
             </div>
 
@@ -327,11 +372,35 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                 </div>
                 
                 <div className="flex gap-2">
-                  {checkoutStep !== 'catalog' && <button onClick={() => setCheckoutStep('catalog')} className="p-5 bg-slate-100 rounded-3xl text-slate-500 font-black"><ArrowLeft className="w-6 h-6"/></button>}
+                  {checkoutStep !== 'catalog' && (
+                    <button 
+                      onClick={() => {
+                        if (checkoutStep === 'payment') setCheckoutStep('shipping');
+                        else if (checkoutStep === 'shipping') setCheckoutStep('catalog');
+                      }} 
+                      className="p-5 bg-slate-100 rounded-3xl text-slate-500 font-black"
+                    >
+                      <ArrowLeft className="w-6 h-6"/>
+                    </button>
+                  )}
+                  
                   {checkoutStep === 'catalog' ? (
                     <button onClick={() => setCheckoutStep('shipping')} className="flex-1 py-5 text-white rounded-3xl font-black shadow-xl" style={{backgroundColor: brandColor}}>SIGUIENTE</button>
+                  ) : checkoutStep === 'shipping' ? (
+                    <button 
+                      onClick={() => setCheckoutStep('payment')} 
+                      disabled={!customerData.nombre || !customerData.telefono || (customerData.metodoEntrega === 'delivery' && !customerData.direccion) || (customerData.metodoEntrega === 'pickup' && !customerData.sedeId)}
+                      className="flex-1 py-5 text-white rounded-3xl font-black shadow-xl disabled:opacity-30" 
+                      style={{backgroundColor: brandColor}}
+                    >
+                      PAGAR AHORA
+                    </button>
                   ) : (
-                    <button onClick={handleSubmitOrder} disabled={isSubmitting || !customerData.nombre || !customerData.telefono} className="flex-1 py-5 bg-slate-900 text-white rounded-3xl font-black disabled:opacity-30">
+                    <button 
+                      onClick={handleSubmitOrder} 
+                      disabled={isSubmitting || !paymentMethod || !comprobante} 
+                      className="flex-1 py-5 bg-slate-900 text-white rounded-3xl font-black disabled:opacity-30 shadow-2xl"
+                    >
                       {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'FINALIZAR PEDIDO'}
                     </button>
                   )}
@@ -342,7 +411,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
-      {/* Éxito de Compra */}
       {checkoutStep === 'success' && (
         <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
            <div className="w-32 h-32 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-8 animate-bounce"><CheckCircle2 className="w-16 h-16"/></div>
