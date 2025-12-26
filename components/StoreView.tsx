@@ -50,27 +50,32 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const configCategory = (config.tiendaCategoriaNombre || '').trim();
       let data: any[] = [];
 
-      // 1. Intentamos buscar en la categoría configurada si no es "TODAS"
+      // ESTRATEGIA DE BÚSQUEDA AGRESIVA (A PRUEBA DE ERRORES)
+      
+      // Paso 1: Intentar buscar por el nombre de la categoría si se especificó una
       if (configCategory && configCategory.toUpperCase() !== 'TODAS') {
         try {
-          data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
-            [['sale_ok', '=', true], ['categ_id', 'ilike', configCategory]], 
-            fields, { limit: 500, order: 'image_128 desc, display_name asc' }
-          );
+          // Primero buscamos el ID de la categoría para evitar errores de tipo many2one
+          const cats = await client.searchRead(session.uid, session.apiKey, 'product.category', [['name', 'ilike', configCategory]], ['id']);
+          if (cats && cats.length > 0) {
+            const catIds = cats.map((c: any) => c.id);
+            data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
+              [['sale_ok', '=', true], ['categ_id', 'in', catIds]], 
+              fields, { limit: 500, order: 'image_128 desc, display_name asc' }
+            );
+          }
         } catch (e) {
-          console.error("Error buscando por categoría específica, reintentando general...", e);
+          console.warn("Fallo búsqueda por ID de categoría, intentando modo texto...");
         }
       }
 
-      // 2. Si no hay resultados o no se especificó categoría, cargamos el catálogo general de venta
+      // Paso 2: Si no hay resultados o no hay categoría, traer TODO lo que se pueda vender
+      // Importante: Quitamos el filtro de compañía si no devuelve nada, ya que muchos productos no tienen compañía asignada
       if (data.length === 0) {
-        const domain: any[] = [['sale_ok', '=', true]];
-        if (session.companyId) {
-          domain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
-        }
-        
-        data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, 
-          { limit: 500, order: 'image_128 desc, display_name asc' }
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
+          [['sale_ok', '=', true]], 
+          fields, 
+          { limit: 400, order: 'image_128 desc, display_name asc' }
         );
       }
 
@@ -84,13 +89,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         imagen: p.image_128,
         descripcion_venta: p.description_sale || '',
         registro_sanitario: p.x_registro_sanitario || '',
-        laboratorio: p.x_laboratorio || (Array.isArray(p.categ_id) ? p.categ_id[1] : 'Genérico'),
+        laboratorio: p.x_laboratorio || (Array.isArray(p.categ_id) ? p.categ_id[1] : 'Laboratorio'),
         principio_activo: p.x_principio_activo || '',
         presentacion: p.display_name.split(',').pop()?.trim() || ''
       }));
       setProductos(mapped);
     } catch (e) {
-      console.error("Error fetching products", e);
+      console.error("Error fatal cargando catálogo:", e);
     } finally {
       setLoading(false);
     }
@@ -199,8 +204,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         ) : filteredProducts.length === 0 ? (
           <div className="py-20 flex flex-col items-center justify-center text-center">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6 text-slate-300"><Package className="w-12 h-12" /></div>
-            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Catálogo próximamente</h3>
-            <p className="text-slate-400 text-sm mt-2 font-medium">Estamos preparando nuestra vitrina virtual para ti.</p>
+            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Catálogo Próximamente</h3>
+            <p className="text-slate-400 text-sm mt-2 font-medium">Estamos actualizando nuestra lista de productos.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 animate-in fade-in duration-500">
@@ -243,7 +248,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
            <div className="space-y-6">
               <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-300">Contacto Directo</h4>
               <a href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || ''}`} className="inline-flex items-center gap-3 bg-emerald-500 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase shadow-xl hover:brightness-110 transition-all">
-                 <MessageCircle className="w-5 h-5"/> Consultar WhatsApp
+                 <MessageCircle className="w-5 h-5"/> WhatsApp
               </a>
            </div>
         </div>
@@ -262,7 +267,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                <div className="w-full aspect-square bg-white rounded-[3rem] shadow-inner p-10 flex items-center justify-center border border-slate-100">
                   {selectedProduct.imagen ? <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="max-h-full max-w-full object-contain" alt=""/> : <ImageIcon className="w-32 h-32 text-slate-100"/>}
                </div>
-               
                <div className="absolute right-0 top-1/2 -translate-y-1/2 h-4/5 w-16 bg-brand-500 rounded-l-3xl flex items-center justify-center overflow-hidden">
                   <span className="text-white font-black uppercase text-xl tracking-widest origin-center -rotate-90 whitespace-nowrap opacity-40">{selectedProduct.categoria}</span>
                </div>
@@ -280,23 +284,19 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     </div>
                     <div className="bg-brand-50 p-4 rounded-2xl flex-1 flex items-center justify-between border border-brand-100">
                        <div>
-                         <p className="text-[9px] font-black text-brand-600 uppercase tracking-widest mb-0.5">Precio Exclusivo Online</p>
+                         <p className="text-[9px] font-black text-brand-600 uppercase tracking-widest mb-0.5">Precio Online</p>
                          <p className="text-4xl font-black text-brand-600">S/ {(selectedProduct.precio * 0.95).toFixed(2)}</p>
-                       </div>
-                       <div className="flex gap-1">
-                          <div className="w-6 h-4 bg-red-500 rounded-sm"></div>
-                          <div className="w-6 h-4 bg-slate-900 rounded-sm"></div>
                        </div>
                     </div>
                   </div>
 
                   <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-4 mb-8">
                      <div className="bg-rose-500 p-2.5 rounded-full text-white animate-pulse"><Bell className="w-5 h-5"/></div>
-                     <p className="text-xs font-black text-rose-600 uppercase tracking-tight leading-tight">¡Cómpralo y participa del sorteo de 1 año de productos gratis!</p>
+                     <p className="text-xs font-black text-rose-600 uppercase tracking-tight leading-tight">¡Consigue beneficios exclusivos comprando online!</p>
                   </div>
 
                   <div className="mb-10">
-                     <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Detalles y Beneficios</h4>
+                     <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Detalles</h4>
                      {selectedProduct.descripcion_venta ? (
                        <ul className="space-y-3">
                          {selectedProduct.descripcion_venta.split('\n').filter(line => line.trim()).map((line, i) => (
@@ -317,7 +317,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                         <p className="text-xs font-bold text-slate-800">{selectedProduct.registro_sanitario || 'Consultar RS'}</p>
                      </div>
                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Vendido por</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Empresa</p>
                         <p className="text-xs font-bold text-brand-600">{config.nombreComercial}</p>
                      </div>
                   </div>
@@ -387,7 +387,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                            {config.sedes_recojo?.map(s => <option key={s.id} value={s.id}>{s.nombre} - {s.direccion}</option>)}
                         </select>
                       )}
-                      <textarea placeholder="Notas adicionales..." className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none h-24 shadow-sm" value={customerData.notas} onChange={e => setCustomerData({...customerData, notas: e.target.value})}></textarea>
+                      <textarea placeholder="Notas adicionales..." className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none h-24 shadow-sm" value={customerData.notes} onChange={e => setCustomerData({...customerData, notes: e.target.value})}></textarea>
                    </div>
                 </div>
               ) : (
