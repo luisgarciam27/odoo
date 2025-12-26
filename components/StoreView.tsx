@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, Loader2, Citrus, Plus, Minus, MapPin, Truck, Info, Beaker, Pill, ClipboardList, CheckCircle2, QrCode, CreditCard, Upload } from 'lucide-react';
+import { ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, Loader2, Citrus, Plus, Minus, MapPin, Truck, Info, Beaker, Pill, ClipboardList, CheckCircle2, CreditCard, Upload } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
 import { supabase } from '../services/supabaseClient';
@@ -48,7 +48,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const domain: any[] = [['sale_ok', '=', true]];
       if (session.companyId) domain.push(['company_id', '=', session.companyId]);
       
-      // Si hay categorías definidas, filtrar por ellas (name ilike o in)
       if (categoryNames.length > 0) {
         domain.push(['categ_id', 'child_of', categoryNames]);
       }
