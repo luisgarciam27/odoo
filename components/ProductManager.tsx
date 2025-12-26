@@ -133,7 +133,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
           <p className="text-slate-500 text-sm font-medium">Gestiona qué productos de Odoo son visibles en tu tienda online.</p>
         </div>
         <div className="flex flex-wrap gap-3 w-full lg:w-auto">
-          <button onClick={fetchProducts} disabled={loading} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-slate-600 rounded-2xl font-black text-xs border border-slate-200 hover:bg-slate-50 shadow-sm disabled:opacity-50 transition-all">
+          <button onClick={fetchProducts} disabled={loading} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-slate-600 rounded-2xl font-black text-xs border border-slate-200 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> SINCRONIZAR ODOO
           </button>
           <button 
