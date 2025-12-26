@@ -44,36 +44,32 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     try {
       const configCategory = (config.tiendaCategoriaNombre || '').trim();
       
-      // Intentamos una búsqueda amplia: productos que se pueden vender
-      let domain: any[] = [['sale_ok', '=', true]];
-      
-      // Si hay una categoría específica, intentamos filtrar por ella o por nombre similar
-      if (configCategory && configCategory.toUpperCase() !== 'TODAS') {
-        domain.push('|', ['categ_id', 'child_of', configCategory], ['categ_id', 'ilike', configCategory]);
-      }
-
-      if (session.companyId) {
-        domain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
-      }
-
+      // Intentamos una búsqueda que garantice resultados
       const fields = [
         'display_name', 'list_price', 'qty_available', 'categ_id', 'image_128', 
         'description_sale', 'x_registro_sanitario', 'x_laboratorio', 'x_principio_activo'
       ];
 
-      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, 
-        { limit: 1000, order: 'qty_available desc' }
-      );
+      let data: any[] = [];
 
-      // Si la búsqueda por categoría falló (devuelve 0), cargamos el catálogo general de la empresa
+      // 1. Intentar por categoría si existe
+      if (configCategory && configCategory.toUpperCase() !== 'TODAS') {
+        try {
+          data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
+            [['sale_ok', '=', true], ['categ_id', 'ilike', configCategory]], 
+            fields, { limit: 500 }
+          );
+        } catch(e) { console.error("Error buscando por categoría", e); }
+      }
+
+      // 2. Si no hay datos, cargar TODO lo que se pueda vender
       if (data.length === 0) {
-        console.warn("Búsqueda por categoría vacía, intentando catálogo general...");
-        const fallbackDomain: any[] = [['sale_ok', '=', true]];
+        const globalDomain: any[] = [['sale_ok', '=', true]];
         if (session.companyId) {
-          fallbackDomain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
+          globalDomain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
         }
-        data = await client.searchRead(session.uid, session.apiKey, 'product.product', fallbackDomain, fields, 
-          { limit: 300, order: 'qty_available desc' }
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', globalDomain, fields, 
+          { limit: 500, order: 'image_128 desc, display_name asc' }
         );
       }
 
@@ -87,7 +83,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         imagen: p.image_128,
         descripcion_venta: p.description_sale || '',
         registro_sanitario: p.x_registro_sanitario || '',
-        laboratorio: p.x_laboratorio || (Array.isArray(p.categ_id) ? p.categ_id[1] : 'Genérico'),
+        laboratorio: p.x_laboratorio || (Array.isArray(p.categ_id) ? p.categ_id[1] : ''),
         principio_activo: p.x_principio_activo || '',
         presentacion: p.display_name.split(',').pop()?.trim() || ''
       }));
@@ -192,7 +188,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-8 space-y-12">
         <div className="relative max-w-2xl mx-auto">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-          <input type="text" placeholder="Buscar productos..." className="w-full pl-16 pr-6 py-5 bg-white border-none rounded-3xl shadow-xl outline-none focus:ring-2 transition-all text-lg font-medium" style={{'--tw-ring-color': brandColor} as any} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <input type="text" placeholder="Buscar en el catálogo..." className="w-full pl-16 pr-6 py-5 bg-white border-none rounded-3xl shadow-xl outline-none focus:ring-2 transition-all text-lg font-medium" style={{'--tw-ring-color': brandColor} as any} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
 
         {loading ? (
@@ -202,11 +198,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         ) : filteredProducts.length === 0 ? (
           <div className="py-20 flex flex-col items-center justify-center text-center">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6 text-slate-300"><Package className="w-12 h-12" /></div>
-            <h3 className="text-xl font-black text-slate-800 uppercase">Sin productos visibles</h3>
-            <p className="text-slate-400 text-sm mt-2">Verifica la categoría "{config.tiendaCategoriaNombre}" en Odoo.</p>
-            <button onClick={fetchProducts} className="mt-8 px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2">
-              <RefreshCw className="w-4 h-4"/> Sincronizar Odoo
-            </button>
+            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Catálogo próximamente</h3>
+            <p className="text-slate-400 text-sm mt-2 font-medium">Estamos actualizando nuestra lista de productos.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
