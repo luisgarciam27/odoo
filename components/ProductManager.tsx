@@ -216,6 +216,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
               ) : (
                 filteredProducts.map(p => {
                   const isHidden = hiddenIds.includes(p.id);
+                  const stockValue = p.stock ?? 0;
                   return (
                     <tr key={p.id} className={`hover:bg-slate-50 transition-colors group ${isHidden ? 'bg-slate-50/50' : ''}`}>
                       <td className="px-8 py-4">
@@ -233,8 +234,8 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
                       </td>
                       <td className="px-8 py-4 font-mono font-bold text-slate-700">S/ {p.precio.toFixed(2)}</td>
                       <td className="px-8 py-4">
-                        <span className={`text-xs font-bold ${p.stock > 0 ? 'text-emerald-600' : 'text-red-400'}`}>
-                          {p.stock} <span className="text-[10px] text-slate-400 font-normal ml-0.5">uds</span>
+                        <span className={`text-xs font-bold ${stockValue > 0 ? 'text-emerald-600' : 'text-red-400'}`}>
+                          {stockValue} <span className="text-[10px] text-slate-400 font-normal ml-0.5">uds</span>
                         </span>
                       </td>
                       <td className="px-8 py-4 text-right">
