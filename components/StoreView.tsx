@@ -77,7 +77,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   };
 
   const filteredProducts = useMemo(() => {
-    // FILTRO CRÍTICO: No mostramos productos cuyo ID esté en la lista de ocultos
     return productos
       .filter(p => !hiddenIds.includes(p.id))
       .filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -128,6 +127,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       
       const { data: { publicUrl } } = supabase.storage.from('comprobantes').getPublicUrl(`${config.code}/${fileName}`);
 
+      // 1. Guardar respaldo en Supabase
       const { data: supaOrder, error: supaError } = await supabase.from('pedidos_online').insert([{
         empresa_codigo: config.code,
         cliente_nombre: customerData.nombre,
@@ -143,24 +143,40 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       if (supaError) throw supaError;
 
+      // 2. Crear Pedido en Odoo
       const odoo = new OdooClient(session.url, session.db, true);
+      
+      // Intentamos buscar un cliente genérico o usamos el ID 1 por defecto
+      // NOTA: Se recomienda configurar un cliente 'Public' en Odoo para esto
+      const defaultPartnerId = 1; 
+
       const orderLines = cart.map(item => [0, 0, {
         product_id: item.producto.id,
         product_uom_qty: item.cantidad,
         price_unit: item.producto.precio
       }]);
 
+      const odooNote = `🛒 PEDIDO WEB #${supaOrder.id}\n` +
+                       `👤 Cliente: ${customerData.nombre}\n` +
+                       `📱 Telf: ${customerData.telefono}\n` +
+                       `🏠 Dirección: ${customerData.direccion}\n` +
+                       `💳 Pago via: ${paymentMethod.toUpperCase()}\n` +
+                       `📝 Notas: ${customerData.notas}\n\n` +
+                       `🖼️ COMPROBANTE DE PAGO:\n${publicUrl}`;
+
       await odoo.create(session.uid, session.apiKey, 'sale.order', {
-        partner_id: 1, 
+        partner_id: defaultPartnerId, 
         order_line: orderLines,
-        note: `PEDIDO WEB #${supaOrder.id}\nCliente: ${customerData.nombre}\nTelf: ${customerData.telefono}\nPago: ${paymentMethod.toUpperCase()}\nComprobante: ${publicUrl}`,
-        company_id: session.companyId
+        note: odooNote,
+        company_id: session.companyId,
+        origin: `Tienda Web ${config.code}`
       });
 
       setCheckoutStep('success');
       setCart([]);
     } catch (e: any) {
-      alert("Error al procesar: " + e.message);
+      console.error("Order Error:", e);
+      alert("Error al procesar: " + (e.message || "Fallo en la conexión con Odoo"));
     } finally {
       setIsSubmitting(false);
     }
@@ -173,7 +189,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           <CheckCircle className="w-12 h-12" />
         </div>
         <h2 className="text-3xl font-bold text-slate-800 mb-2">¡Pedido enviado con éxito!</h2>
-        <p className="text-slate-500 mb-8 max-w-xs">Tu pedido está siendo procesado. Te contactaremos vía WhatsApp para confirmar el despacho.</p>
+        <p className="text-slate-500 mb-8 max-w-xs">Tu pedido está siendo procesado en Odoo. Te contactaremos vía WhatsApp para confirmar el despacho.</p>
         <button onClick={() => setCheckoutStep('catalog')} className="px-10 py-4 text-white rounded-2xl font-bold shadow-xl active:scale-95 transition-all" style={{backgroundColor: brandColor}}>Volver al Inicio</button>
       </div>
     );
