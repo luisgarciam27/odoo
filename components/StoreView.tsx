@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, Loader2, Citrus, Plus, Minus, Info, CheckCircle2, RefreshCw, MapPin, Truck, CreditCard, Upload, MessageCircle, ShieldCheck, HelpCircle, Bell } from 'lucide-react';
+import { ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, Loader2, Citrus, Plus, Minus, Info, CheckCircle2, RefreshCw, MapPin, Truck, CreditCard, Upload, MessageCircle, Bell } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
 import { supabase } from '../services/supabaseClient';
@@ -32,7 +32,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [comprobante, setComprobante] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const brandColor = config?.colorPrimario || '#009a51'; // Verde por defecto tipo farmacia
+  const brandColor = config?.colorPrimario || '#009a51'; 
   
   const hiddenIds = useMemo(() => (config?.hiddenProducts || []).map(id => Number(id)), [config?.hiddenProducts]);
   const hiddenCats = useMemo(() => (config?.hiddenCategories || []).map(c => c.trim().toUpperCase()), [config?.hiddenCategories]);
@@ -53,7 +53,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         domain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
       }
 
-      // Añadimos 'description_sale' y campos 'x_' para laboratorio y otros
       const fields = [
         'display_name', 'list_price', 'qty_available', 'categ_id', 'image_128', 
         'description_sale', 'x_registro_sanitario', 'x_laboratorio', 'x_principio_activo'
@@ -198,10 +197,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         ) : filteredProducts.length === 0 ? (
           <div className="py-20 flex flex-col items-center justify-center text-center">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6 text-slate-300"><Package className="w-12 h-12" /></div>
-            <h3 className="text-xl font-black text-slate-800 uppercase">Catálogo no disponible</h3>
-            <p className="text-slate-500 max-w-xs mt-2 text-sm">No hay productos visibles en este momento.</p>
-            <button onClick={fetchProducts} className="mt-8 px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95">
-              <RefreshCw className="w-4 h-4"/> Reintentar Carga
+            <h3 className="text-xl font-black text-slate-800 uppercase">Sin productos visibles</h3>
+            <button onClick={fetchProducts} className="mt-8 px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2">
+              <RefreshCw className="w-4 h-4"/> Sincronizar Odoo
             </button>
           </div>
         ) : (
@@ -266,7 +264,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                   {selectedProduct.imagen ? <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="max-h-full max-w-full object-contain" alt=""/> : <ImageIcon className="w-32 h-32 text-slate-100"/>}
                </div>
                
-               {/* Badge de Categoría lateral (como en la foto) */}
+               {/* Badge de Categoría lateral */}
                <div className="absolute right-0 top-1/2 -translate-y-1/2 h-4/5 w-16 bg-brand-500 rounded-l-3xl flex items-center justify-center overflow-hidden">
                   <span className="text-white font-black uppercase text-xl tracking-widest origin-center -rotate-90 whitespace-nowrap opacity-40">{selectedProduct.categoria}</span>
                </div>
@@ -275,7 +273,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             {/* Info Derecha */}
             <div className="w-full lg:w-1/2 p-8 lg:p-14 overflow-y-auto bg-white border-l border-slate-50">
                <div className="mb-8">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">{selectedProduct.laboratorio || 'Sin Laboratorio'} {selectedProduct.presentacion && ` • ${selectedProduct.presentacion.toUpperCase()}`}</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">{selectedProduct.laboratorio || 'PRODUCTO DE ODOO'} {selectedProduct.presentacion && ` • ${selectedProduct.presentacion.toUpperCase()}`}</span>
                   <h2 className="text-3xl lg:text-4xl font-black text-slate-900 leading-[1.1] mb-6">{selectedProduct.nombre}</h2>
                   
                   <div className="flex flex-col sm:flex-row sm:items-end gap-6 mb-8 py-6 border-y border-slate-50">
@@ -285,7 +283,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     </div>
                     <div className="bg-brand-50 p-4 rounded-2xl flex-1 flex items-center justify-between border border-brand-100">
                        <div>
-                         <p className="text-[9px] font-black text-brand-600 uppercase tracking-widest mb-0.5">Precio Online</p>
+                         <p className="text-[9px] font-black text-brand-600 uppercase tracking-widest mb-0.5">Precio Exclusivo Online</p>
                          <p className="text-4xl font-black text-brand-600">S/ {(selectedProduct.precio * 0.95).toFixed(2)}</p>
                        </div>
                        <div className="flex gap-1">
@@ -295,15 +293,15 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     </div>
                   </div>
 
-                  {/* Banner de Sorteo (Foto) */}
+                  {/* Banner promocional similar a la captura */}
                   <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-4 mb-8">
                      <div className="bg-rose-500 p-2.5 rounded-full text-white animate-pulse"><Bell className="w-5 h-5"/></div>
                      <p className="text-xs font-black text-rose-600 uppercase tracking-tight leading-tight">¡Cómpralo y participa del sorteo de 1 año de productos!</p>
                   </div>
 
-                  {/* Descripción de Venta */}
+                  {/* Descripción de Venta de Odoo */}
                   <div className="mb-10">
-                     <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Descripción y Beneficios</h4>
+                     <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Información del Producto</h4>
                      {selectedProduct.descripcion_venta ? (
                        <ul className="space-y-3">
                          {selectedProduct.descripcion_venta.split('\n').filter(line => line.trim()).map((line, i) => (
@@ -314,33 +312,23 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                          ))}
                        </ul>
                      ) : (
-                       <p className="text-sm italic text-slate-400">Sin descripción disponible.</p>
+                       <p className="text-sm italic text-slate-400">Sin descripción disponible en Odoo.</p>
                      )}
-                     <button className="mt-4 text-brand-600 text-xs font-black uppercase tracking-widest hover:underline">Ver más detalles</button>
                   </div>
 
-                  {/* Detalles Técnicos */}
+                  {/* Detalles Técnicos Médicos */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-                     {selectedProduct.registro_sanitario && (
-                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">RS / NSO</p>
-                          <p className="text-xs font-bold text-slate-800">{selectedProduct.registro_sanitario}</p>
-                       </div>
-                     )}
-                     {selectedProduct.principio_activo && (
-                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Principio Activo</p>
-                          <p className="text-xs font-bold text-slate-800">{selectedProduct.principio_activo}</p>
-                       </div>
-                     )}
+                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Registro Sanitario</p>
+                        <p className="text-xs font-bold text-slate-800">{selectedProduct.registro_sanitario || 'En trámite'}</p>
+                     </div>
+                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Vendido por</p>
+                        <p className="text-xs font-bold text-brand-600">{config.nombreComercial}</p>
+                     </div>
                   </div>
 
                   <div className="flex gap-4 sticky bottom-0 bg-white pt-4">
-                     <div className="flex items-center bg-slate-100 rounded-3xl p-2 px-4 gap-4">
-                        <button className="p-2 hover:bg-white rounded-full transition-all text-slate-400"><Minus className="w-4 h-4"/></button>
-                        <span className="font-black text-lg w-4 text-center">1</span>
-                        <button className="p-2 hover:bg-white rounded-full transition-all text-slate-900"><Plus className="w-4 h-4"/></button>
-                     </div>
                      <button 
                        onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); }} 
                        className="flex-1 py-5 text-white rounded-[2rem] font-black shadow-2xl active:scale-95 transition-all uppercase tracking-widest text-xs" 
