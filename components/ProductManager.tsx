@@ -20,7 +20,6 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
   const [categoryFilter, setCategoryFilter] = useState('Todas');
   const [showSuccess, setShowSuccess] = useState(false);
   
-  // Sincronizar estados locales con config
   const [hiddenIds, setHiddenIds] = useState<number[]>(config.hiddenProducts || []);
   const [hiddenCats, setHiddenCats] = useState<string[]>(config.hiddenCategories || []);
 
@@ -28,52 +27,63 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
     fetchProducts();
   }, [session, config.tiendaCategoriaNombre]);
 
+  const mapOdooProducts = (data: any[]): Producto[] => {
+    return data.map((p: any) => ({
+      id: p.id,
+      nombre: p.display_name,
+      precio: p.list_price || 0,
+      costo: 0,
+      categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
+      stock: p.qty_available || 0,
+      imagen: p.image_128
+    }));
+  };
+
   const fetchProducts = async () => {
     setLoading(true);
     const client = new OdooClient(session.url, session.db, true);
     try {
       const configCategory = config.tiendaCategoriaNombre || 'Catalogo';
-      const categoryNames = configCategory.split(',').map(c => c.trim()).filter(c => c.length > 0);
-      
-      // Paso 1: Intentar obtener IDs de categorías para un filtrado más exacto
-      let categoryIds: number[] = [];
-      try {
-        const cats = await client.searchRead(session.uid, session.apiKey, 'product.category', 
-          ['|', ['name', 'ilike', configCategory], ['complete_name', 'ilike', configCategory]], 
-          ['id']
-        );
-        categoryIds = cats.map((c: any) => c.id);
-      } catch (e) {
-        console.warn("No se pudieron resolver IDs de categorías, usando nombres", e);
-      }
+      // Limpiamos los nombres de categorías configurados
+      const categoryNames = configCategory.split(',')
+        .map(c => c.trim())
+        .filter(c => c.length > 0 && c.toLowerCase() !== 'todas' && c.toLowerCase() !== 'all');
 
+      // Construcción del dominio de búsqueda
       const domain: any[] = [['sale_ok', '=', true]];
       
-      // Si tenemos IDs los usamos, sino usamos los nombres (child_of es flexible)
-      if (categoryIds.length > 0) {
-        domain.push(['categ_id', 'child_of', categoryIds]);
-      } else if (categoryNames.length > 0) {
+      // 1. Filtrado por categorías (si se configuró algo que no sea "Todas")
+      if (categoryNames.length > 0) {
         domain.push(['categ_id', 'child_of', categoryNames]);
       }
 
-      if (session.companyId) domain.push(['company_id', '=', session.companyId]);
+      // 2. Filtrado por compañía (Permisivo: Productos de la empresa + Productos Globales)
+      if (session.companyId) {
+        domain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
+      }
 
-      const data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, 
+      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, 
         ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_128'], 
-        { limit: 1000, order: 'display_name asc' }
+        { limit: 2000, order: 'display_name asc' }
       );
 
-      setProductos(data.map((p: any) => ({
-        id: p.id,
-        nombre: p.display_name,
-        precio: p.list_price || 0,
-        costo: 0,
-        categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
-        stock: p.qty_available || 0,
-        imagen: p.image_128
-      })));
+      // 3. Fallback de Seguridad: Si no hay resultados con el filtro de categoría, intentar sin él
+      if (data.length === 0 && categoryNames.length > 0) {
+        console.warn("No se encontraron productos con el filtro de categoría. Intentando carga global...");
+        const fallbackDomain: any[] = [['sale_ok', '=', true]];
+        if (session.companyId) {
+          fallbackDomain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
+        }
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', fallbackDomain, 
+          ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_128'], 
+          { limit: 1000, order: 'display_name asc' }
+        );
+      }
+
+      setProductos(mapOdooProducts(data));
     } catch (e) {
-      console.error("Error fetching products", e);
+      console.error("Error crítico sincronizando Odoo:", e);
+      alert("Error al conectar con Odoo. Verifique su conexión o configuración de categorías.");
     } finally {
       setLoading(false);
     }
@@ -130,7 +140,6 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 pb-32 text-slate-700">
-      {/* Header Premium */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -140,7 +149,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
           <p className="text-slate-500 text-sm font-medium">Gestiona qué productos de Odoo son visibles en tu tienda online.</p>
         </div>
         <div className="flex flex-wrap gap-3 w-full lg:w-auto">
-          <button onClick={fetchProducts} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-slate-600 rounded-2xl font-black text-xs border border-slate-200 hover:bg-slate-50 transition-all shadow-sm">
+          <button onClick={fetchProducts} disabled={loading} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-slate-600 rounded-2xl font-black text-xs border border-slate-200 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> SINCRONIZAR ODOO
           </button>
           <button 
@@ -155,7 +164,6 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
         </div>
       </div>
 
-      {/* Tabs Switcher */}
       <div className="flex bg-slate-100 p-1.5 rounded-[2rem] w-full max-w-sm mx-auto shadow-inner">
         <button 
           onClick={() => setActiveTab('individual')}
@@ -173,7 +181,6 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
 
       {activeTab === 'individual' ? (
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/40 overflow-hidden animate-in fade-in slide-in-from-left-4">
-          {/* Toolbar de la Tabla */}
           <div className="p-8 border-b border-slate-50 flex flex-col xl:flex-row gap-6 items-center justify-between bg-slate-50/30">
             <div className="flex flex-col md:flex-row gap-4 w-full xl:w-auto">
               <div className="relative w-full md:w-80 group">
@@ -198,25 +205,26 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
             </div>
 
             <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-end">
-               <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mr-2 hidden md:block">Acciones Rápidas:</span>
                <button 
                 onClick={() => handleBulkAction('show')}
                 className="flex items-center gap-2 px-5 py-3 bg-emerald-50 text-emerald-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100"
                >
-                 <CheckCircle className="w-4 h-4"/> Publicar Visibles
+                 <CheckCircle className="w-4 h-4"/> Publicar Todos
                </button>
                <button 
                 onClick={() => handleBulkAction('hide')}
                 className="flex items-center gap-2 px-5 py-3 bg-rose-50 text-rose-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100"
                >
-                 <XCircle className="w-4 h-4"/> Ocultar Visibles
+                 <XCircle className="w-4 h-4"/> Ocultar Todos
                </button>
             </div>
           </div>
 
           <div className="p-4 bg-blue-50/50 flex items-center gap-3 border-b border-blue-50">
              <Info className="w-4 h-4 text-blue-500" />
-             <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Mostrando {filteredProducts.length} productos de Odoo</p>
+             <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
+               {loading ? 'Sincronizando...' : `Sincronizados ${productos.length} productos de Odoo`}
+             </p>
           </div>
 
           <div className="overflow-x-auto">
@@ -244,7 +252,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
                     <td colSpan={5} className="py-32 text-center">
                       <div className="flex flex-col items-center opacity-30">
                         <Package className="w-16 h-16 mb-4" />
-                        <p className="font-black uppercase tracking-widest text-xs">No se encontraron productos en esta categoría</p>
+                        <p className="font-black uppercase tracking-widest text-xs">No se encontraron productos para mostrar</p>
                       </div>
                     </td>
                   </tr>
@@ -288,7 +296,6 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
                               ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
                               : 'bg-rose-50 text-rose-500 border border-rose-100 hover:bg-rose-500 hover:text-white'
                           }`}
-                          title={isCategoryHidden ? "Oculto automáticamente por categoría" : ""}
                         >
                           {isActuallyVisible ? <><Eye className="w-4 h-4"/> PUBLICADO</> : isCategoryHidden ? <><EyeOff className="w-4 h-4"/> CAT. OCULTA</> : <><EyeOff className="w-4 h-4"/> OCULTO</>}
                         </button>
@@ -337,7 +344,6 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
         </div>
       )}
 
-      {/* Floating Success Indicator */}
       {showSuccess && (
         <div className="fixed bottom-12 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-10 py-5 rounded-full shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-12 duration-500 z-50">
           <div className="w-8 h-8 bg-brand-500 rounded-full flex items-center justify-center">
