@@ -56,6 +56,7 @@ export interface ClientConfig {
   showStore?: boolean;
   storeCategories?: string; // IDs manuales (opcional)
   tiendaCategoriaNombre?: string; // Ej: "Catalogo Web"
+  hiddenProducts?: number[]; // IDs de productos ocultos manualmente
   yapeNumber?: string;
   yapeName?: string;
   yapeQR?: string; 

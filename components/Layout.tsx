@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
@@ -11,7 +12,8 @@ import {
   CreditCard,
   Store,
   ShoppingCart,
-  Palette
+  Palette,
+  PackageSearch
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -100,6 +102,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
               <div className="text-[11px] font-bold text-brand-500 uppercase tracking-widest mb-3 px-4 mt-6">
                 Venta Online
               </div>
+              <NavItem view="product-manager" icon={PackageSearch} label="Mis Productos" color="text-brand-500" />
               <NavItem view="store-config" icon={Palette} label="Configurar Tienda" color="text-brand-500" />
               <NavItem view="store" icon={ShoppingCart} label="Ver Mi Tienda" color="text-brand-500" />
             </>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { ShoppingCart, Package, Search, ChevronRight, X, Image as ImageIcon, CheckCircle, ArrowLeft, Loader2, Citrus, Plus, Minus, Trash2, Send, Tag, Zap, Star, ShieldCheck, QrCode } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
@@ -24,6 +25,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const brandColor = config.colorPrimario || '#84cc16';
+  const hiddenIds = config.hiddenProducts || [];
 
   useEffect(() => {
     fetchProducts();
@@ -80,10 +82,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   };
 
   const filteredProducts = useMemo(() => {
-    return productos.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [productos, searchTerm]);
+    // Aplicamos filtro de productos ocultos manualmente por el cliente
+    return productos
+      .filter(p => !hiddenIds.includes(p.id))
+      .filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [productos, searchTerm, hiddenIds]);
 
-  const featuredProducts = useMemo(() => productos.filter(p => (p.stock || 0) > 0).slice(0, 4), [productos]);
+  const featuredProducts = useMemo(() => filteredProducts.filter(p => (p.stock || 0) > 0).slice(0, 4), [filteredProducts]);
 
   const addToCart = (p: Producto) => {
     setCart(prev => {
