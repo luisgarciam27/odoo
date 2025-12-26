@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, Loader2, Citrus, Plus, Minus, MapPin, Truck, Info, Beaker, Pill, ClipboardList, CheckCircle2, CreditCard, Upload } from 'lucide-react';
+// Added RefreshCw to imports
+import { ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, Loader2, Citrus, Plus, Minus, MapPin, Truck, Info, Beaker, Pill, ClipboardList, CheckCircle2, CreditCard, Upload, MessageCircle, ShieldCheck, HelpCircle, RefreshCw } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
 import { supabase } from '../services/supabaseClient';
@@ -32,17 +33,20 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [comprobante, setComprobante] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const brandColor = config.colorPrimario || '#84cc16';
+  const brandColor = config?.colorPrimario || '#84cc16';
   
-  // Sincronización robusta de filtros (asegurar tipos Number para IDs)
-  const hiddenIds = useMemo(() => Array.isArray(config.hiddenProducts) ? config.hiddenProducts.map(Number) : [], [config.hiddenProducts]);
-  const hiddenCats = useMemo(() => Array.isArray(config.hiddenCategories) ? config.hiddenCategories : [], [config.hiddenCategories]);
+  // Sincronización robusta de filtros
+  const hiddenIds = useMemo(() => Array.isArray(config?.hiddenProducts) ? config.hiddenProducts.map(Number) : [], [config?.hiddenProducts]);
+  const hiddenCats = useMemo(() => Array.isArray(config?.hiddenCategories) ? config.hiddenCategories : [], [config?.hiddenCategories]);
 
   useEffect(() => {
-    fetchProducts();
+    if (session && config) {
+      fetchProducts();
+    }
   }, [session, config]);
 
   const fetchProducts = async () => {
+    if (!session) return;
     setLoading(true);
     const client = new OdooClient(session.url, session.db, true);
     try {
@@ -57,7 +61,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       );
 
       setProductos(data.map((p: any) => ({
-        id: Number(p.id), // Asegurar Number
+        id: Number(p.id),
         nombre: p.display_name,
         precio: p.list_price,
         costo: 0,
@@ -77,8 +81,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
   const filteredProducts = useMemo(() => {
     return productos
-      .filter(p => !hiddenIds.includes(p.id)) // Filtrar por ID individual
-      .filter(p => !hiddenCats.includes(p.categoria || '')) // Filtrar por Categoría completa
+      .filter(p => !hiddenIds.includes(p.id)) 
+      .filter(p => !hiddenCats.includes(p.categoria || ''))
       .filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [productos, searchTerm, hiddenIds, hiddenCats]);
 
@@ -153,29 +157,40 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     }
   };
 
+  if (!config || !session) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-12">
+        <Loader2 className="w-12 h-12 animate-spin text-brand-500 mb-4" />
+        <p className="font-black uppercase tracking-widest text-xs text-slate-400">Iniciando Tienda...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-white font-sans text-slate-800 pb-20 overflow-x-hidden">
-      <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-40 px-6 py-5 flex items-center justify-between shadow-sm">
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col overflow-x-hidden">
+      {/* Navbar - Siempre visible */}
+      <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-40 px-6 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
           {onBack && <button onClick={onBack} className="p-2 text-slate-400 hover:text-slate-900 transition-all"><ArrowLeft/></button>}
           <div className="flex items-center gap-3">
-             {config.logoUrl ? <img src={config.logoUrl} className="h-10 rounded-lg" alt="Logo" /> : <div className="p-2 rounded-xl text-white" style={{backgroundColor: brandColor}}><Citrus className="w-5 h-5" /></div>}
-             <h1 className="font-black text-slate-900 uppercase text-xs tracking-tighter">{config.nombreComercial || config.code}</h1>
+             {config.logoUrl ? <img src={config.logoUrl} className="h-10 rounded-lg object-contain" alt="Logo" /> : <div className="p-2 rounded-xl text-white" style={{backgroundColor: brandColor}}><Citrus className="w-5 h-5" /></div>}
+             <h1 className="font-black text-slate-900 uppercase text-xs tracking-tighter leading-none">{config.nombreComercial || config.code}</h1>
           </div>
         </div>
-        <button onClick={() => setIsCartOpen(true)} className="relative p-3 bg-slate-50 rounded-2xl transition-all hover:bg-slate-100">
+        <button onClick={() => setIsCartOpen(true)} className="relative p-3 bg-slate-100 rounded-2xl transition-all hover:bg-slate-200">
           <ShoppingCart className="w-5 h-5 text-slate-600" />
           {cart.length > 0 && <span className="absolute -top-1 -right-1 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center animate-bounce" style={{backgroundColor: brandColor}}>{cart.length}</span>}
         </button>
       </nav>
 
-      <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-12">
-        <div className="relative max-w-2xl mx-auto">
+      {/* Main Content */}
+      <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-8 space-y-12">
+        <div className="relative max-w-2xl mx-auto animate-in fade-in slide-in-from-top-4 duration-700">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
           <input 
             type="text" 
             placeholder="Buscar por nombre o síntoma..." 
-            className="w-full pl-16 pr-6 py-5 bg-slate-50 border-none rounded-3xl shadow-inner outline-none focus:ring-2 transition-all text-lg font-medium"
+            className="w-full pl-16 pr-6 py-5 bg-white border-none rounded-3xl shadow-xl shadow-slate-200/50 outline-none focus:ring-2 transition-all text-lg font-medium"
             style={{'--tw-ring-color': brandColor} as any}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -184,7 +199,18 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-            {[1,2,3,4,5].map(i => <div key={i} className="bg-slate-50 rounded-[2.5rem] aspect-[3/4] animate-pulse"></div>)}
+            {[1,2,3,4,5,6,7,8,9,10].map(i => <div key={i} className="bg-white rounded-[2.5rem] aspect-[3/4] animate-pulse border border-slate-50 shadow-sm"></div>)}
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="py-20 flex flex-col items-center justify-center text-center animate-in fade-in">
+            <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6 text-slate-300">
+              <Package className="w-12 h-12" />
+            </div>
+            <h3 className="text-xl font-black text-slate-800 uppercase">No se encontraron productos</h3>
+            <p className="text-slate-500 max-w-xs mt-2 text-sm">Verifica que los productos pertenezcan a la categoría configurada o que no estén marcados como ocultos.</p>
+            <button onClick={fetchProducts} className="mt-8 px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2">
+              <RefreshCw className="w-4 h-4"/> Reintentar Carga
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
@@ -192,26 +218,70 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               <div 
                 key={p.id} 
                 onClick={() => setSelectedProduct(p)}
-                className="group relative bg-white rounded-[2.5rem] p-4 border border-slate-50 hover:shadow-2xl transition-all duration-500 cursor-pointer flex flex-col"
+                className="group relative bg-white rounded-[2.5rem] p-4 border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 cursor-pointer flex flex-col"
               >
-                <div className="aspect-square bg-slate-50 rounded-[2rem] mb-4 overflow-hidden relative">
+                <div className="aspect-square bg-slate-50 rounded-[2rem] mb-4 overflow-hidden relative border border-slate-50">
                   {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={p.nombre} /> : <div className="w-full h-full flex items-center justify-center text-slate-200"><Package className="w-12 h-12"/></div>}
-                  <button onClick={(e) => addToCart(p, e)} className="absolute bottom-3 right-3 p-3 bg-white rounded-2xl shadow-xl text-slate-800 hover:bg-brand-500 hover:text-white transition-all opacity-0 group-hover:opacity-100"><Plus className="w-5 h-5"/></button>
+                  <button onClick={(e) => addToCart(p, e)} className="absolute bottom-3 right-3 p-3 bg-white rounded-2xl shadow-xl text-slate-800 hover:bg-slate-900 hover:text-white transition-all opacity-0 group-hover:opacity-100"><Plus className="w-5 h-5"/></button>
                 </div>
                 <div className="flex-1 px-1">
                   <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">{p.categoria}</span>
                   <h3 className="text-sm font-bold text-slate-800 line-clamp-2 leading-tight mt-1 h-10">{p.nombre}</h3>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-xl font-black text-slate-900">S/ {p.precio.toFixed(2)}</span>
-                    <Info className="w-4 h-4 text-slate-200 group-hover:text-brand-400 transition-colors" />
+                    <Info className="w-4 h-4 text-slate-200 group-hover:text-slate-400 transition-colors" />
                   </div>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </main>
 
+      {/* Footer Pro - Nueva sección */}
+      <footer className="bg-white border-t border-slate-100 pt-16 pb-8 mt-20">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
+           <div className="space-y-4">
+              <div className="flex items-center justify-center md:justify-start gap-3">
+                 <Citrus className="w-8 h-8 text-brand-500" />
+                 <span className="font-black text-xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
+              </div>
+              <p className="text-sm text-slate-400 leading-relaxed font-medium">Tu salud y bienestar en buenas manos. Compra online y recibe en tu puerta o recoge en nuestra sede más cercana.</p>
+           </div>
+           
+           <div className="space-y-6">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-300">Nuestros Servicios</h4>
+              <ul className="space-y-3">
+                 <li className="flex items-center justify-center md:justify-start gap-3 text-sm font-bold text-slate-600"><Truck className="w-4 h-4 text-brand-500"/> Delivery Rápido</li>
+                 <li className="flex items-center justify-center md:justify-start gap-3 text-sm font-bold text-slate-600"><MapPin className="w-4 h-4 text-brand-500"/> Recojo en Sucursal</li>
+                 <li className="flex items-center justify-center md:justify-start gap-3 text-sm font-bold text-slate-600"><ShieldCheck className="w-4 h-4 text-brand-500"/> Productos Garantizados</li>
+              </ul>
+           </div>
+
+           <div className="space-y-6">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-300">Atención al Cliente</h4>
+              <div className="flex flex-col items-center md:items-start gap-4">
+                 <a href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || ''}`} target="_blank" className="flex items-center gap-3 bg-emerald-500 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase shadow-xl shadow-emerald-200 hover:brightness-110 transition-all">
+                    <MessageCircle className="w-5 h-5"/> Escribir por WhatsApp
+                 </a>
+                 <button className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-slate-800 transition-colors">
+                    <HelpCircle className="w-4 h-4"/> ¿Necesitas ayuda?
+                 </button>
+              </div>
+           </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-6 mt-16 pt-8 border-t border-slate-50 flex flex-col md:flex-row justify-between items-center gap-6">
+           <div className="flex items-center gap-6 opacity-30 grayscale">
+              <img src="https://logodownload.org/wp-content/uploads/2014/07/visa-logo-1.png" className="h-4 object-contain" />
+              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" className="h-6 object-contain" />
+              <img src="https://cdn.icon-icons.com/icons2/2699/PNG/512/yape_logo_icon_169466.png" className="h-6 object-contain" />
+           </div>
+           <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by LEMON BI &copy; 2025</p>
+        </div>
+      </footer>
+
+      {/* Modals y Cart Drawer (Se mantienen pero con mejoras de carga) */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedProduct(null)}></div>
