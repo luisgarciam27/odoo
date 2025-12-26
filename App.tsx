@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard';
 import Login from './components/Login';
 import Layout from './components/Layout';
 import AdminDashboard from './components/AdminDashboard';
 import StoreView from './components/StoreView';
+import StoreSettings from './components/StoreSettings';
 import { OdooSession, ClientConfig } from './types';
 import { getClientByCode } from './services/clientManager';
 import { OdooClient } from './services/odoo';
@@ -107,6 +109,8 @@ const App: React.FC = () => {
       <Layout onLogout={handleLogout} currentView={currentView} onNavigate={setCurrentView} showStoreLink={clientConfig?.showStore}>
         {currentView === 'store' && odooSession && clientConfig ? (
            <StoreView session={odooSession} config={clientConfig} onBack={() => setCurrentView('general')} />
+        ) : currentView === 'store-config' && clientConfig ? (
+           <StoreSettings config={clientConfig} onUpdate={setClientConfig} />
         ) : (
           <Dashboard session={odooSession} view={currentView} />
         )}

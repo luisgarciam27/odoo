@@ -12,7 +12,8 @@ import {
   X,
   CreditCard,
   Store,
-  ShoppingCart
+  ShoppingCart,
+  Palette
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -52,7 +53,6 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
   return (
     <div className="min-h-screen flex font-sans text-slate-800 selection:bg-brand-200 selection:text-brand-900">
       
-      {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300"
@@ -60,7 +60,6 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
         />
       )}
 
-      {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-40 w-72 flex-col bg-white/80 backdrop-blur-xl border-r border-slate-200/60 transition-transform duration-300 ease-out shadow-[4px_0_24px_-4px_rgba(0,0,0,0.03)]
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
@@ -76,24 +75,21 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
               <p className="text-[10px] text-brand-600 font-bold tracking-widest mt-1 uppercase">Analytics</p>
             </div>
           </div>
-          <button 
-            onClick={() => setIsMobileMenuOpen(false)}
-            className="md:hidden text-slate-400 hover:text-slate-600 transition-colors"
-          >
+          <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-slate-400 hover:text-slate-600 transition-colors">
             <X className="w-6 h-6" />
           </button>
         </div>
 
         <nav className="flex-1 p-5 space-y-1 overflow-y-auto">
           <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-4 mt-2">
-            Principal
+            Análisis
           </div>
           
           <NavItem view="general" icon={LayoutDashboard} label="Dashboard General" />
           <NavItem view="rentabilidad" icon={TrendingUp} label="Rentabilidad" />
 
           <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-4 mt-6">
-            Gestión
+            Operaciones
           </div>
 
           <NavItem view="comparativa" icon={Store} label="Sedes y Cajas" />
@@ -106,17 +102,13 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
               <div className="text-[11px] font-bold text-brand-500 uppercase tracking-widest mb-3 px-4 mt-6">
                 Venta Online
               </div>
+              <NavItem view="store-config" icon={Palette} label="Configurar Tienda" color="text-brand-500" />
               <NavItem view="store" icon={ShoppingCart} label="Ver Mi Tienda" color="text-brand-500" />
             </>
           )}
         </nav>
 
         <div className="p-5 border-t border-slate-100 bg-slate-50/50">
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-800 hover:bg-white rounded-xl transition-all mb-2 hover:shadow-sm">
-            <Settings className="w-5 h-5" />
-            <span className="font-sans text-sm font-medium">Configuración</span>
-          </button>
-          
           <button 
             onClick={onLogout}
             className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all group"
