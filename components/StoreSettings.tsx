@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Palette, ShoppingBag, QrCode, ImageIcon, Save, CheckCircle2, Globe, Tag, ExternalLink, RotateCcw, Copy } from 'lucide-react';
+import { Palette, ShoppingBag, QrCode, ImageIcon, Save, CheckCircle2, Globe, Tag, ExternalLink, RotateCcw, Copy, ListChecks } from 'lucide-react';
 import { ClientConfig } from '../types';
 import { saveClient } from '../services/clientManager';
 
@@ -33,6 +34,8 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
     alert("Enlace copiado con éxito.\nPuedes compartirlo con tus clientes.");
   };
 
+  const brandColor = currentConfig.colorPrimario || '#84cc16';
+
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -46,7 +49,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
             onClick={copyPublicLink}
             className="flex items-center gap-2 px-5 py-3 bg-brand-50 text-brand-600 rounded-2xl font-bold text-sm border border-brand-100 hover:bg-brand-100 transition-all shadow-sm"
           >
-            <Copy className="w-4 h-4" /> Copiar Link Público
+            <Copy className="w-4 h-4" /> Copiar Link
           </button>
           <button 
             type="button"
@@ -114,7 +117,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
 
           <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5 text-emerald-500" /> ¿Qué productos deseas publicar?
+              <ShoppingBag className="w-5 h-5 text-emerald-500" /> Configuración del Catálogo
             </h3>
             
             <div className="space-y-4">
@@ -122,8 +125,8 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                 <div className="flex items-center gap-3">
                   <Globe className="w-5 h-5 text-emerald-600" />
                   <div>
-                    <p className="text-sm font-bold text-emerald-900 leading-none">Visibilidad</p>
-                    <p className="text-[10px] text-emerald-600 mt-1 uppercase font-bold">La tienda está Online</p>
+                    <p className="text-sm font-bold text-emerald-900 leading-none">Visibilidad Web</p>
+                    <p className="text-[10px] text-emerald-600 mt-1 uppercase font-bold">{currentConfig.showStore ? 'Tienda Online' : 'Tienda en Mantenimiento'}</p>
                   </div>
                 </div>
                 <input 
@@ -135,7 +138,9 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Categorías de Odoo a mostrar</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <ListChecks className="w-3 h-3"/> Categorías de Odoo a publicar
+                </label>
                 <div className="relative">
                   <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                   <input 
@@ -143,10 +148,14 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                     className="w-full pl-10 pr-4 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-emerald-200 font-bold text-emerald-800"
                     value={currentConfig.tiendaCategoriaNombre}
                     onChange={e => setCurrentConfig({...currentConfig, tiendaCategoriaNombre: e.target.value})}
-                    placeholder="Ej: Catalogo, Medicina, Ofertas"
+                    placeholder="Ej: ONLINE, PHARMASCOOT, CATALOGO"
                   />
                 </div>
-                <p className="text-[10px] text-slate-400 mt-2 px-1 leading-relaxed">Solo se mostrarán productos de las categorías que indiques aquí. Puedes escribir varias separadas por comas.</p>
+                <div className="mt-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                    <span className="font-bold text-slate-700">TIP:</span> Para mostrar varias categorías, sepáralas por comas. El sistema importará todos los productos que pertenezcan a esas categorías en tu Odoo.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -155,13 +164,13 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <QrCode className="w-5 h-5 text-purple-500" /> Datos para recibir Pagos
+              <QrCode className="w-5 h-5 text-purple-500" /> Métodos de Pago
             </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4 p-5 bg-[#742d8a08] rounded-3xl border border-[#742d8a15]">
                 <p className="text-[10px] font-bold text-[#742d8a] uppercase tracking-widest flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full bg-[#742d8a]"></div> Configuración Yape
+                   <div className="w-2 h-2 rounded-full bg-[#742d8a]"></div> Yape
                 </p>
                 <input 
                   type="text" placeholder="Número Celular" 
@@ -170,7 +179,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                   onChange={e => setCurrentConfig({...currentConfig, yapeNumber: e.target.value})}
                 />
                 <input 
-                  type="text" placeholder="URL Código QR" 
+                  type="text" placeholder="Link imagen QR" 
                   className="w-full p-3 bg-white border border-slate-100 rounded-xl text-[10px] outline-none focus:ring-2 focus:ring-[#742d8a]"
                   value={currentConfig.yapeQR}
                   onChange={e => setCurrentConfig({...currentConfig, yapeQR: e.target.value})}
@@ -179,7 +188,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
 
               <div className="space-y-4 p-5 bg-[#00adef08] rounded-3xl border border-[#00adef15]">
                 <p className="text-[10px] font-bold text-[#00adef] uppercase tracking-widest flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full bg-[#00adef]"></div> Configuración Plin
+                   <div className="w-2 h-2 rounded-full bg-[#00adef]"></div> Plin
                 </p>
                 <input 
                   type="text" placeholder="Número Celular" 
@@ -188,7 +197,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                   onChange={e => setCurrentConfig({...currentConfig, plinNumber: e.target.value})}
                 />
                 <input 
-                  type="text" placeholder="URL Código QR" 
+                  type="text" placeholder="Link imagen QR" 
                   className="w-full p-3 bg-white border border-slate-100 rounded-xl text-[10px] outline-none focus:ring-2 focus:ring-[#00adef]"
                   value={currentConfig.plinQR}
                   onChange={e => setCurrentConfig({...currentConfig, plinQR: e.target.value})}
@@ -201,17 +210,18 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
              {showSuccess && (
                <div className="bg-emerald-50 text-emerald-700 px-6 py-4 rounded-2xl flex items-center gap-3 border border-emerald-100 animate-in zoom-in duration-300">
                   <CheckCircle2 className="w-5 h-5" />
-                  <span className="text-sm font-bold">¡Configuración guardada exitosamente!</span>
+                  <span className="text-sm font-bold">¡Catálogo publicado con éxito!</span>
                </div>
              )}
              
              <button 
                type="submit" 
                disabled={isSaving}
-               className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-bold shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+               className="w-full py-5 text-white rounded-[2rem] font-bold shadow-2xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+               style={{backgroundColor: brandColor, boxShadow: `0 20px 25px -5px ${brandColor}40`}}
              >
                 {isSaving ? <RotateCcw className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                {isSaving ? 'Actualizando...' : 'Guardar y Publicar'}
+                {isSaving ? 'Guardando...' : 'Publicar Tienda Ahora'}
              </button>
           </div>
         </div>

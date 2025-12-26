@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Package, Eye, EyeOff, Save, RefreshCw, CheckCircle2, AlertCircle, Loader2, Tag, Filter } from 'lucide-react';
+import { Search, Package, Eye, EyeOff, Save, RefreshCw, CheckCircle2, AlertCircle, Loader2, Tag, Filter, Check, XCircle } from 'lucide-react';
 import { Producto, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
 import { saveClient } from '../services/clientManager';
@@ -50,7 +50,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
 
       const data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, 
         ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_128'], 
-        { limit: 300, order: 'display_name asc' }
+        { limit: 500, order: 'display_name asc' }
       );
 
       setProductos(data.map((p: any) => ({
@@ -91,6 +91,15 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
     });
   };
 
+  const handleBulkAction = (action: 'hide' | 'show') => {
+    const visibleIds = filteredProducts.map(p => p.id);
+    if (action === 'hide') {
+      setHiddenIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+    } else {
+      setHiddenIds(prev => prev.filter(id => !visibleIds.includes(id)));
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     const newConfig = { ...config, hiddenProducts: hiddenIds };
@@ -111,24 +120,27 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
     ocultos: hiddenIds.filter(id => productos.some(p => p.id === id)).length
   };
 
+  const brandColor = config.colorPrimario || '#84cc16';
+
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 pb-24">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión de Publicación</h2>
-          <p className="text-slate-500 text-sm mt-1">Selecciona qué productos quieres que vean tus clientes en la web.</p>
+          <p className="text-slate-500 text-sm mt-1">Controla qué productos de Odoo se ven en tu tienda web.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button 
             onClick={fetchProducts}
             className="flex items-center gap-2 px-4 py-2.5 bg-white text-slate-600 rounded-xl font-bold text-sm border border-slate-200 hover:bg-slate-50 transition-all shadow-sm"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sincronizar Odoo
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sincronizar
           </button>
           <button 
             onClick={handleSave}
             disabled={saving || loading}
-            className="flex items-center gap-2 px-6 py-2.5 bg-brand-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-brand-200 hover:bg-brand-600 transition-all active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-2.5 text-white rounded-xl font-bold text-sm shadow-lg hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
+            style={{backgroundColor: brandColor, boxShadow: `0 10px 15px -3px ${brandColor}30`}}
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Guardar Cambios
@@ -138,9 +150,9 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-brand-50 rounded-2xl text-brand-600"><Package className="w-6 h-6"/></div>
+          <div className="p-3 bg-slate-50 rounded-2xl text-slate-600"><Package className="w-6 h-6"/></div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">En Odoo</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Importados de Odoo</p>
             <h4 className="text-2xl font-bold text-slate-800">{stats.total}</h4>
           </div>
         </div>
@@ -154,33 +166,55 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-red-50 rounded-2xl text-red-600"><EyeOff className="w-6 h-6"/></div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ocultos</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ocultos Manualmente</p>
             <h4 className="text-2xl font-bold text-red-500">{stats.ocultos}</h4>
           </div>
         </div>
       </div>
 
       <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-50 flex flex-col md:flex-row gap-4 items-center justify-between bg-slate-50/30">
-          <div className="relative w-full md:w-96">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-            <input 
-              type="text" 
-              placeholder="Buscar por nombre..." 
-              className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-medium"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
+        <div className="p-6 border-b border-slate-50 space-y-4 bg-slate-50/30">
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="relative w-full md:w-96">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+              <input 
+                type="text" 
+                placeholder="Buscar por nombre..." 
+                className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-medium shadow-sm"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <select 
+                className="flex-1 md:w-48 p-3 bg-white border border-slate-200 rounded-2xl text-sm outline-none font-bold shadow-sm"
+                value={categoryFilter}
+                onChange={e => setCategoryFilter(e.target.value)}
+              >
+                {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+            </div>
           </div>
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select 
-              className="flex-1 md:w-48 p-3 bg-white border border-slate-200 rounded-2xl text-sm outline-none font-medium"
-              value={categoryFilter}
-              onChange={e => setCategoryFilter(e.target.value)}
-            >
-              {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-            </select>
+
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-2">
+             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+               Mostrando {filteredProducts.length} productos
+             </div>
+             <div className="flex gap-2">
+                <button 
+                  onClick={() => handleBulkAction('show')}
+                  className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold uppercase hover:bg-emerald-200 transition-colors flex items-center gap-1.5"
+                >
+                  <Check className="w-3 h-3" /> Publicar Todos los Visibles
+                </button>
+                <button 
+                  onClick={() => handleBulkAction('hide')}
+                  className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-[10px] font-bold uppercase hover:bg-red-200 transition-colors flex items-center gap-1.5"
+                >
+                  <XCircle className="w-3 h-3" /> Ocultar Todos los Visibles
+                </button>
+             </div>
           </div>
         </div>
 
@@ -189,7 +223,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
             <thead className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
               <tr>
                 <th className="px-8 py-5">Producto</th>
-                <th className="px-8 py-5">Categoría</th>
+                <th className="px-8 py-5">Categoría Odoo</th>
                 <th className="px-8 py-5">Precio</th>
                 <th className="px-8 py-5">Stock</th>
                 <th className="px-8 py-5 text-right">Estado / Acción</th>
@@ -210,7 +244,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
                 <tr>
                   <td colSpan={5} className="px-8 py-20 text-center">
                     <AlertCircle className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-                    <p className="text-slate-400 font-bold">No se encontraron productos</p>
+                    <p className="text-slate-400 font-bold">No se encontraron productos para los filtros actuales</p>
                   </td>
                 </tr>
               ) : (
@@ -262,7 +296,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
       {showSuccess && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-8 py-4 rounded-3xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-10 duration-500 z-50">
           <CheckCircle2 className="w-6 h-6 text-brand-400" />
-          <p className="font-bold">¡Catálogo actualizado correctamente!</p>
+          <p className="font-bold">¡Cambios guardados! Tu tienda se ha actualizado.</p>
         </div>
       )}
     </div>
