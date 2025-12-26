@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-// Added RefreshCw to imports
 import { ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, Loader2, Citrus, Plus, Minus, MapPin, Truck, Info, Beaker, Pill, ClipboardList, CheckCircle2, CreditCard, Upload, MessageCircle, ShieldCheck, HelpCircle, RefreshCw } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -35,7 +34,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
   const brandColor = config?.colorPrimario || '#84cc16';
   
-  // Sincronización robusta de filtros
   const hiddenIds = useMemo(() => Array.isArray(config?.hiddenProducts) ? config.hiddenProducts.map(Number) : [], [config?.hiddenProducts]);
   const hiddenCats = useMemo(() => Array.isArray(config?.hiddenCategories) ? config.hiddenCategories : [], [config?.hiddenCategories]);
 
@@ -43,35 +41,63 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     if (session && config) {
       fetchProducts();
     }
-  }, [session, config]);
+  }, [session, config.tiendaCategoriaNombre]);
+
+  const mapOdooProducts = (data: any[]): Producto[] => {
+    return data.map((p: any) => ({
+      id: Number(p.id),
+      nombre: p.display_name,
+      precio: p.list_price || 0,
+      costo: 0,
+      categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
+      stock: p.qty_available || 0,
+      imagen: p.image_128,
+      registro_sanitario: p.x_registro_sanitario || '',
+      laboratorio: p.x_laboratorio || '',
+      principio_activo: p.x_principio_activo || ''
+    }));
+  };
 
   const fetchProducts = async () => {
     if (!session) return;
     setLoading(true);
     const client = new OdooClient(session.url, session.db, true);
     try {
-      const categoryNames = (config.tiendaCategoriaNombre || 'Catalogo').split(',').map(c => c.trim()).filter(c => c.length > 0);
-      const domain: any[] = [['sale_ok', '=', true]];
-      if (session.companyId) domain.push(['company_id', '=', session.companyId]);
-      if (categoryNames.length > 0) domain.push(['categ_id', 'child_of', categoryNames]);
+      const configCategory = config.tiendaCategoriaNombre || 'Catalogo';
+      const categoryNames = configCategory.split(',')
+        .map(c => c.trim())
+        .filter(c => c.length > 0 && c.toLowerCase() !== 'todas' && c.toLowerCase() !== 'all');
 
-      const data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, 
+      // Construcción del dominio de búsqueda (Idéntico al ProductManager para consistencia)
+      const domain: any[] = [['sale_ok', '=', true]];
+      
+      if (categoryNames.length > 0) {
+        domain.push(['categ_id', 'child_of', categoryNames]);
+      }
+
+      if (session.companyId) {
+        domain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
+      }
+
+      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, 
         ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_128', 'x_registro_sanitario', 'x_laboratorio', 'x_principio_activo'], 
-        { limit: 300, order: 'qty_available desc' }
+        { limit: 500, order: 'qty_available desc' }
       );
 
-      setProductos(data.map((p: any) => ({
-        id: Number(p.id),
-        nombre: p.display_name,
-        precio: p.list_price,
-        costo: 0,
-        categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
-        stock: p.qty_available || 0,
-        imagen: p.image_128,
-        registro_sanitario: p.x_registro_sanitario || '',
-        laboratorio: p.x_laboratorio || '',
-        principio_activo: p.x_principio_activo || ''
-      })));
+      // Fallback de Seguridad: Si el filtro de categoría no devuelve nada, cargar todo lo vendible
+      if (data.length === 0 && categoryNames.length > 0) {
+        console.warn("Store: No se encontraron productos con el filtro de categoría. Intentando carga global...");
+        const fallbackDomain: any[] = [['sale_ok', '=', true]];
+        if (session.companyId) {
+          fallbackDomain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
+        }
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', fallbackDomain, 
+          ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_128', 'x_registro_sanitario', 'x_laboratorio', 'x_principio_activo'], 
+          { limit: 300, order: 'qty_available desc' }
+        );
+      }
+
+      setProductos(mapOdooProducts(data));
     } catch (e) {
       console.error("Error fetching products", e);
     } finally {
@@ -168,7 +194,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col overflow-x-hidden">
-      {/* Navbar - Siempre visible */}
       <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-40 px-6 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
           {onBack && <button onClick={onBack} className="p-2 text-slate-400 hover:text-slate-900 transition-all"><ArrowLeft/></button>}
@@ -183,7 +208,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </button>
       </nav>
 
-      {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-8 space-y-12">
         <div className="relative max-w-2xl mx-auto animate-in fade-in slide-in-from-top-4 duration-700">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
@@ -207,9 +231,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               <Package className="w-12 h-12" />
             </div>
             <h3 className="text-xl font-black text-slate-800 uppercase">No se encontraron productos</h3>
-            <p className="text-slate-500 max-w-xs mt-2 text-sm">Verifica que los productos pertenezcan a la categoría configurada o que no estén marcados como ocultos.</p>
+            <p className="text-slate-500 max-w-xs mt-2 text-sm">Verifica la categoría en Odoo o que tus productos estén marcados para la venta.</p>
             <button onClick={fetchProducts} className="mt-8 px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2">
-              <RefreshCw className="w-4 h-4"/> Reintentar Carga
+              <RefreshCw className="w-4 h-4"/> Sincronizar Catálogo
             </button>
           </div>
         ) : (
@@ -238,7 +262,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* Footer Pro - Nueva sección */}
       <footer className="bg-white border-t border-slate-100 pt-16 pb-8 mt-20">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
            <div className="space-y-4">
@@ -281,7 +304,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       </footer>
 
-      {/* Modals y Cart Drawer (Se mantienen pero con mejoras de carga) */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedProduct(null)}></div>
