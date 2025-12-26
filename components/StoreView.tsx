@@ -15,7 +15,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setOrderCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [checkoutStep, setCheckoutStep] = useState<'catalog' | 'shipping' | 'payment' | 'success'>('catalog');
@@ -50,7 +50,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const configCategory = (config.tiendaCategoriaNombre || '').trim();
       let data: any[] = [];
 
-      // 1. Intentar por Categoría Configurada
+      // ESTRATEGIA DE BÚSQUEDA NIVEL 1: Categoría específica
       if (configCategory && configCategory.toUpperCase() !== 'TODAS') {
         try {
           const cats = await client.searchRead(session.uid, session.apiKey, 'product.category', [['name', 'ilike', configCategory]], ['id']);
@@ -62,17 +62,23 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             );
           }
         } catch (e) {
-          console.warn("Error en categoría, reintentando general...");
+          console.warn("Filtro por categoría falló, intentando general...");
         }
       }
 
-      // 2. Fallback: Carga General (Si falla lo anterior o no hay resultados)
+      // ESTRATEGIA DE BÚSQUEDA NIVEL 2: Búsqueda Global (Sin filtros de categoría ni compañía)
+      // Esto asegura que si Odoo tiene restricciones por compañía, aún así traigamos productos
       if (data.length === 0) {
-        data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
-          [['sale_ok', '=', true]], 
-          fields, 
-          { limit: 500, order: 'image_128 desc, display_name asc' }
-        );
+        try {
+          data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
+            [['sale_ok', '=', true]], 
+            fields, 
+            { limit: 500, order: 'image_128 desc, display_name asc' }
+          );
+        } catch (e) {
+          // ESTRATEGIA NIVEL 3: Búsqueda cruda (Solo lo básico)
+          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [], fields, { limit: 100 });
+        }
       }
 
       const mapped = data.map((p: any) => ({
@@ -113,7 +119,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
   const addToCart = (p: Producto, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setCart(prev => {
+    setOrderCart(prev => {
       const exists = prev.find(item => item.producto.id === p.id);
       if (exists) return prev.map(item => item.producto.id === p.id ? { ...item, cantidad: item.cantidad + 1 } : item);
       return [...prev, { producto: p, cantidad: 1 }];
@@ -121,13 +127,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   };
 
   const updateQuantity = (productId: number, delta: number) => {
-    setCart(prev => prev.map(item => 
+    setOrderCart(prev => prev.map(item => 
       item.producto.id === productId ? { ...item, cantidad: Math.max(1, item.cantidad + delta) } : item
     ));
   };
 
   const removeFromCart = (productId: number) => {
-    setCart(prev => prev.filter(item => item.producto.id !== productId));
+    setOrderCart(prev => prev.filter(item => item.producto.id !== productId));
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + (item.producto.precio * item.cantidad), 0);
@@ -162,7 +168,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         company_id: session.companyId
       });
       setCheckoutStep('success');
-      setCart([]);
+      setOrderCart([]);
     } catch (e: any) {
       console.error(e);
       alert("Error al procesar pedido.");
@@ -284,11 +290,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                          <p className="text-4xl font-black text-brand-600">S/ {(selectedProduct.precio * 0.95).toFixed(2)}</p>
                        </div>
                     </div>
-                  </div>
-
-                  <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-4 mb-8">
-                     <div className="bg-rose-500 p-2.5 rounded-full text-white animate-pulse"><Bell className="w-5 h-5"/></div>
-                     <p className="text-xs font-black text-rose-600 uppercase tracking-tight leading-tight">¡Consigue beneficios exclusivos comprando online!</p>
                   </div>
 
                   <div className="mb-10">
@@ -461,7 +462,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
            <div className="w-32 h-32 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-8 animate-bounce shadow-xl shadow-emerald-100"><CheckCircle2 className="w-16 h-16"/></div>
            <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">¡Pedido Recibido!</h2>
            <p className="text-slate-500 mb-10 max-w-sm font-medium">Muchas gracias por tu compra. Nos pondremos en contacto contigo vía WhatsApp para confirmar la entrega.</p>
-           <button onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setCart([]); }} className="px-12 py-5 bg-slate-900 text-white rounded-[2rem] font-black transition-all active:scale-95 shadow-xl uppercase tracking-widest text-xs">Volver al Inicio</button>
+           <button onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setOrderCart([]); }} className="px-12 py-5 bg-slate-900 text-white rounded-[2rem] font-black transition-all active:scale-95 shadow-xl uppercase tracking-widest text-xs">Volver al Inicio</button>
         </div>
       )}
     </div>
