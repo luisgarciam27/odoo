@@ -6,37 +6,18 @@ export interface Producto {
   precio: number;
   categoria?: string;
   stock?: number;
-  imagen?: string; // base64 de Odoo
+  imagen?: string; 
+  // Campos Médicos
+  registro_sanitario?: string;
+  laboratorio?: string;
+  principio_activo?: string;
+  presentacion?: string;
 }
 
-export interface Venta {
-  fecha: Date;
-  sede: string;
-  compania: string;
-  sesion: string;
-  producto: string;
-  categoria: string;
-  vendedor: string;
-  metodoPago: string;
-  cantidad: number;
-  total: number;
-  costo: number;
-  margen: number;
-  margenPorcentaje: string;
-}
-
-export interface Filtros {
-  sedeSeleccionada: string;
-  companiaSeleccionada: string;
-  periodoSeleccionado: string;
-  fechaInicio: string;
-  fechaFin: string;
-}
-
-export interface AgrupadoPorDia {
-  fecha: string;
-  ventas: number;
-  margen: number;
+export interface SedeStore {
+  id: string;
+  nombre: string;
+  direccion: string;
 }
 
 export interface ClientConfig {
@@ -48,22 +29,22 @@ export interface ClientConfig {
   companyFilter: string;
   whatsappNumbers?: string;
   isActive: boolean;
-  // Campos de Marca
   nombreComercial?: string;
   logoUrl?: string;
   colorPrimario?: string;
-  // Campos para la tienda
   showStore?: boolean;
-  storeCategories?: string; // IDs manuales (opcional)
-  tiendaCategoriaNombre?: string; // Ej: "Catalogo Web"
-  hiddenProducts?: number[]; // IDs de productos ocultos manualmente
+  storeCategories?: string;
+  tiendaCategoriaNombre?: string;
+  hiddenProducts?: number[];
   yapeNumber?: string;
   yapeName?: string;
   yapeQR?: string; 
   plinNumber?: string;
   plinName?: string;
   plinQR?: string;
-  bankAccount?: string;
+  // Nuevos campos logística y salud
+  sedes_recojo?: SedeStore[];
+  campos_medicos_visibles?: string[]; // ["registro", "laboratorio", "principio"]
 }
 
 export interface OdooSession {
@@ -80,4 +61,43 @@ export interface OdooSession {
 export interface CartItem {
   producto: Producto;
   cantidad: number;
+}
+
+/**
+ * Definition of sale record (Venta)
+ */
+export interface Venta {
+  fecha: Date;
+  sede: string;
+  compania: string;
+  vendedor: string;
+  sesion: string;
+  producto: string;
+  categoria: string;
+  metodoPago: string;
+  cantidad: number;
+  total: number;
+  costo: number;
+  margen: number;
+  margenPorcentaje: string;
+}
+
+/**
+ * Dashboard filter interface (Filtros)
+ */
+export interface Filtros {
+  sedeSeleccionada: string;
+  companiaSeleccionada: string;
+  periodoSeleccionado: string;
+  fechaInicio: string;
+  fechaFin: string;
+}
+
+/**
+ * Grouped sales data per day for charts (AgrupadoPorDia)
+ */
+export interface AgrupadoPorDia {
+  fecha: string;
+  ventas: number;
+  margen: number;
 }
