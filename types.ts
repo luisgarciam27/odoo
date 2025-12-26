@@ -7,7 +7,7 @@ export interface Producto {
   categoria?: string;
   stock?: number;
   imagen?: string; 
-  // Campos Médicos
+  // Campos Médicos/Veterinarios
   registro_sanitario?: string;
   laboratorio?: string;
   principio_activo?: string;
@@ -42,7 +42,7 @@ export interface ClientConfig {
   plinNumber?: string;
   plinName?: string;
   plinQR?: string;
-  // Nuevos campos logística y salud
+  // Configuración Salud y Logística
   sedes_recojo?: SedeStore[];
   campos_medicos_visibles?: string[]; // ["registro", "laboratorio", "principio"]
 }
@@ -63,9 +63,6 @@ export interface CartItem {
   cantidad: number;
 }
 
-/**
- * Definition of sale record (Venta)
- */
 export interface Venta {
   fecha: Date;
   sede: string;
@@ -82,9 +79,6 @@ export interface Venta {
   margenPorcentaje: string;
 }
 
-/**
- * Dashboard filter interface (Filtros)
- */
 export interface Filtros {
   sedeSeleccionada: string;
   companiaSeleccionada: string;
@@ -93,9 +87,6 @@ export interface Filtros {
   fechaFin: string;
 }
 
-/**
- * Grouped sales data per day for charts (AgrupadoPorDia)
- */
 export interface AgrupadoPorDia {
   fecha: string;
   ventas: number;
