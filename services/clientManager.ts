@@ -14,6 +14,24 @@ export const changeAdminPassword = (newPassword: string) => {
     localStorage.setItem(ADMIN_PWD_KEY, newPassword);
 };
 
+const mapRowToConfig = (row: any): ClientConfig => ({
+    code: row.codigo_acceso,
+    url: row.odoo_url,
+    db: row.odoo_db,
+    username: row.odoo_username,
+    apiKey: row.odoo_api_key,
+    companyFilter: row.filtro_compania,
+    whatsappNumbers: row.whatsapp_numeros,
+    isActive: row.estado ?? true,
+    showStore: row.tienda_habilitada ?? true,
+    storeCategories: row.tienda_categorias || '',
+    tiendaCategoriaNombre: row.tienda_categoria_nombre || 'Catalogo',
+    yapeNumber: row.yape_numero || '',
+    yapeName: row.yape_nombre || '',
+    plinNumber: row.plin_numero || '',
+    plinName: row.plin_nombre || ''
+});
+
 export const getClients = async (): Promise<ClientConfig[]> => {
     const { data, error } = await supabase
         .from('empresas')
@@ -25,16 +43,7 @@ export const getClients = async (): Promise<ClientConfig[]> => {
         return [];
     }
 
-    return data.map((row: any) => ({
-        code: row.codigo_acceso,
-        url: row.odoo_url,
-        db: row.odoo_db,
-        username: row.odoo_username,
-        apiKey: row.odoo_api_key,
-        companyFilter: row.filtro_compania,
-        whatsappNumbers: row.whatsapp_numeros,
-        isActive: row.estado ?? true
-    }));
+    return data.map(mapRowToConfig);
 };
 
 export const getClientByCode = async (code: string): Promise<ClientConfig | null> => {
@@ -45,17 +54,7 @@ export const getClientByCode = async (code: string): Promise<ClientConfig | null
         .single();
     
     if (error || !data) return null;
-
-    return {
-        code: data.codigo_acceso,
-        url: data.odoo_url,
-        db: data.odoo_db,
-        username: data.odoo_username,
-        apiKey: data.odoo_api_key,
-        companyFilter: data.filtro_compania,
-        whatsappNumbers: data.whatsapp_numeros,
-        isActive: data.estado ?? true
-    };
+    return mapRowToConfig(data);
 };
 
 export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<{ success: boolean; message?: string }> => {
@@ -67,14 +66,20 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         odoo_api_key: client.apiKey,
         filtro_compania: client.companyFilter,
         whatsapp_numeros: client.whatsappNumbers,
-        estado: client.isActive
+        estado: client.isActive,
+        tienda_habilitada: client.showStore,
+        tienda_categorias: client.storeCategories,
+        tienda_categoria_nombre: client.tiendaCategoriaNombre || 'Catalogo',
+        yape_numero: client.yapeNumber,
+        yape_nombre: client.yapeName,
+        plin_numero: client.plinNumber,
+        plin_nombre: client.plinName
     };
 
     try {
         if (isNew) {
             const existing = await getClientByCode(client.code);
             if (existing) return { success: false, message: 'El código de empresa ya existe.' };
-
             const { error } = await supabase.from('empresas').insert([payload]);
             if (error) throw error;
         } else {
@@ -84,15 +89,12 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         return { success: true };
     } catch (error: any) {
         console.error('Error saving client:', error);
-        return { success: false, message: error.message || 'Error al guardar en base de datos.' };
+        return { success: false, message: error.message || 'Error al guardar.' };
     }
 };
 
 export const deleteClient = async (code: string): Promise<boolean> => {
     const { error } = await supabase.from('empresas').delete().eq('codigo_acceso', code);
-    if (error) {
-        console.error('Error deleting client:', error);
-        return false;
-    }
+    if (error) return false;
     return true;
 };

@@ -1,10 +1,12 @@
 
-
 export interface Producto {
   id: number;
   nombre: string;
   costo: number;
   precio: number;
+  categoria?: string;
+  stock?: number;
+  imagen?: string; // base64 de Odoo
 }
 
 export interface Venta {
@@ -31,7 +33,6 @@ export interface Filtros {
   fechaFin: string;
 }
 
-// Fix: Added missing AgrupadoPorDia interface to fix import error in Dashboard.tsx
 export interface AgrupadoPorDia {
   fecha: string;
   ventas: number;
@@ -46,7 +47,18 @@ export interface ClientConfig {
   apiKey: string;
   companyFilter: string;
   whatsappNumbers?: string;
-  isActive: boolean; // Control de envío n8n
+  isActive: boolean;
+  // Campos para la tienda
+  showStore?: boolean;
+  storeCategories?: string; // IDs manuales (opcional)
+  tiendaCategoriaNombre?: string; // Ej: "Catalogo Web"
+  yapeNumber?: string;
+  yapeName?: string;
+  yapeQR?: string; 
+  plinNumber?: string;
+  plinName?: string;
+  plinQR?: string;
+  bankAccount?: string;
 }
 
 export interface OdooSession {
@@ -58,4 +70,9 @@ export interface OdooSession {
   useProxy: boolean;
   companyId?: number;
   companyName?: string;
+}
+
+export interface CartItem {
+  producto: Producto;
+  cantidad: number;
 }

@@ -12,7 +12,8 @@ import {
   X,
   CreditCard,
   Store,
-  Rocket
+  Rocket,
+  ShoppingCart
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -20,9 +21,10 @@ interface LayoutProps {
   onLogout: () => void;
   currentView: string;
   onNavigate: (view: string) => void;
+  showStoreLink?: boolean;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavigate }) => {
+const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavigate, showStoreLink }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const handleNavigate = (view: string) => {
@@ -30,7 +32,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
     setIsMobileMenuOpen(false);
   };
 
-  const NavItem = ({ view, icon: Icon, label }: { view: string, icon: any, label: string }) => (
+  const NavItem = ({ view, icon: Icon, label, color = 'text-brand-600' }: { view: string, icon: any, label: string, color?: string }) => (
     <button 
       onClick={() => handleNavigate(view)}
       className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 group relative overflow-hidden mb-1.5 font-medium ${
@@ -39,7 +41,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
           : 'text-slate-500 hover:text-slate-800 hover:bg-white hover:shadow-sm border border-transparent'
       }`}
     >
-      <Icon className={`w-5 h-5 transition-transform group-hover:scale-110 duration-300 ${currentView === view ? 'text-brand-600' : 'text-slate-400 group-hover:text-brand-500'}`} />
+      <Icon className={`w-5 h-5 transition-transform group-hover:scale-110 duration-300 ${currentView === view ? color : 'text-slate-400 group-hover:text-brand-500'}`} />
       <span className="font-sans text-sm tracking-wide">{label}</span>
       
       {currentView === view && (
@@ -75,7 +77,6 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
               <p className="text-[10px] text-brand-600 font-bold tracking-widest mt-1 uppercase">Analytics</p>
             </div>
           </div>
-          {/* Mobile Close Button */}
           <button 
             onClick={() => setIsMobileMenuOpen(false)}
             className="md:hidden text-slate-400 hover:text-slate-600 transition-colors"
@@ -100,6 +101,15 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
           <NavItem view="ventas" icon={ShoppingBag} label="Ventas y Pedidos" />
           <NavItem view="pagos" icon={CreditCard} label="Métodos de Pago" />
           <NavItem view="reportes" icon={PieChart} label="Reportes Gráficos" />
+
+          {showStoreLink && (
+            <>
+              <div className="text-[11px] font-bold text-brand-500 uppercase tracking-widest mb-3 px-4 mt-6">
+                Venta Online
+              </div>
+              <NavItem view="store" icon={ShoppingCart} label="Ver Mi Tienda" color="text-brand-500" />
+            </>
+          )}
         </nav>
 
         <div className="p-5 border-t border-slate-100 bg-slate-50/50">
@@ -115,40 +125,19 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
             <LogOut className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
             <span className="font-sans text-sm font-medium">Cerrar Sesión</span>
           </button>
-
-          <div className="mt-4 pt-4 border-t border-slate-200 text-center">
-             <a href="https://gaorsystem.vercel.app/" target="_blank" rel="noreferrer" className="flex flex-col items-center gap-2 group transition-all">
-                <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-white rounded-lg shadow-sm border border-slate-100 flex items-center justify-center">
-                        <Rocket className="w-3.5 h-3.5 text-violet-600" />
-                    </div>
-                    <div className="text-sm font-bold tracking-tight">
-                        <span className="text-slate-800">Gaor</span>
-                        <span className="text-violet-600">System</span>
-                    </div>
-                </div>
-                <p className="text-[9px] text-slate-400 font-mono hover:text-brand-600 transition-colors uppercase font-bold tracking-tighter">Powered by GaorSystem Peru</p>
-             </a>
-          </div>
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 transition-all w-full h-screen overflow-y-auto relative z-10 scroll-smooth">
-        {/* Mobile Header */}
         <div className="md:hidden bg-white/90 backdrop-blur-md border-b border-slate-200 text-slate-800 p-4 flex items-center justify-between sticky top-0 z-20 shadow-sm">
           <div className="flex items-center gap-2">
             <Citrus className="w-6 h-6 text-brand-500" />
             <span className="font-bold text-lg">LEMON BI</span>
           </div>
-          <button 
-            onClick={() => setIsMobileMenuOpen(true)}
-            className="text-slate-500 hover:text-slate-800"
-          >
+          <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-500 hover:text-slate-800">
             <Menu className="w-6 h-6" />
           </button>
         </div>
-
         {children}
       </main>
     </div>

@@ -23,7 +23,6 @@ const serialize = (value: any): string => {
   }
   if (typeof value === 'object' && value !== null) {
     if (value instanceof Date) {
-        // Odoo expects ISO8601 basic format usually, but let's try string for simplicity or standard struct
         return `<string>${value.toISOString()}</string>`;
     }
     return `<struct>${Object.entries(value).map(([k, v]) => 
@@ -36,7 +35,7 @@ const serialize = (value: any): string => {
 // Parser for XML-RPC responses
 const parseValue = (node: Element): any => {
   const child = node.firstElementChild;
-  if (!child) return node.textContent; // Default string
+  if (!child) return node.textContent; 
 
   switch (child.tagName) {
     case 'string': return child.textContent;
@@ -68,7 +67,7 @@ export class OdooClient {
   private useProxy: boolean;
   
   constructor(url: string, db: string, useProxy: boolean = false) {
-    this.url = url.replace(/\/+$/, ''); // Remove trailing slash
+    this.url = url.replace(/\/+$/, ''); 
     this.db = db;
     this.useProxy = useProxy;
   }
@@ -83,7 +82,6 @@ export class OdooClient {
 </methodCall>`;
 
     const targetUrl = `${this.url}/xmlrpc/2/${endpoint}`;
-    // Use corsproxy.io to bypass browser CORS restrictions if enabled
     const fetchUrl = this.useProxy 
       ? `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
       : targetUrl;
@@ -105,7 +103,6 @@ export class OdooClient {
         const parser = new DOMParser();
         const doc = parser.parseFromString(text, 'text/xml');
         
-        // Check for fault
         const fault = doc.querySelector('fault');
         if (fault) {
             const faultStruct = parseValue(fault.querySelector('value')!);
@@ -123,18 +120,12 @@ export class OdooClient {
   }
 
   async authenticate(username: string, apiKey: string): Promise<number> {
-    // login(db, login, password)
     const uid = await this.rpcCall('common', 'authenticate', [this.db, username, apiKey, {}]);
     if (!uid) throw new Error("Authentication failed");
     return uid;
   }
 
-  /**
-   * searchRead mejorado para soportar opciones avanzadas como context, limit, order, etc.
-   */
   async searchRead(uid: number, apiKey: string, model: string, domain: any[], fields: string[], options: any = {}) {
-    // execute_kw(db, uid, password, model, method, args, kwargs)
-    // kwargs contiene: fields, limit, offset, order, context
     const kwargs = {
         fields: fields,
         ...options
@@ -148,6 +139,18 @@ export class OdooClient {
         'search_read', 
         [domain], 
         kwargs
+    ]);
+  }
+
+  async create(uid: number, apiKey: string, model: string, vals: any, context: any = {}) {
+    return await this.rpcCall('object', 'execute_kw', [
+        this.db,
+        uid,
+        apiKey,
+        model,
+        'create',
+        [vals],
+        { context }
     ]);
   }
 }
