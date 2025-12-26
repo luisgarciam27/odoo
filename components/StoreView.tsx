@@ -50,32 +50,28 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const configCategory = (config.tiendaCategoriaNombre || '').trim();
       let data: any[] = [];
 
-      // Intento 1: Por categoría específica
+      // 1. Intentamos buscar en la categoría configurada si no es "TODAS"
       if (configCategory && configCategory.toUpperCase() !== 'TODAS') {
         try {
           data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
             [['sale_ok', '=', true], ['categ_id', 'ilike', configCategory]], 
-            fields, { limit: 500 }
+            fields, { limit: 500, order: 'image_128 desc, display_name asc' }
           );
-        } catch (e) { console.error("Error en búsqueda por categoría", e); }
+        } catch (e) {
+          console.error("Error buscando por categoría específica, reintentando general...", e);
+        }
       }
 
-      // Intento 2: Si no hay resultados o no hay categoría, traer catálogo general (Sale OK)
+      // 2. Si no hay resultados o no se especificó categoría, cargamos el catálogo general de venta
       if (data.length === 0) {
         const domain: any[] = [['sale_ok', '=', true]];
-        // Intentar filtrar por compañía si está disponible, pero ser flexible
         if (session.companyId) {
           domain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
         }
         
         data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, 
-          { limit: 400, order: 'image_128 desc, display_name asc' }
+          { limit: 500, order: 'image_128 desc, display_name asc' }
         );
-      }
-
-      // Si aún así no hay nada, traer los primeros 100 productos de venta sin filtros de compañía
-      if (data.length === 0) {
-        data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 100 });
       }
 
       const mapped = data.map((p: any) => ({
@@ -193,7 +189,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-8 space-y-12">
         <div className="relative max-w-2xl mx-auto">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-          <input type="text" placeholder="Buscar productos..." className="w-full pl-16 pr-6 py-5 bg-white border-none rounded-3xl shadow-xl outline-none focus:ring-2 transition-all text-lg font-medium" style={{'--tw-ring-color': brandColor} as any} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <input type="text" placeholder="¿Qué estás buscando hoy?" className="w-full pl-16 pr-6 py-5 bg-white border-none rounded-3xl shadow-xl outline-none focus:ring-2 transition-all text-lg font-medium" style={{'--tw-ring-color': brandColor} as any} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
 
         {loading ? (
@@ -203,8 +199,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         ) : filteredProducts.length === 0 ? (
           <div className="py-20 flex flex-col items-center justify-center text-center">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6 text-slate-300"><Package className="w-12 h-12" /></div>
-            <h3 className="text-xl font-black text-slate-800 uppercase">Catálogo Próximamente</h3>
-            <p className="text-slate-400 text-sm mt-2 font-medium">Estamos actualizando nuestra lista de productos para brindarte la mejor atención.</p>
+            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Catálogo próximamente</h3>
+            <p className="text-slate-400 text-sm mt-2 font-medium">Estamos preparando nuestra vitrina virtual para ti.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 animate-in fade-in duration-500">
@@ -262,19 +258,16 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           <div className="relative bg-white w-full max-w-6xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col lg:flex-row animate-in zoom-in-95 max-h-[95vh]">
             <button onClick={() => setSelectedProduct(null)} className="absolute top-6 right-6 p-3 bg-white shadow-lg rounded-full z-10 hover:bg-slate-50 transition-all"><X className="w-6 h-6"/></button>
             
-            {/* Imagen Izquierda */}
             <div className="w-full lg:w-1/2 bg-slate-50 flex flex-col items-center justify-center p-8 lg:p-20 relative min-h-[400px]">
                <div className="w-full aspect-square bg-white rounded-[3rem] shadow-inner p-10 flex items-center justify-center border border-slate-100">
                   {selectedProduct.imagen ? <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="max-h-full max-w-full object-contain" alt=""/> : <ImageIcon className="w-32 h-32 text-slate-100"/>}
                </div>
                
-               {/* Badge lateral con la categoría */}
                <div className="absolute right-0 top-1/2 -translate-y-1/2 h-4/5 w-16 bg-brand-500 rounded-l-3xl flex items-center justify-center overflow-hidden">
                   <span className="text-white font-black uppercase text-xl tracking-widest origin-center -rotate-90 whitespace-nowrap opacity-40">{selectedProduct.categoria}</span>
                </div>
             </div>
 
-            {/* Info Derecha */}
             <div className="w-full lg:w-1/2 p-8 lg:p-14 overflow-y-auto bg-white border-l border-slate-50">
                <div className="mb-8">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">{selectedProduct.laboratorio || 'PRODUCTO ODOO'} {selectedProduct.presentacion && ` • ${selectedProduct.presentacion.toUpperCase()}`}</span>
@@ -297,13 +290,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     </div>
                   </div>
 
-                  {/* Banner promocional */}
                   <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-4 mb-8">
                      <div className="bg-rose-500 p-2.5 rounded-full text-white animate-pulse"><Bell className="w-5 h-5"/></div>
                      <p className="text-xs font-black text-rose-600 uppercase tracking-tight leading-tight">¡Cómpralo y participa del sorteo de 1 año de productos gratis!</p>
                   </div>
 
-                  {/* Descripción de Odoo formateada */}
                   <div className="mb-10">
                      <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Detalles y Beneficios</h4>
                      {selectedProduct.descripcion_venta ? (
@@ -320,7 +311,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                      )}
                   </div>
 
-                  {/* Ficha Técnica Rápida */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                         <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Registro Sanitario</p>
