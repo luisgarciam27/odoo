@@ -12,7 +12,6 @@ import {
   X,
   CreditCard,
   Store,
-  Rocket,
   ShoppingCart
 } from 'lucide-react';
 

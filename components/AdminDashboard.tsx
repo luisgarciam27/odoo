@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { getClients, saveClient, deleteClient, changeAdminPassword } from '../services/clientManager';
+import { getClients, saveClient, deleteClient } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, X, LogOut, Key, Shield, Activity, RefreshCw, Smartphone, Copy, Workflow, Send, CheckCircle2, PauseCircle, Bell, Settings, Calendar, ShoppingBag, QrCode, Tag, ExternalLink } from 'lucide-react';
+import { Trash2, Edit, Plus, X, LogOut, Shield, Activity, RefreshCw, Copy, ShoppingBag, Tag, ExternalLink } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 
 interface AdminDashboardProps {

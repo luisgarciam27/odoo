@@ -2,11 +2,11 @@
 import React, { useState } from 'react';
 import { ArrowRight, Loader2, AlertTriangle, ShieldCheck, Citrus, Building2, Lock, UserCog, Rocket } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
-import { OdooSession } from '../types';
+import { OdooSession, ClientConfig } from '../types';
 import { getClientByCode, verifyAdminPassword } from '../services/clientManager';
 
 interface LoginProps {
-  onLogin: (session: OdooSession | null) => void;
+  onLogin: (session: OdooSession | null, config: ClientConfig) => void;
   onAdminLogin: () => void;
 }
 
@@ -72,7 +72,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, onAdminLogin }) => {
         }
         setStatusMessage("¡Acceso Correcto!");
         setTimeout(() => {
-            onLogin({ url: clientConfig.url, db: clientConfig.db, username: clientConfig.username, apiKey: clientConfig.apiKey, uid: uid, useProxy: true, companyId: targetCompanyId, companyName: targetCompanyName });
+            onLogin({ 
+                url: clientConfig.url, 
+                db: clientConfig.db, 
+                username: clientConfig.username, 
+                apiKey: clientConfig.apiKey, 
+                uid: uid, 
+                useProxy: true, 
+                companyId: targetCompanyId, 
+                companyName: targetCompanyName 
+            }, clientConfig);
         }, 500);
     } catch (err: any) {
         setError(err.message || "Error de comunicación.");

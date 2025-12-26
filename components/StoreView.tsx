@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShoppingCart, Package, Search, ChevronRight, X, Smartphone, CreditCard, Image as ImageIcon, CheckCircle, ArrowLeft, Loader2, Citrus, Plus, Minus, Trash2, Send } from 'lucide-react';
+import { ShoppingCart, Package, Search, ChevronRight, X, Image as ImageIcon, CheckCircle, ArrowLeft, Loader2, Citrus, Plus, Minus, Trash2, Send } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
 import { supabase } from '../services/supabaseClient';
@@ -32,7 +32,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     setLoading(true);
     const client = new OdooClient(session.url, session.db, true);
     try {
-      // 1. Buscar el ID de la categoría configurada (ej: "Catalogo")
       const targetCategoryName = config.tiendaCategoriaNombre || 'Catalogo';
       const categories = await client.searchRead(session.uid, session.apiKey, 'product.category', 
         [['name', 'ilike', targetCategoryName]], 
@@ -41,12 +40,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       const domain: any[] = [['sale_ok', '=', true]];
       
-      // Si encontramos la categoría, filtramos por ella y sus hijas
       if (categories && categories.length > 0) {
         const categoryIds = categories.map((c: any) => c.id);
         domain.push(['categ_id', 'child_of', categoryIds]);
       } else if (config.storeCategories) {
-        // Fallback a IDs manuales si no hay nombre
         const catIds = config.storeCategories.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
         if (catIds.length > 0) domain.push(['categ_id', 'in', catIds]);
       }
@@ -111,10 +108,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
     setIsSubmitting(true);
     try {
-      // 1. Subir a Supabase Storage
       const fileExt = comprobante.name.split('.').pop();
       const fileName = `order_${Date.now()}.${fileExt}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('comprobantes')
         .upload(`${config.code}/${fileName}`, comprobante);
 
@@ -122,7 +118,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       
       const { data: { publicUrl } } = supabase.storage.from('comprobantes').getPublicUrl(`${config.code}/${fileName}`);
 
-      // 2. Guardar pedido en Supabase
       const { data: supaOrder, error: supaError } = await supabase.from('pedidos_online').insert([{
         empresa_codigo: config.code,
         cliente_nombre: customerData.nombre,
@@ -138,7 +133,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       if (supaError) throw supaError;
 
-      // 3. Crear pedido en Odoo
       const odoo = new OdooClient(session.url, session.db, true);
       const orderLines = cart.map(item => [0, 0, {
         product_id: item.producto.id,
@@ -271,7 +265,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                   {cart.map(item => (
                     <div key={item.producto.id} className="flex gap-4 items-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
                       <div className="w-16 h-16 bg-white rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden border">
-                         {item.producto.imagen ? <img src={`data:image/png;base64,${item.producto.imagen}`} className="w-full h-full object-cover"/> : <ImageIcon className="w-6 h-6 text-slate-200"/>}
+                         {item.producto.imagen ? <img src={`data:image/png;base64,${item.producto.imagen}`} className="w-full h-full object-cover" alt={item.producto.nombre}/> : <ImageIcon className="w-6 h-6 text-slate-200"/>}
                       </div>
                       <div className="flex-1">
                         <h4 className="text-xs font-bold text-slate-800 line-clamp-1">{item.producto.nombre}</h4>
@@ -315,9 +309,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Escanea para pagar</p>
                        <div className="w-44 h-44 bg-white mx-auto mb-4 rounded-3xl border-4 border-white shadow-sm flex items-center justify-center overflow-hidden">
                           {paymentMethod === 'yape' && config.yapeQR ? (
-                            <img src={config.yapeQR} className="w-full h-full object-cover" />
+                            <img src={config.yapeQR} className="w-full h-full object-cover" alt="QR Yape"/>
                           ) : paymentMethod === 'plin' && config.plinQR ? (
-                            <img src={config.plinQR} className="w-full h-full object-cover" />
+                            <img src={config.plinQR} className="w-full h-full object-cover" alt="QR Plin" />
                           ) : (
                             <ImageIcon className="w-10 h-10 text-slate-100 opacity-20" />
                           )}
