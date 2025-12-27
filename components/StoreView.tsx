@@ -4,7 +4,7 @@ import {
   ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, 
   Loader2, Citrus, Plus, Minus, Info, CheckCircle2, MapPin, Truck, 
   CreditCard, Upload, MessageCircle, Instagram, Facebook, ShieldCheck, 
-  Clock, Headphones, ChevronRight, Smartphone, Star
+  Clock, Headphones, ChevronRight, Smartphone, Star, HeartPulse
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -193,7 +193,24 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   if (!config || !session) return null;
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] font-sans text-slate-800 flex flex-col overflow-x-hidden">
+    <div className="min-h-screen bg-[#F8F9FA] font-sans text-slate-800 flex flex-col overflow-x-hidden relative">
+      
+      {/* 💚 WHATSAPP FLOTANTE PREMIUM */}
+      <a 
+        href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || ''}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-8 right-8 z-[60] group flex items-center gap-3"
+      >
+        <div className="bg-white px-4 py-2 rounded-2xl shadow-xl border border-slate-100 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 pointer-events-none">
+          <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest whitespace-nowrap">Chatea con nosotros</p>
+        </div>
+        <div className="w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all animate-bounce-slow">
+           <MessageCircle className="w-8 h-8 fill-white/20" />
+           <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-20"></div>
+        </div>
+      </a>
+
       {/* 🔝 BANNER DE PROMOCIÓN SUPERIOR */}
       <div className="bg-slate-900 text-white py-2 text-center overflow-hidden">
         <div className="animate-pulse flex items-center justify-center gap-4">
@@ -260,42 +277,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       </header>
 
-      {/* 🏷️ SUB-NAV / CATEGORIES (MOBILE) */}
-      <div className="md:hidden bg-white border-b border-slate-100 px-4 py-2 overflow-x-auto flex gap-2 no-scrollbar">
-         {['Todo', 'Promociones', 'Nuevos', 'Salud'].map(cat => (
-           <button key={cat} className="px-4 py-1.5 rounded-full bg-slate-50 border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap active:bg-slate-900 active:text-white transition-all">
-             {cat}
-           </button>
-         ))}
-      </div>
-
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-8 space-y-12">
-        {/* BUSCADOR MOBILE */}
-        <div className="md:hidden relative">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-          <input type="text" placeholder="Buscar productos..." className="w-full pl-16 pr-6 py-5 bg-white border-none rounded-3xl shadow-xl outline-none focus:ring-2 transition-all text-lg font-medium" style={{'--tw-ring-color': brandColor} as any} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-        </div>
-
-        {/* 🏥 TRUST BADGES SECTION */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in duration-700">
-           <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4 group hover:shadow-md transition-all">
-              <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl group-hover:bg-blue-500 group-hover:text-white transition-all"><Truck className="w-5 h-5"/></div>
-              <div><h4 className="text-[10px] font-black uppercase tracking-widest">Envío Rápido</h4><p className="text-[9px] text-slate-400 font-bold">24-48 horas hábiles</p></div>
-           </div>
-           <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4 group hover:shadow-md transition-all">
-              <div className="p-3 bg-emerald-50 text-emerald-500 rounded-2xl group-hover:bg-emerald-500 group-hover:text-white transition-all"><ShieldCheck className="w-5 h-5"/></div>
-              <div><h4 className="text-[10px] font-black uppercase tracking-widest">Pago Seguro</h4><p className="text-[9px] text-slate-400 font-bold">Transacción protegida</p></div>
-           </div>
-           <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4 group hover:shadow-md transition-all">
-              <div className="p-3 bg-orange-50 text-orange-500 rounded-2xl group-hover:bg-orange-500 group-hover:text-white transition-all"><Clock className="w-5 h-5"/></div>
-              <div><h4 className="text-[10px] font-black uppercase tracking-widest">Atención 24/7</h4><p className="text-[9px] text-slate-400 font-bold">Canales digitales</p></div>
-           </div>
-           <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4 group hover:shadow-md transition-all">
-              <div className="p-3 bg-purple-50 text-purple-500 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all"><Headphones className="w-5 h-5"/></div>
-              <div><h4 className="text-[10px] font-black uppercase tracking-widest">Soporte Médico</h4><p className="text-[9px] text-slate-400 font-bold">Especialistas listos</p></div>
-           </div>
-        </div>
-
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
             {[1,2,3,4,5,6,7,8,9,10].map(i => <div key={i} className="bg-white rounded-[2.5rem] aspect-[3/4] animate-pulse border border-slate-100"></div>)}
@@ -313,7 +295,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                 <div className="aspect-square bg-[#F1F3F5] rounded-[2rem] mb-4 overflow-hidden relative border border-slate-50 flex items-center justify-center">
                   {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={p.nombre} /> : <Package className="w-12 h-12 text-slate-200"/>}
                   <button onClick={(e) => addToCart(p, e)} className="absolute bottom-3 right-3 p-3 bg-white rounded-2xl shadow-xl text-slate-800 hover:bg-slate-900 hover:text-white transition-all md:opacity-0 group-hover:opacity-100"><Plus className="w-5 h-5"/></button>
-                  {/* FIX VERCEL TS18048: Asegurando que p.stock no sea undefined para la comparación */}
                   {(p.stock ?? 0) <= 5 && (p.stock ?? 0) > 0 && <span className="absolute top-3 left-3 bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest">Últimas uds</span>}
                 </div>
                 <div className="flex-1 px-1">
@@ -334,80 +315,110 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* 🦶 FOOTER PREMIUM */}
+      {/* 🦶 FOOTER PREMIUM TOTALMENTE EDITABLE */}
       <footer className="bg-slate-900 text-white mt-20 pt-20 pb-10">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
-           {/* Col 1: Marca */}
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16">
+           {/* Col 1: Marca & Redes */}
            <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                 <div className="p-2 bg-brand-500 rounded-xl">
-                   <Citrus className="w-6 h-6 text-white" />
+              <div className="flex items-center gap-4">
+                 <div className="p-2.5 bg-brand-500 rounded-2xl shadow-lg shadow-brand-500/20">
+                   {config.logoUrl ? (
+                     <img src={config.logoUrl} className="w-8 h-8 object-contain brightness-0 invert" alt="logo" />
+                   ) : (
+                     <Citrus className="w-8 h-8 text-white" />
+                   )}
                  </div>
-                 <span className="font-black text-xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
+                 <span className="font-black text-2xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
               </div>
               <p className="text-sm text-slate-400 leading-relaxed font-medium">
-                Tu salud es nuestra prioridad. Ofrecemos los mejores productos farmacéuticos y servicios de salud digital con la garantía de expertos.
+                {config.footer_description}
               </p>
-              <div className="flex gap-4">
-                <a href="#" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center hover:bg-brand-500 transition-all"><Facebook className="w-5 h-5"/></a>
-                <a href="#" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center hover:bg-brand-500 transition-all"><Instagram className="w-5 h-5"/></a>
-                <a href="#" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center hover:bg-brand-500 transition-all"><MessageCircle className="w-5 h-5"/></a>
+              <div className="flex gap-4 pt-4">
+                {config.facebook_url && (
+                  <a href={config.facebook_url} target="_blank" rel="noreferrer" className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-brand-500 hover:border-brand-500 transition-all transform hover:-translate-y-1">
+                    <Facebook className="w-5 h-5 fill-white/10"/>
+                  </a>
+                )}
+                {config.instagram_url && (
+                  <a href={config.instagram_url} target="_blank" rel="noreferrer" className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-brand-500 hover:border-brand-500 transition-all transform hover:-translate-y-1">
+                    <Instagram className="w-5 h-5"/>
+                  </a>
+                )}
+                <a href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || ''}`} className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-brand-500 hover:border-brand-500 transition-all transform hover:-translate-y-1">
+                  <MessageCircle className="w-5 h-5 fill-white/10"/>
+                </a>
               </div>
            </div>
 
-           {/* Col 2: Enlaces */}
-           <div className="space-y-6">
-              <h4 className="text-xs font-black uppercase tracking-widest text-slate-500">Enlaces de Interés</h4>
-              <ul className="space-y-4">
-                 <li><a href="#" className="text-sm font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2 group"><ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-all"/> Términos y Condiciones</a></li>
-                 <li><a href="#" className="text-sm font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2 group"><ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-all"/> Políticas de Privacidad</a></li>
-                 <li><a href="#" className="text-sm font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2 group"><ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-all"/> Libro de Reclamaciones</a></li>
-                 <li><a href="#" className="text-sm font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2 group"><ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-all"/> Sedes y Horarios</a></li>
-              </ul>
-           </div>
-
-           {/* Col 3: Pagos y Confianza */}
-           <div className="space-y-6">
-              <h4 className="text-xs font-black uppercase tracking-widest text-slate-500">Métodos de Pago</h4>
-              <div className="grid grid-cols-3 gap-3">
-                 <div className="h-10 bg-white/5 rounded-lg flex items-center justify-center border border-white/10 hover:border-brand-500/50 transition-all cursor-help" title="Yape"><Smartphone className="w-5 h-5 text-purple-400" /></div>
-                 <div className="h-10 bg-white/5 rounded-lg flex items-center justify-center border border-white/10 hover:border-brand-500/50 transition-all cursor-help" title="Plin"><Smartphone className="w-5 h-5 text-cyan-400" /></div>
-                 <div className="h-10 bg-white/5 rounded-lg flex items-center justify-center border border-white/10 hover:border-brand-500/50 transition-all cursor-help" title="Tarjetas"><CreditCard className="w-5 h-5 text-slate-400" /></div>
+           {/* Col 2: Pagos y Garantía (Iconos mejorados) */}
+           <div className="space-y-8">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 mb-6 flex items-center gap-2">
+                   <div className="w-1 h-3 bg-brand-500 rounded-full"></div>
+                   Métodos de Pago
+                </h4>
+                <div className="flex flex-wrap gap-4">
+                   <div className="h-14 w-20 bg-white rounded-xl flex items-center justify-center border border-white/5 hover:border-purple-500/50 transition-all cursor-help relative group" title="Yape">
+                      <div className="absolute inset-0 bg-purple-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <img src="https://logodownload.org/wp-content/uploads/2021/01/yape-logo.png" className="h-8 object-contain grayscale group-hover:grayscale-0 transition-all" alt="yape" />
+                   </div>
+                   <div className="h-14 w-20 bg-white rounded-xl flex items-center justify-center border border-white/5 hover:border-cyan-500/50 transition-all cursor-help relative group" title="Plin">
+                      <div className="absolute inset-0 bg-cyan-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <img src="https://logodownload.org/wp-content/uploads/2021/01/plin-logo.png" className="h-6 object-contain grayscale group-hover:grayscale-0 transition-all" alt="plin" />
+                   </div>
+                   <div className="h-14 w-20 bg-white rounded-xl flex items-center justify-center border border-white/5 hover:border-blue-500/50 transition-all cursor-help relative group" title="Visa">
+                      <div className="absolute inset-0 bg-blue-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <img src="https://upload.wikimedia.org/wikipedia/commons/d/d6/Visa_2021.svg" className="h-4 object-contain grayscale group-hover:grayscale-0 transition-all" alt="visa" />
+                   </div>
+                </div>
               </div>
-              <div className="pt-4 border-t border-white/5">
-                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4">Garantía de Calidad</h4>
-                 <div className="flex items-center gap-3">
-                    <ShieldCheck className="w-10 h-10 text-brand-500 opacity-50" />
-                    <p className="text-[10px] text-slate-500 font-bold leading-tight">Autorizado por DIGEMID y el Ministerio de Salud.</p>
+              
+              <div className="pt-8 border-t border-white/5">
+                 <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 mb-6 flex items-center gap-2">
+                   <div className="w-1 h-3 bg-emerald-500 rounded-full"></div>
+                   Garantía de Calidad
+                 </h4>
+                 <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5 group hover:border-emerald-500/30 transition-all">
+                    <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl group-hover:scale-110 transition-transform">
+                       <HeartPulse className="w-6 h-6" />
+                    </div>
+                    <p className="text-[11px] text-slate-300 font-bold leading-relaxed">
+                      {config.quality_text}
+                    </p>
                  </div>
               </div>
            </div>
 
-           {/* Col 4: Contacto */}
+           {/* Col 3: Soporte */}
            <div className="space-y-6">
-              <h4 className="text-xs font-black uppercase tracking-widest text-slate-500">Soporte al Cliente</h4>
-              <p className="text-sm text-slate-400 font-medium">¿Tienes dudas con tu pedido? Escríbenos.</p>
+              <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 mb-6 flex items-center gap-2">
+                 <div className="w-1 h-3 bg-brand-500 rounded-full"></div>
+                 Soporte al Cliente
+              </h4>
+              <p className="text-sm text-slate-400 font-medium leading-relaxed">
+                {config.support_text}
+              </p>
               <a 
                 href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || ''}`} 
-                className="inline-flex w-full items-center justify-center gap-3 bg-emerald-500 text-white px-6 py-4 rounded-2xl font-black text-xs uppercase shadow-xl hover:bg-emerald-600 transition-all transform hover:-translate-y-1"
+                className="inline-flex w-full items-center justify-center gap-4 bg-emerald-500 text-white px-8 py-5 rounded-2xl font-black text-xs uppercase shadow-2xl hover:bg-emerald-600 hover:scale-[1.02] transition-all transform active:scale-95"
               >
-                 <MessageCircle className="w-5 h-5"/> Chatear por WhatsApp
+                 <MessageCircle className="w-5 h-5 fill-white/20"/> Chatear por WhatsApp
               </a>
-              <div className="flex items-center gap-2 text-slate-500">
-                <Smartphone className="w-4 h-4" />
-                <span className="text-xs font-bold tracking-widest">{config.whatsappNumbers?.split(',')[0]}</span>
+              <div className="flex items-center justify-center gap-3 text-slate-500 py-4 border-t border-white/5 mt-4">
+                <Smartphone className="w-5 h-5 text-brand-500" />
+                <span className="text-sm font-black tracking-[0.2em]">{config.whatsappNumbers?.split(',')[0]}</span>
               </div>
            </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-6 mt-20 pt-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
-          <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">
+        <div className="max-w-7xl mx-auto px-6 mt-20 pt-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-8">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em]">
             &copy; 2025 {config.nombreComercial || config.code}. Todos los derechos reservados.
           </p>
-          <div className="flex items-center gap-6">
-             <div className="flex items-center gap-1.5 grayscale opacity-50">
+          <div className="flex items-center gap-8">
+             <div className="flex items-center gap-2 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all cursor-default">
                <Star className="w-4 h-4 fill-brand-500 text-brand-500" />
-               <span className="text-[10px] font-black uppercase tracking-widest">Premium Store</span>
+               <span className="text-[10px] font-black uppercase tracking-[0.2em]">Tienda Certificada</span>
              </div>
              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
                Powered by <span className="text-white">LEMON BI</span>
@@ -422,7 +433,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setSelectedProduct(null)}></div>
           <div className="relative bg-white w-full max-w-6xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col lg:flex-row animate-in zoom-in-95 max-h-[90vh]">
             <button onClick={() => setSelectedProduct(null)} className="absolute top-6 right-6 p-4 bg-white/50 backdrop-blur-md shadow-lg rounded-full z-10 hover:bg-slate-100 transition-all"><X className="w-6 h-6"/></button>
-            
             <div className="w-full lg:w-1/2 bg-[#F8F9FA] flex flex-col items-center justify-center p-8 lg:p-16 relative">
                <div className="w-full aspect-square bg-white rounded-[3rem] shadow-sm p-12 flex items-center justify-center border border-slate-100 group">
                   {selectedProduct.imagen ? (
@@ -431,24 +441,15 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     <ImageIcon className="w-32 h-32 text-slate-100"/>
                   )}
                </div>
-               {/* Decorative tag */}
                <div className="absolute left-0 bottom-12 bg-slate-900 text-white px-6 py-2 rounded-r-2xl font-black text-[10px] uppercase tracking-widest">
                  Producto Original
                </div>
             </div>
-
             <div className="w-full lg:w-1/2 p-8 lg:p-16 overflow-y-auto bg-white">
                <div className="mb-10">
-                  <span className="inline-block px-3 py-1 bg-brand-50 text-brand-600 text-[10px] font-black uppercase tracking-widest rounded-lg mb-4">
-                    {selectedProduct.categoria}
-                  </span>
-                  <h2 className="text-3xl lg:text-5xl font-black text-slate-900 leading-[1.1] mb-6 tracking-tight">
-                    {selectedProduct.nombre}
-                  </h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-8">
-                    {selectedProduct.laboratorio || 'PRODUCTO ODOO'} {selectedProduct.presentacion && ` • ${selectedProduct.presentacion.toUpperCase()}`}
-                  </p>
-                  
+                  <span className="inline-block px-3 py-1 bg-brand-50 text-brand-600 text-[10px] font-black uppercase tracking-widest rounded-lg mb-4">{selectedProduct.categoria}</span>
+                  <h2 className="text-3xl lg:text-5xl font-black text-slate-900 leading-[1.1] mb-6 tracking-tight">{selectedProduct.nombre}</h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-8">{selectedProduct.laboratorio || 'PRODUCTO ODOO'} {selectedProduct.presentacion && ` • ${selectedProduct.presentacion.toUpperCase()}`}</p>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-8 mb-10 py-8 border-y border-slate-50">
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Precio Regular</p>
@@ -459,12 +460,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                          <p className="text-[10px] font-black text-brand-600 uppercase tracking-widest mb-1">Precio Online</p>
                          <p className="text-4xl font-black text-brand-600 leading-none">S/ {(selectedProduct.precio * 0.95).toFixed(2)}</p>
                        </div>
-                       <div className="h-10 w-10 bg-brand-500 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-lg animate-pulse">
-                         -5%
-                       </div>
+                       <div className="h-10 w-10 bg-brand-500 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-lg animate-pulse">-5%</div>
                     </div>
                   </div>
-
                   <div className="mb-10 space-y-4">
                      <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Información del Producto</h4>
                      {selectedProduct.descripcion_venta ? (
@@ -480,7 +478,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                        <p className="text-sm italic text-slate-400 font-medium leading-relaxed">Este producto cuenta con todas las certificaciones de salud requeridas. Solicita más detalles a nuestros asesores.</p>
                      )}
                   </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-12">
                      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex items-center gap-4">
                         <div className="p-3 bg-white rounded-xl shadow-sm"><ShieldCheck className="w-5 h-5 text-slate-400" /></div>
@@ -497,7 +494,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                         </div>
                      </div>
                   </div>
-
                   <div className="flex gap-4 sticky bottom-0 bg-white pt-4">
                      <button 
                        onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); }} 
@@ -631,7 +627,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                         </button>
                       ))}
                    </div>
-
                    <div className={`p-8 border-2 border-dashed rounded-[2.5rem] text-center relative group transition-all ${comprobante ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200 hover:border-brand-300'}`}>
                       <input 
                         type="file" 
@@ -642,70 +637,34 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                       {comprobante ? (
                         <div className="flex flex-col items-center gap-3 text-emerald-600">
                           <div className="w-16 h-16 bg-white rounded-full shadow-lg flex items-center justify-center"><CheckCircle2 className="w-8 h-8" /></div>
-                          <div>
-                            <p className="text-xs font-black uppercase tracking-widest">¡Listo!</p>
-                            <p className="text-[10px] font-bold opacity-70 truncate max-w-[200px]">{comprobante.name}</p>
-                          </div>
+                          <div><p className="text-xs font-black uppercase tracking-widest">¡Listo!</p><p className="text-[10px] font-bold opacity-70 truncate max-w-[200px]">{comprobante.name}</p></div>
                         </div>
                       ) : (
                         <div className="flex flex-col items-center gap-4 text-slate-400">
                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center group-hover:bg-brand-50 group-hover:text-brand-500 transition-all"><Upload className="w-8 h-8" /></div>
-                           <div>
-                             <p className="text-xs font-black uppercase tracking-widest">Subir Comprobante</p>
-                             <p className="text-[9px] font-bold opacity-60 mt-1">Captura de pantalla o foto de la operación</p>
-                           </div>
+                           <div><p className="text-xs font-black uppercase tracking-widest">Subir Comprobante</p><p className="text-[9px] font-bold opacity-60 mt-1">Captura de pantalla o foto de la operación</p></div>
                         </div>
                       )}
                    </div>
                 </div>
               )}
             </div>
-
-            {/* DRAWER FOOTER / ACTION BUTTONS */}
             {cart.length > 0 && (
               <div className="p-8 border-t border-slate-100 bg-white space-y-5">
                 <div className="flex justify-between items-center px-2">
                   <span className="text-slate-400 font-black uppercase text-[10px] tracking-[0.2em]">Total a Pagar</span>
-                  <div className="text-right">
-                    <span className="text-3xl font-black text-slate-900 leading-none block">S/ {cartTotal.toFixed(2)}</span>
-                    <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest mt-1">Incluye impuestos</span>
-                  </div>
+                  <div className="text-right"><span className="text-3xl font-black text-slate-900 leading-none block">S/ {cartTotal.toFixed(2)}</span><span className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest mt-1">Incluye impuestos</span></div>
                 </div>
-
                 <div className="flex gap-3">
                   {checkoutStep !== 'catalog' && (
-                    <button 
-                      onClick={() => { if (checkoutStep === 'payment') setCheckoutStep('shipping'); else setCheckoutStep('catalog'); }} 
-                      className="p-5 bg-slate-100 text-slate-500 rounded-3xl hover:bg-slate-200 transition-all active:scale-95 shadow-sm"
-                    >
-                      <ArrowLeft className="w-6 h-6"/>
-                    </button>
+                    <button onClick={() => { if (checkoutStep === 'payment') setCheckoutStep('shipping'); else setCheckoutStep('catalog'); }} className="p-5 bg-slate-100 text-slate-500 rounded-3xl hover:bg-slate-200 transition-all active:scale-95 shadow-sm"><ArrowLeft className="w-6 h-6"/></button>
                   )}
                   {checkoutStep === 'catalog' ? (
-                    <button 
-                      onClick={() => setCheckoutStep('shipping')} 
-                      className="flex-1 py-6 text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 uppercase tracking-widest text-[11px]" 
-                      style={{backgroundColor: brandColor, boxShadow: `0 15px 30px -5px ${brandColor}50`}}
-                    >
-                      Continuar Pedido
-                    </button>
+                    <button onClick={() => setCheckoutStep('shipping')} className="flex-1 py-6 text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 uppercase tracking-widest text-[11px]" style={{backgroundColor: brandColor, boxShadow: `0 15px 30px -5px ${brandColor}50`}}>Continuar Pedido</button>
                   ) : checkoutStep === 'shipping' ? (
-                    <button 
-                      onClick={() => setCheckoutStep('payment')} 
-                      disabled={!customerData.nombre || !customerData.telefono || (customerData.metodoEntrega === 'delivery' && !customerData.direccion) || (customerData.metodoEntrega === 'pickup' && !customerData.sedeId)} 
-                      className="flex-1 py-6 text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 disabled:opacity-30 disabled:shadow-none uppercase tracking-widest text-[11px]" 
-                      style={{backgroundColor: brandColor, boxShadow: `0 15px 30px -5px ${brandColor}50`}}
-                    >
-                      Ir al Pago
-                    </button>
+                    <button onClick={() => setCheckoutStep('payment')} disabled={!customerData.nombre || !customerData.telefono} className="flex-1 py-6 text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 disabled:opacity-30 uppercase tracking-widest text-[11px]" style={{backgroundColor: brandColor}}>Ir al Pago</button>
                   ) : (
-                    <button 
-                      onClick={handleSubmitOrder} 
-                      disabled={isSubmitting || !paymentMethod || !comprobante} 
-                      className="flex-1 py-6 bg-slate-900 text-white rounded-[2rem] font-black transition-all active:scale-95 disabled:opacity-30 flex items-center justify-center uppercase tracking-widest text-[11px] shadow-2xl"
-                    >
-                      {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Confirmar y Enviar'}
-                    </button>
+                    <button onClick={handleSubmitOrder} disabled={isSubmitting || !paymentMethod || !comprobante} className="flex-1 py-6 bg-slate-900 text-white rounded-[2rem] font-black transition-all active:scale-95 flex items-center justify-center uppercase tracking-widest text-[11px] shadow-2xl">{isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Confirmar y Enviar'}</button>
                   )}
                 </div>
               </div>
@@ -714,30 +673,15 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
-      {/* 🎉 SUCCESS VIEW */}
       {checkoutStep === 'success' && (
         <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
            <div className="relative mb-12">
              <div className="w-40 h-40 bg-emerald-50 rounded-full flex items-center justify-center animate-ping absolute opacity-20"></div>
-             <div className="w-40 h-40 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center relative shadow-xl shadow-emerald-100">
-               <CheckCircle2 className="w-20 h-20"/>
-             </div>
+             <div className="w-40 h-40 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center relative shadow-xl shadow-emerald-100"><CheckCircle2 className="w-20 h-20"/></div>
            </div>
            <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">¡Pedido Recibido!</h2>
-           <div className="bg-slate-50 px-8 py-6 rounded-[2.5rem] border border-slate-100 max-w-sm mb-12">
-             <p className="text-slate-500 font-medium leading-relaxed">
-               Estamos procesando tu pedido. Recibirás una confirmación vía WhatsApp en los próximos minutos.
-             </p>
-           </div>
-           <div className="flex flex-col gap-4 w-full max-w-xs">
-             <button 
-               onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setCart([]); }} 
-               className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black transition-all active:scale-95 shadow-xl uppercase tracking-widest text-xs"
-             >
-               Volver a la Tienda
-             </button>
-             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Código de Pedido: #ONLINE-{Date.now().toString().slice(-4)}</p>
-           </div>
+           <div className="bg-slate-50 px-8 py-6 rounded-[2.5rem] border border-slate-100 max-w-sm mb-12"><p className="text-slate-500 font-medium leading-relaxed">Estamos procesando tu pedido. Recibirás una confirmación vía WhatsApp en los próximos minutos.</p></div>
+           <button onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setCart([]); }} className="w-full max-w-xs py-6 bg-slate-900 text-white rounded-[2rem] font-black transition-all active:scale-95 shadow-xl uppercase tracking-widest text-xs">Volver a la Tienda</button>
         </div>
       )}
     </div>

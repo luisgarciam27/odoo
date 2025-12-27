@@ -38,7 +38,14 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     plinName: row.plin_nombre || '',
     plinQR: row.plin_qr || '',
     sedes_recojo: Array.isArray(row.sedes_recojo) ? row.sedes_recojo : [],
-    campos_medicos_visibles: Array.isArray(row.campos_medicos_visibles) ? row.campos_medicos_visibles : ["registro", "laboratorio", "principio"]
+    campos_medicos_visibles: Array.isArray(row.campos_medicos_visibles) ? row.campos_medicos_visibles : ["registro", "laboratorio", "principio"],
+    // Nuevos campos
+    footer_description: row.footer_description || 'Tu salud es nuestra prioridad. Ofrecemos los mejores productos farmacéuticos y servicios de salud digital con la garantía de expertos.',
+    facebook_url: row.facebook_url || '',
+    instagram_url: row.instagram_url || '',
+    tiktok_url: row.tiktok_url || '',
+    quality_text: row.quality_text || 'Autorizado por DIGEMID y el Ministerio de Salud.',
+    support_text: row.support_text || '¿Tienes dudas con tu pedido? Escríbenos.'
 });
 
 export const getClients = async (): Promise<ClientConfig[]> => {
@@ -90,7 +97,14 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         plin_nombre: client.plinName,
         plin_qr: client.plinQR,
         sedes_recojo: client.sedes_recojo || [],
-        campos_medicos_visibles: client.campos_medicos_visibles || ["registro", "laboratorio", "principio"]
+        campos_medicos_visibles: client.campos_medicos_visibles || ["registro", "laboratorio", "principio"],
+        // Nuevos campos dinámicos
+        footer_description: client.footer_description,
+        facebook_url: client.facebook_url,
+        instagram_url: client.instagram_url,
+        tiktok_url: client.tiktok_url,
+        quality_text: client.quality_text,
+        support_text: client.support_text
     };
 
     try {

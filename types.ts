@@ -47,6 +47,13 @@ export interface ClientConfig {
   plinQR?: string;
   sedes_recojo?: SedeStore[];
   campos_medicos_visibles?: string[];
+  // Campos de personalización de Footer
+  footer_description?: string;
+  facebook_url?: string;
+  instagram_url?: string;
+  tiktok_url?: string;
+  quality_text?: string;
+  support_text?: string;
 }
 
 export interface OdooSession {
