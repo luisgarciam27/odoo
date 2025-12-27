@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, X, LogOut, Shield, Activity, RefreshCw, Copy, ShoppingBag, Tag, ExternalLink, Palette, ImageIcon, QrCode, Facebook, Instagram, MessageCircle, HeartPulse } from 'lucide-react';
+import { Trash2, Edit, Plus, X, LogOut, Shield, Activity, RefreshCw, Copy, ShoppingBag, Tag, ExternalLink, Palette, Facebook, Instagram, MessageCircle, HeartPulse } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 
 interface AdminDashboardProps {

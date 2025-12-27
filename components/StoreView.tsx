@@ -4,7 +4,7 @@ import {
   ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, 
   Loader2, Citrus, Plus, Minus, Info, CheckCircle2, MapPin, Truck, 
   CreditCard, Upload, MessageCircle, Instagram, Facebook, ShieldCheck, 
-  Clock, Headphones, ChevronRight, Smartphone, Star, HeartPulse
+  Smartphone, Star, HeartPulse
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -64,8 +64,15 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             finalDomain.push(['categ_id', 'child_of', cats[0].id]);
           }
         }
+        // Intentar obtener con campos personalizados primero
         data = await client.searchRead(session.uid, session.apiKey, 'product.product', finalDomain, [...coreFields, ...extraFields], { limit: 500, context });
-      } catch (e) {
+      } catch (e: any) {
+        // Fallback si fallan los campos personalizados o el dominio complejo
+        const errorMessage = e.message || '';
+        const isInvalidField = errorMessage.includes('Invalid field') || errorMessage.includes('ValueError');
+        
+        console.debug(isInvalidField ? "Odoo no cuenta con campos médicos personalizados. Usando campos estándar." : "Reintentando carga básica...", e);
+        
         data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], coreFields, { limit: 500, context });
       }
 
@@ -673,6 +680,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
+      {/* SUCCESS SCREEN */}
       {checkoutStep === 'success' && (
         <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
            <div className="relative mb-12">
@@ -680,7 +688,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
              <div className="w-40 h-40 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center relative shadow-xl shadow-emerald-100"><CheckCircle2 className="w-20 h-20"/></div>
            </div>
            <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">¡Pedido Recibido!</h2>
-           <div className="bg-slate-50 px-8 py-6 rounded-[2.5rem] border border-slate-100 max-w-sm mb-12"><p className="text-slate-500 font-medium leading-relaxed">Estamos procesando tu pedido. Recibirás una confirmación vía WhatsApp en los próximos minutos.</p></div>
+           <div className="bg-slate-50 px-8 py-6 rounded-[2.5rem] border border-slate-100 max-sm mb-12"><p className="text-slate-500 font-medium leading-relaxed">Estamos procesando tu pedido. Recibirás una confirmación vía WhatsApp en los próximos minutos.</p></div>
            <button onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setCart([]); }} className="w-full max-w-xs py-6 bg-slate-900 text-white rounded-[2rem] font-black transition-all active:scale-95 shadow-xl uppercase tracking-widest text-xs">Volver a la Tienda</button>
         </div>
       )}

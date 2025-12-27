@@ -114,7 +114,7 @@ export class OdooClient {
         
         return parseValue(paramNode);
     } catch (error: any) {
-        console.error("RPC Call Failed", error);
+        console.debug("RPC Call connection info", error);
         throw error;
     }
   }
