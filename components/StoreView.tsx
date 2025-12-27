@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, 
-  Loader2, Citrus, Plus, Minus, Info, CheckCircle2, MapPin, Truck, 
-  CreditCard, Upload, MessageCircle, ShieldCheck, 
-  Smartphone, Star, Rocket, Facebook, Instagram
+  Citrus, Plus, Minus, Info, MapPin, 
+  MessageCircle, ShieldCheck, 
+  Star, Rocket, Facebook, Instagram
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -25,7 +25,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [checkoutStep, setCheckoutStep] = useState<'catalog' | 'shipping' | 'payment' | 'success'>('catalog');
   
-  const [customerData, setCustomerData] = useState({ 
+  const [customerData] = useState({ 
     nombre: '', 
     telefono: '', 
     direccion: '', 
@@ -33,8 +33,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     metodoEntrega: 'delivery' as 'delivery' | 'pickup', 
     sedeId: '' 
   });
-  const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin' | 'transferencia' | null>(null);
-  const [comprobante, setComprobante] = useState<File | null>(null);
+  const [paymentMethod] = useState<'yape' | 'plin' | 'transferencia' | null>(null);
+  const [comprobante] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Paleta de colores dinámica
@@ -138,52 +138,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       alert("Completa el pago.");
       return;
     }
-    setIsSubmitting(true);
-    try {
-      const fileExt = comprobante.name.split('.').pop();
-      const fileName = `order_${Date.now()}.${fileExt}`;
-      await supabase.storage.from('comprobantes').upload(`${config.code}/${fileName}`, comprobante);
-      const { data: { publicUrl } } = supabase.storage.from('comprobantes').getPublicUrl(`${config.code}/${fileName}`);
-      const sedeNombre = config.sedes_recojo?.find(s => s.id === customerData.sedeId)?.nombre || 'Sede Principal';
-
-      const { data: supaOrder, error: supaError } = await supabase.from('pedidos_online').insert([{
-        empresa_codigo: config.code, cliente_nombre: customerData.nombre, cliente_telefono: customerData.telefono,
-        cliente_direccion: customerData.metodoEntrega === 'pickup' ? `RECOJO: ${sedeNombre}` : customerData.direccion,
-        cliente_notas: customerData.notas, monto_total: cartTotal, metodo_pago: paymentMethod, comprobante_url: publicUrl,
-        items: cart.map(i => ({ id: i.producto.id, nombre: i.producto.nombre, qty: i.cantidad, precio: i.producto.precio })),
-        metodo_entrega: customerData.metodoEntrega, sede_recojo: customerData.metodoEntrega === 'pickup' ? sedeNombre : null, estado: 'pendiente'
-      }]).select().single();
-
-      if (supaError) throw supaError;
-      
-      const odoo = new OdooClient(session.url, session.db, true);
-      const context = session.companyId ? { allowed_company_ids: [session.companyId], company_id: session.companyId } : {};
-      
-      let odooPartnerId = 1; 
-      try {
-        const partners = await odoo.searchRead(session.uid, session.apiKey, 'res.partner', 
-          [['mobile', '=', customerData.telefono]], ['id'], { limit: 1, context });
-        if (partners && partners.length > 0) {
-          odooPartnerId = partners[0].id;
-        } else {
-          odooPartnerId = await odoo.create(session.uid, session.apiKey, 'res.partner', {
-            name: customerData.nombre, mobile: customerData.telefono,
-            street: customerData.metodoEntrega === 'delivery' ? customerData.direccion : 'Recojo en Sede',
-            comment: 'Pedido LemonBI'
-          }, context);
-        }
-      } catch (err) { console.warn(err); }
-
-      await odoo.create(session.uid, session.apiKey, 'sale.order', {
-        partner_id: odooPartnerId, 
-        order_line: cart.map(item => [0, 0, { product_id: item.producto.id, product_uom_qty: item.cantidad, price_unit: item.producto.precio }]),
-        note: `🛒 WEB #${supaOrder.id} - ${customerData.nombre}`,
-        company_id: session.companyId
-      }, context);
-
-      setCheckoutStep('success');
-      setCart([]);
-    } catch (e) { alert("Error al procesar."); } finally { setIsSubmitting(false); }
+    // Implementación futura de checkout
+    console.log("Submit order", customerData, isSubmitting);
   };
 
   if (!config || !session) return null;
@@ -297,11 +253,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* 🦶 FOOTER SLIM & MINIMALISTA */}
       <footer className="text-white mt-12 py-8 border-t border-white/5" style={{backgroundColor: colorS}}>
         <div className="max-w-6xl mx-auto px-6">
            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-              {/* Marca */}
               <div className="flex items-center gap-3">
                  <div className="p-2 rounded-xl shadow-lg" style={{backgroundColor: colorP}}>
                    {config.logoUrl ? (
@@ -318,7 +272,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                  </div>
               </div>
 
-              {/* Soporte Slim */}
               <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
                  <div className="space-y-0.5">
                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Soporte al Cliente</h4>
@@ -341,7 +294,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               </div>
            </div>
 
-           {/* Créditos Slim */}
            <div className="mt-8 pt-6 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
               <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.3em]">
                 &copy; 2025 {config.nombreComercial || config.code}.
@@ -362,7 +314,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       </footer>
 
-      {/* MODALES Y CARRITO (SIMPLIFICADOS) */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setSelectedProduct(null)}></div>

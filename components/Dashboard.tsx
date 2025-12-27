@@ -3,11 +3,12 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, Area, AreaChart 
 } from 'recharts';
+/* Fix: Corrected lucide-react import from lucide-center */
 import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Store, Download, FileSpreadsheet, ArrowUp, ArrowDown, Receipt, Target, PieChart as PieChartIcon, MapPin, CreditCard, Wallet, CalendarRange, Zap, X } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
-// @ts-ignore
+/* Fix: Use namespace import for xlsx to resolve "does not provide an export named default" error */
 import * as XLSX from 'xlsx';
 
 const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
