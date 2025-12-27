@@ -26,6 +26,8 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     nombreComercial: row.nombre_comercial || row.codigo_acceso,
     logoUrl: row.logo_url || '',
     colorPrimario: row.color_primario || '#84cc16',
+    colorSecundario: row.color_secundario || '#1e293b',
+    colorAcento: row.color_acento || '#0ea5e9',
     showStore: row.tienda_habilitada ?? true,
     storeCategories: row.tienda_categorias || '',
     tiendaCategoriaNombre: row.tienda_categoria_nombre || 'Catalogo',
@@ -39,13 +41,12 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     plinQR: row.plin_qr || '',
     sedes_recojo: Array.isArray(row.sedes_recojo) ? row.sedes_recojo : [],
     campos_medicos_visibles: Array.isArray(row.campos_medicos_visibles) ? row.campos_medicos_visibles : ["registro", "laboratorio", "principio"],
-    // Nuevos campos
-    footer_description: row.footer_description || 'Tu salud es nuestra prioridad. Ofrecemos los mejores productos farmacéuticos y servicios de salud digital con la garantía de expertos.',
+    footer_description: row.footer_description || 'Ofrecemos los mejores productos con la garantía de expertos.',
     facebook_url: row.facebook_url || '',
     instagram_url: row.instagram_url || '',
     tiktok_url: row.tiktok_url || '',
-    quality_text: row.quality_text || 'Autorizado por DIGEMID y el Ministerio de Salud.',
-    support_text: row.support_text || '¿Tienes dudas con tu pedido? Escríbenos.'
+    quality_text: row.quality_text || 'Autorizado por entidades competentes.',
+    support_text: row.support_text || '¿Tienes dudas? Escríbenos.'
 });
 
 export const getClients = async (): Promise<ClientConfig[]> => {
@@ -86,6 +87,8 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         nombre_comercial: client.nombreComercial,
         logo_url: client.logoUrl,
         color_primario: client.colorPrimario,
+        color_secundario: client.colorSecundario,
+        color_acento: client.colorAcento,
         tienda_habilitada: client.showStore,
         tienda_categoria_nombre: client.tiendaCategoriaNombre || 'Catalogo',
         productos_ocultos: client.hiddenProducts || [],
@@ -98,7 +101,6 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         plin_qr: client.plinQR,
         sedes_recojo: client.sedes_recojo || [],
         campos_medicos_visibles: client.campos_medicos_visibles || ["registro", "laboratorio", "principio"],
-        // Nuevos campos dinámicos
         footer_description: client.footer_description,
         facebook_url: client.facebook_url,
         instagram_url: client.instagram_url,

@@ -8,7 +8,6 @@ export interface Producto {
   stock?: number;
   imagen?: string; 
   descripcion_venta?: string;
-  // Campos Médicos/Veterinarios
   registro_sanitario?: string;
   laboratorio?: string;
   principio_activo?: string;
@@ -34,6 +33,8 @@ export interface ClientConfig {
   nombreComercial?: string;
   logoUrl?: string;
   colorPrimario?: string;
+  colorSecundario?: string;
+  colorAcento?: string;
   showStore?: boolean;
   storeCategories?: string;
   tiendaCategoriaNombre?: string;
@@ -47,7 +48,6 @@ export interface ClientConfig {
   plinQR?: string;
   sedes_recojo?: SedeStore[];
   campos_medicos_visibles?: string[];
-  // Campos de personalización de Footer
   footer_description?: string;
   facebook_url?: string;
   instagram_url?: string;
