@@ -120,7 +120,25 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         return { success: true };
     } catch (error: any) {
         console.error('Error saving client:', error);
-        return { success: false, message: error.message || 'Error al guardar.' };
+        
+        let errorMessage = 'Error al guardar.';
+        
+        if (typeof error === 'string') {
+            errorMessage = error;
+        } else if (error && typeof error.message === 'string') {
+            errorMessage = error.message;
+        } else if (error && typeof error.details === 'string' && error.details) {
+            errorMessage = error.details;
+        } else if (error) {
+            try {
+                const stringified = error.toString();
+                errorMessage = stringified === '[object Object]' ? JSON.stringify(error) : stringified;
+            } catch (e) {
+                errorMessage = 'Error desconocido al guardar.';
+            }
+        }
+
+        return { success: false, message: errorMessage };
     }
 };
 

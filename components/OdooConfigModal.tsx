@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Server, Database, User, Key, Save, AlertCircle, HelpCircle, RotateCcw } from 'lucide-react';
 
@@ -37,9 +38,9 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose, init
     if(confirm('¿Restaurar configuración por defecto?')) {
         setConfig({
             url: 'https://igp.facturaclic.pe/',
-            db: 'igp_master',
+            db: 'vida_master',
             username: 'soporte@facturaclic.pe',
-            apiKey: '6761eabe769db8795b3817000bd649cad0970d0f'
+            apiKey: '7a823daf061832dd8f01876a714da94f7e9c9355'
         });
     }
   };
