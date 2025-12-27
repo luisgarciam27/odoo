@@ -41,6 +41,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     if (!session) return;
     setLoading(true);
     const client = new OdooClient(session.url, session.db, true);
+    
+    // El contexto es CRITICO para multi-compañía en Odoo
+    const context = session.companyId ? { allowed_company_ids: [session.companyId], company_id: session.companyId } : {};
+
     try {
       const fields = [
         'display_name', 'list_price', 'qty_available', 'categ_id', 'image_128', 
@@ -50,15 +54,15 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const configCategory = (config.tiendaCategoriaNombre || '').trim();
       let data: any[] = [];
 
-      // NIVEL 1: Intento por categoría específica (si existe configuración)
+      // NIVEL 1: Intento por categoría específica con contexto de compañía
       if (configCategory && configCategory.toUpperCase() !== 'TODAS' && configCategory.toUpperCase() !== 'CATALOGO') {
         try {
-          const cats = await client.searchRead(session.uid, session.apiKey, 'product.category', [['name', 'ilike', configCategory]], ['id']);
+          const cats = await client.searchRead(session.uid, session.apiKey, 'product.category', [['name', 'ilike', configCategory]], ['id'], { context });
           if (cats && cats.length > 0) {
             const catIds = cats.map((c: any) => c.id);
             data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
               [['sale_ok', '=', true], ['categ_id', 'in', catIds]], 
-              fields, { limit: 500, order: 'image_128 desc, display_name asc' }
+              fields, { limit: 500, order: 'image_128 desc, display_name asc', context }
             );
           }
         } catch (e) {
@@ -66,18 +70,18 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         }
       }
 
-      // NIVEL 2: Carga general de productos para la venta (Fallback principal)
+      // NIVEL 2: Carga general (Fallback principal) - Esencial para que se vean productos si el filtro de categoría falla
       if (data.length === 0) {
         try {
           data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
             [['sale_ok', '=', true]], 
             fields, 
-            { limit: 500, order: 'image_128 desc, display_name asc' }
+            { limit: 500, order: 'image_128 desc, display_name asc', context }
           );
         } catch (e) {
-          console.warn("Fallo general, intentando carga sin filtros de venta...");
-          // NIVEL 3: Carga de emergencia (sin filtros)
-          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [], fields, { limit: 100 });
+          console.warn("Fallo general, intentando carga de emergencia...");
+          // NIVEL 3: Carga de emergencia absoluta (Sin filtros, solo lo que el API permita leer)
+          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [], fields, { limit: 100, context });
         }
       }
 
@@ -160,13 +164,17 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       }]).select().single();
 
       if (supaError) throw supaError;
+      
       const odoo = new OdooClient(session.url, session.db, true);
+      const context = session.companyId ? { allowed_company_ids: [session.companyId], company_id: session.companyId } : {};
+      
       await odoo.create(session.uid, session.apiKey, 'sale.order', {
         partner_id: 1, 
         order_line: cart.map(item => [0, 0, { product_id: item.producto.id, product_uom_qty: item.cantidad, price_unit: item.producto.precio }]),
         note: `🛒 PEDIDO WEB #${supaOrder.id}\n👤 Cliente: ${customerData.nombre}\n📍 Entrega: ${customerData.metodoEntrega === 'pickup' ? 'RECOJO EN ' + sedeNombre : customerData.direccion}\n💳 Pago: ${paymentMethod.toUpperCase()}\n🖼️ Comprobante: ${publicUrl}`,
         company_id: session.companyId
-      });
+      }, context);
+
       setCheckoutStep('success');
       setCart([]);
     } catch (e: any) {
@@ -207,7 +215,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           <div className="py-20 flex flex-col items-center justify-center text-center">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6 text-slate-300"><Package className="w-12 h-12" /></div>
             <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Catálogo Disponible</h3>
-            <p className="text-slate-400 text-sm mt-2 font-medium">Estamos actualizando nuestra lista de productos.</p>
+            <p className="text-slate-400 text-sm mt-2 font-medium">Estamos actualizando nuestra lista de productos para ti.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 animate-in fade-in duration-500">
@@ -380,7 +388,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                         <input type="text" placeholder="Dirección de Envío" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 shadow-sm" style={{'--tw-ring-color': brandColor} as any} value={customerData.direccion} onChange={e => setCustomerData({...customerData, direccion: e.target.value})} />
                       ) : (
                         <select className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 appearance-none shadow-sm" style={{'--tw-ring-color': brandColor} as any} value={customerData.sedeId} onChange={e => setCustomerData({...customerData, sedeId: e.target.value})}>
-                           <option value="">Selecciona una tienda...</option>
+                           <option value="">Selecciona una sede de recojo...</option>
                            {config.sedes_recojo?.map(s => <option key={s.id} value={s.id}>{s.nombre} - {s.direccion}</option>)}
                         </select>
                       )}
