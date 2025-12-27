@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient } from '../services/clientManager';
 import { ClientConfig } from '../types';
-import { Trash2, Edit, Plus, X, LogOut, Shield, Activity, RefreshCw, Copy, ShoppingBag, ExternalLink, Facebook, Instagram, MessageCircle, Sparkles, Wand2 } from 'lucide-react';
+import { Trash2, Edit, Plus, X, LogOut, Shield, Activity, RefreshCw, ShoppingBag, ExternalLink, Facebook, Instagram, MessageCircle, Sparkles, Wand2 } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
+// @ts-ignore
 import { GoogleGenAI, Type } from "@google/genai";
 
 interface AdminDashboardProps {
@@ -78,7 +79,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             }));
         } catch (error) {
             console.error("AI Error:", error);
-            alert("No se pudo analizar el logo. Verifica que la URL sea pública o introduce los colores manualmente.");
+            alert("No se pudo analizar el logo automáticamente.");
         } finally {
             setIsGeneratingPalette(false);
         }
@@ -134,13 +135,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             footer_description: '', facebook_url: '', instagram_url: '', tiktok_url: '', quality_text: '', support_text: '' 
         });
         setOriginalCode(null);
-    };
-
-    const copyStoreLink = (code: string) => {
-        const baseUrl = window.location.origin + window.location.pathname;
-        const fullUrl = `${baseUrl}?shop=${code}`;
-        navigator.clipboard.writeText(fullUrl);
-        alert(`Link copiado: ${fullUrl}`);
     };
 
     const handleTestConnection = async (client: ClientConfig) => {
@@ -202,7 +196,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black bg-brand-100 text-brand-700 uppercase">
                                                     <ShoppingBag className="w-3.5 h-3.5"/> Activo
                                                 </span>
-                                                <button onClick={() => copyStoreLink(c.code)} className="text-[9px] text-brand-600 font-bold hover:underline">Copiar Link</button>
                                             </div>
                                         ) : <span className="text-slate-300 text-[10px] font-black uppercase">Inactivo</span>}
                                     </td>

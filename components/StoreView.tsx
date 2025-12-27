@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, 
-  Loader2, Citrus, Plus, Minus, Info, CheckCircle2, MapPin, 
-  Smartphone, Star, Rocket, Facebook, Instagram, MessageCircle
+  Citrus, Plus, Minus, Info, MapPin, 
+  Star, Rocket, MessageCircle
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -200,7 +200,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         <div className="bg-white px-4 py-2 rounded-2xl shadow-xl border border-slate-100 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 pointer-events-none">
           <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest whitespace-nowrap">Chatea con nosotros</p>
         </div>
-        <div className="w-16 h-16 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all animate-bounce-slow" style={{backgroundColor: '#10B981'}}>
+        <div className="w-16 h-16 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all" style={{backgroundColor: '#10B981'}}>
            <MessageCircle className="w-8 h-8 fill-white/20" />
            <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-20"></div>
         </div>
@@ -332,9 +332,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                    >
                       <MessageCircle className="w-4 h-4 fill-white/20"/> {config.whatsappNumbers?.split(',')[0] || 'Chatear Ahora'}
                    </a>
-                   <div className="flex items-center gap-2 text-slate-500 pr-1">
-                      <Smartphone className="w-3.5 h-3.5" style={{color: colorP}} />
-                      <span className="text-xs font-bold tracking-widest">{config.whatsappNumbers?.split(',')[0] || '51975615244'}</span>
+                   <div className="flex items-center gap-2 text-slate-500 pr-1 text-xs">
+                      51975615244
                    </div>
                  </div>
               </div>
@@ -361,7 +360,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       </footer>
 
-      {/* MODALES Y CARRITO (SIMPLIFICADOS) */}
+      {/* MODALES Y CARRITO */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setSelectedProduct(null)}></div>
@@ -386,10 +385,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 text-xs text-slate-600 font-medium">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500"/> Garantía de Calidad
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-600 font-medium">
-                    <MapPin className="w-4 h-4 text-blue-500"/> Punto de venta: {config.nombreComercial}
+                    <MapPin className="w-4 h-4 text-blue-500"/> Sucursal: {config.nombreComercial}
                   </div>
                 </div>
                 <button 
@@ -415,29 +411,63 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
-              {cart.map(item => (
-                <div key={item.producto.id} className="flex gap-4 items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-                  <div className="w-16 h-16 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
-                    {item.producto.imagen ? <img src={`data:image/png;base64,${item.producto.imagen}`} className="w-full h-full object-cover" alt=""/> : <Package className="w-6 h-6 text-slate-200"/>}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-[11px] font-bold text-slate-800 line-clamp-1">{item.producto.nombre}</h4>
-                    <p className="text-sm font-black mt-0.5" style={{color: colorP}}>S/ {item.producto.precio.toFixed(2)}</p>
-                    <div className="flex items-center gap-3 mt-2">
-                      <div className="flex items-center bg-slate-50 rounded-lg p-0.5 border">
-                        <button onClick={() => updateQuantity(item.producto.id, -1)} className="p-1 bg-white rounded shadow-sm"><Minus className="w-2.5 h-2.5"/></button>
-                        <span className="text-xs font-bold px-3">{item.cantidad}</span>
-                        <button onClick={() => updateQuantity(item.producto.id, 1)} className="p-1 bg-white rounded shadow-sm"><Plus className="w-2.5 h-2.5"/></button>
+              {checkoutStep === 'catalog' ? (
+                cart.map(item => (
+                  <div key={item.producto.id} className="flex gap-4 items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                    <div className="w-16 h-16 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+                      {item.producto.imagen ? <img src={`data:image/png;base64,${item.producto.imagen}`} className="w-full h-full object-cover" alt=""/> : <Package className="w-6 h-6 text-slate-200"/>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-[11px] font-bold text-slate-800 line-clamp-1">{item.producto.nombre}</h4>
+                      <p className="text-sm font-black mt-0.5" style={{color: colorP}}>S/ {item.producto.precio.toFixed(2)}</p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <div className="flex items-center bg-slate-50 rounded-lg p-0.5 border">
+                          <button onClick={() => updateQuantity(item.producto.id, -1)} className="p-1 bg-white rounded shadow-sm"><Minus className="w-2.5 h-2.5"/></button>
+                          <span className="text-xs font-bold px-3">{item.cantidad}</span>
+                          <button onClick={() => updateQuantity(item.producto.id, 1)} className="p-1 bg-white rounded shadow-sm"><Plus className="w-2.5 h-2.5"/></button>
+                        </div>
+                        <button onClick={() => removeFromCart(item.producto.id)} className="text-xs font-bold text-red-400 hover:text-red-600 transition-colors ml-auto">Quitar</button>
                       </div>
-                      <button onClick={() => removeFromCart(item.producto.id)} className="text-xs font-bold text-red-400 hover:text-red-600 transition-colors ml-auto">Quitar</button>
                     </div>
                   </div>
+                ))
+              ) : checkoutStep === 'shipping' ? (
+                <div className="space-y-4 p-2 animate-in slide-in-from-bottom-5">
+                   <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest mb-4">Datos de Entrega</h3>
+                   <input type="text" placeholder="Nombre Completo" className="w-full p-4 bg-white border rounded-xl text-sm" value={customerData.nombre} onChange={e => setCustomerData({...customerData, nombre: e.target.value})} />
+                   <input type="tel" placeholder="Teléfono" className="w-full p-4 bg-white border rounded-xl text-sm" value={customerData.telefono} onChange={e => setCustomerData({...customerData, telefono: e.target.value})} />
+                   <div className="flex gap-2">
+                     <button onClick={() => setCustomerData({...customerData, metodoEntrega: 'delivery'})} className={`flex-1 p-3 border rounded-xl text-[10px] font-black uppercase ${customerData.metodoEntrega === 'delivery' ? 'bg-slate-900 text-white' : 'bg-slate-50'}`}>Delivery</button>
+                     <button onClick={() => setCustomerData({...customerData, metodoEntrega: 'pickup'})} className={`flex-1 p-3 border rounded-xl text-[10px] font-black uppercase ${customerData.metodoEntrega === 'pickup' ? 'bg-slate-900 text-white' : 'bg-slate-50'}`}>Recojo</button>
+                   </div>
+                   {customerData.metodoEntrega === 'delivery' ? (
+                     <input type="text" placeholder="Dirección de Envío" className="w-full p-4 bg-white border rounded-xl text-sm" value={customerData.direccion} onChange={e => setCustomerData({...customerData, direccion: e.target.value})} />
+                   ) : (
+                     <select className="w-full p-4 bg-white border rounded-xl text-sm" value={customerData.sedeId} onChange={e => setCustomerData({...customerData, sedeId: e.target.value})}>
+                       <option value="">Selecciona Sede</option>
+                       {config.sedes_recojo?.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                     </select>
+                   )}
+                   <textarea placeholder="Notas adicionales..." className="w-full p-4 bg-white border rounded-xl text-sm h-24" value={customerData.notas} onChange={e => setCustomerData({...customerData, notas: e.target.value})}></textarea>
                 </div>
-              ))}
-              {cart.length === 0 && (
-                <div className="h-full flex flex-col items-center justify-center opacity-30 text-slate-300">
-                  <ShoppingCart className="w-20 h-20 mb-4" />
-                  <p className="font-black uppercase tracking-widest text-xs">Tu carrito está vacío</p>
+              ) : (
+                <div className="space-y-4 p-2 animate-in slide-in-from-bottom-5">
+                   <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest mb-4">Método de Pago</h3>
+                   <div className="grid grid-cols-1 gap-3">
+                     {['yape', 'plin', 'transferencia'].map(method => (
+                       <button 
+                         key={method} 
+                         onClick={() => setPaymentMethod(method as any)}
+                         className={`p-4 border rounded-xl text-left uppercase font-black text-[10px] transition-all ${paymentMethod === method ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-200' : 'bg-white'}`}
+                       >
+                         {method}
+                       </button>
+                     ))}
+                   </div>
+                   <div className="mt-4 p-8 border-2 border-dashed rounded-2xl text-center relative bg-slate-50">
+                      <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setComprobante(e.target.files?.[0] || null)} />
+                      {comprobante ? <span className="text-emerald-600 font-bold text-xs">{comprobante.name}</span> : <span className="text-slate-400 font-bold text-xs uppercase">Sube tu comprobante</span>}
+                   </div>
                 </div>
               )}
             </div>
@@ -445,15 +475,20 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             {cart.length > 0 && (
               <div className="p-8 border-t border-slate-100 space-y-5 bg-white">
                 <div className="flex justify-between items-end">
-                  <span className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Total del Pedido</span>
+                  <span className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Total</span>
                   <span className="text-3xl font-black text-slate-900 leading-none">S/ {cartTotal.toFixed(2)}</span>
                 </div>
                 <button 
-                  onClick={() => checkoutStep === 'catalog' ? setCheckoutStep('shipping') : handleSubmitOrder()} 
+                  onClick={() => {
+                    if (checkoutStep === 'catalog') setCheckoutStep('shipping');
+                    else if (checkoutStep === 'shipping') setCheckoutStep('payment');
+                    else handleSubmitOrder();
+                  }}
+                  disabled={isSubmitting}
                   className="w-full py-5 text-white rounded-2xl font-black shadow-2xl transition-all active:scale-95 uppercase tracking-widest text-[11px]" 
                   style={{backgroundColor: colorA}}
                 >
-                  {checkoutStep === 'catalog' ? 'Continuar Compra' : 'Confirmar Pedido'}
+                  {isSubmitting ? 'Procesando...' : checkoutStep === 'catalog' ? 'Siguiente' : checkoutStep === 'shipping' ? 'Ir al Pago' : 'Finalizar Pedido'}
                 </button>
               </div>
             )}
@@ -461,13 +496,12 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
-      {/* Success Modal */}
       {checkoutStep === 'success' && (
         <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
-           <div className="w-32 h-32 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-8 shadow-xl shadow-emerald-50"><CheckCircle2 className="w-16 h-16"/></div>
+           <div className="w-32 h-32 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-8 shadow-xl shadow-emerald-50"><Star className="w-16 h-16"/></div>
            <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight uppercase">¡Pedido Enviado!</h2>
-           <p className="text-slate-500 font-medium leading-relaxed max-w-sm mb-10">Tu pedido ha sido recibido correctamente. Te contactaremos vía WhatsApp para confirmar los detalles.</p>
-           <button onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setCart([]); }} className="w-full max-w-xs py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all">Volver al catálogo</button>
+           <p className="text-slate-500 font-medium leading-relaxed max-w-sm mb-10">Tu pedido ha sido recibido. Te contactaremos vía WhatsApp pronto.</p>
+           <button onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setCart([]); }} className="w-full max-w-xs py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all">Cerrar</button>
         </div>
       )}
     </div>
