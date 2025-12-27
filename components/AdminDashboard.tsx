@@ -4,7 +4,6 @@ import { getClients, saveClient, deleteClient } from '../services/clientManager'
 import { ClientConfig } from '../types';
 import { Trash2, Edit, Plus, X, LogOut, Shield, Activity, RefreshCw, ShoppingBag, ExternalLink, Facebook, Instagram, MessageCircle, Sparkles, Wand2 } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
-// @ts-ignore
 import { GoogleGenAI, Type } from "@google/genai";
 
 interface AdminDashboardProps {

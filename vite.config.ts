@@ -1,3 +1,4 @@
+
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -6,7 +7,16 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
-      external: ['xlsx']
+      // Externalizamos todas las dependencias que se cargan vía importmap en el HTML
+      external: [
+        'react',
+        'react-dom',
+        'recharts',
+        'lucide-react',
+        'xlsx',
+        '@supabase/supabase-js',
+        '@google/genai'
+      ]
     }
   }
 })
