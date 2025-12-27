@@ -7,9 +7,15 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
-      // Solo externalizamos @google/genai ya que se resuelve vía importmap en el navegador
-      // y no está presente en el node_modules del entorno de build.
+      // Marcamos como externas las librerías que se cargan vía CDN (importmap)
+      // para evitar que Rollup intente buscarlas en node_modules durante el build.
       external: [
+        'react',
+        'react-dom',
+        'recharts',
+        'lucide-react',
+        'xlsx',
+        '@supabase/supabase-js',
         '@google/genai'
       ]
     }

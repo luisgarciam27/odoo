@@ -36,3 +36,8 @@ declare module '@google/genai' {
     IMAGE = 'IMAGE',
   }
 }
+
+declare module 'xlsx' {
+  const XLSX: any;
+  export = XLSX;
+}
