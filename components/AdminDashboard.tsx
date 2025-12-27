@@ -4,6 +4,7 @@ import { getClients, saveClient, deleteClient } from '../services/clientManager'
 import { ClientConfig } from '../types';
 import { Trash2, Edit, Plus, X, LogOut, Shield, Activity, RefreshCw, ShoppingBag, ExternalLink, Facebook, Instagram, MessageCircle, Sparkles, Wand2 } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
+// @ts-ignore
 import { GoogleGenAI, Type } from "@google/genai";
 
 interface AdminDashboardProps {
@@ -48,7 +49,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
         setIsGeneratingPalette(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+            // Acceso seguro a API_KEY inyectada por el entorno
+            const apiKey = (typeof process !== 'undefined' && process.env?.API_KEY) || '';
+            const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: `Analiza la identidad de marca '${currentClient.nombreComercial || currentClient.code}' basándote en este logo: ${currentClient.logoUrl}. 
