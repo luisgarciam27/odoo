@@ -41,48 +41,42 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     if (!session) return;
     setLoading(true);
     const client = new OdooClient(session.url, session.db, true);
-    
-    // El contexto es CRITICO para multi-compañía en Odoo
     const context = session.companyId ? { allowed_company_ids: [session.companyId], company_id: session.companyId } : {};
 
+    // Campos CORE: Funcionan en CUALQUIER Odoo
+    const coreFields = ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale'];
+    // Campos EXTRA: Solo se añaden si no rompen la consulta
+    const extraFields = ['qty_available', 'x_registro_sanitario', 'x_laboratorio', 'x_principio_activo'];
+
     try {
-      const fields = [
-        'display_name', 'list_price', 'qty_available', 'categ_id', 'image_128', 
-        'description_sale', 'x_registro_sanitario', 'x_laboratorio', 'x_principio_activo'
-      ];
-
-      const configCategory = (config.tiendaCategoriaNombre || '').trim();
       let data: any[] = [];
+      const configCategory = (config.tiendaCategoriaNombre || '').trim();
 
-      // NIVEL 1: Intento por categoría específica con contexto de compañía
-      if (configCategory && configCategory.toUpperCase() !== 'TODAS' && configCategory.toUpperCase() !== 'CATALOGO') {
-        try {
+      // Intento 1: Carga con campos Core (Los más seguros)
+      try {
+        console.log("Intentando carga Core...");
+        const domain: any[] = [['sale_ok', '=', true]];
+        
+        // Si hay una categoría específica, buscamos su ID primero
+        let finalDomain = [...domain];
+        if (configCategory && !['TODAS', 'CATALOGO', ''].includes(configCategory.toUpperCase())) {
           const cats = await client.searchRead(session.uid, session.apiKey, 'product.category', [['name', 'ilike', configCategory]], ['id'], { context });
           if (cats && cats.length > 0) {
-            const catIds = cats.map((c: any) => c.id);
-            data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
-              [['sale_ok', '=', true], ['categ_id', 'in', catIds]], 
-              fields, { limit: 500, order: 'image_128 desc, display_name asc', context }
-            );
+            finalDomain.push(['categ_id', 'child_of', cats[0].id]);
           }
-        } catch (e) {
-          console.warn("Fallo por categoría, reintentando carga general...");
         }
+
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', finalDomain, [...coreFields, ...extraFields], { limit: 500, context });
+      } catch (e) {
+        console.warn("Fallo carga completa, reintentando solo con campos básicos...");
+        // Intento 2: Solo campos básicos (Si falló por culpa de un campo x_ que no existe)
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], coreFields, { limit: 500, context });
       }
 
-      // NIVEL 2: Carga general (Fallback principal) - Esencial para que se vean productos si el filtro de categoría falla
+      // Intento 3: Si product.product falló o está vacío, probar product.template
       if (data.length === 0) {
-        try {
-          data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
-            [['sale_ok', '=', true]], 
-            fields, 
-            { limit: 500, order: 'image_128 desc, display_name asc', context }
-          );
-        } catch (e) {
-          console.warn("Fallo general, intentando carga de emergencia...");
-          // NIVEL 3: Carga de emergencia absoluta (Sin filtros, solo lo que el API permita leer)
-          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [], fields, { limit: 100, context });
-        }
+        console.log("product.product vacío, intentando product.template...");
+        data = await client.searchRead(session.uid, session.apiKey, 'product.template', [['sale_ok', '=', true]], coreFields, { limit: 200, context });
       }
 
       const mapped = data.map((p: any) => ({
@@ -99,9 +93,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         principio_activo: p.x_principio_activo || '',
         presentacion: p.display_name.split(',').pop()?.trim() || ''
       }));
+
+      console.log(`Productos cargados: ${mapped.length}`);
       setProductos(mapped);
     } catch (e) {
-      console.error("Error definitivo cargando productos:", e);
+      console.error("Error crítico de visibilidad:", e);
     } finally {
       setLoading(false);
     }
@@ -215,7 +211,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           <div className="py-20 flex flex-col items-center justify-center text-center">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6 text-slate-300"><Package className="w-12 h-12" /></div>
             <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Catálogo Disponible</h3>
-            <p className="text-slate-400 text-sm mt-2 font-medium">Estamos actualizando nuestra lista de productos para ti.</p>
+            <p className="text-slate-400 text-sm mt-2 font-medium">No se encontraron productos disponibles en este momento.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 animate-in fade-in duration-500">
@@ -312,7 +308,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                          ))}
                        </ul>
                      ) : (
-                       <p className="text-sm italic text-slate-400 font-medium">Información pendiente de actualización.</p>
+                       <p className="text-sm italic text-slate-400 font-medium">Información técnica disponible próximamente.</p>
                      )}
                   </div>
 
