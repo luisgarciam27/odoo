@@ -9,7 +9,7 @@ if (!rootElement) {
 }
 
 // Capturador de errores global para depuración
-window.onerror = function(message, source, lineno, colno, error) {
+window.onerror = function(message, _source, _lineno, _colno, error) {
   console.error("Global Error Caught:", message, error);
 };
 
