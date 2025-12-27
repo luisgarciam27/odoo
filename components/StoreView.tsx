@@ -43,21 +43,15 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     const client = new OdooClient(session.url, session.db, true);
     const context = session.companyId ? { allowed_company_ids: [session.companyId], company_id: session.companyId } : {};
 
-    // Campos CORE: Funcionan en CUALQUIER Odoo
     const coreFields = ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale'];
-    // Campos EXTRA: Solo se añaden si no rompen la consulta
     const extraFields = ['qty_available', 'x_registro_sanitario', 'x_laboratorio', 'x_principio_activo'];
 
     try {
       let data: any[] = [];
       const configCategory = (config.tiendaCategoriaNombre || '').trim();
 
-      // Intento 1: Carga con campos Core (Los más seguros)
       try {
-        console.log("Intentando carga Core...");
         const domain: any[] = [['sale_ok', '=', true]];
-        
-        // Si hay una categoría específica, buscamos su ID primero
         let finalDomain = [...domain];
         if (configCategory && !['TODAS', 'CATALOGO', ''].includes(configCategory.toUpperCase())) {
           const cats = await client.searchRead(session.uid, session.apiKey, 'product.category', [['name', 'ilike', configCategory]], ['id'], { context });
@@ -65,17 +59,12 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             finalDomain.push(['categ_id', 'child_of', cats[0].id]);
           }
         }
-
         data = await client.searchRead(session.uid, session.apiKey, 'product.product', finalDomain, [...coreFields, ...extraFields], { limit: 500, context });
       } catch (e) {
-        console.warn("Fallo carga completa, reintentando solo con campos básicos...");
-        // Intento 2: Solo campos básicos (Si falló por culpa de un campo x_ que no existe)
         data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], coreFields, { limit: 500, context });
       }
 
-      // Intento 3: Si product.product falló o está vacío, probar product.template
       if (data.length === 0) {
-        console.log("product.product vacío, intentando product.template...");
         data = await client.searchRead(session.uid, session.apiKey, 'product.template', [['sale_ok', '=', true]], coreFields, { limit: 200, context });
       }
 
@@ -93,8 +82,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         principio_activo: p.x_principio_activo || '',
         presentacion: p.display_name.split(',').pop()?.trim() || ''
       }));
-
-      console.log(`Productos cargados: ${mapped.length}`);
       setProductos(mapped);
     } catch (e) {
       console.error("Error crítico de visibilidad:", e);
@@ -164,10 +151,30 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const odoo = new OdooClient(session.url, session.db, true);
       const context = session.companyId ? { allowed_company_ids: [session.companyId], company_id: session.companyId } : {};
       
+      // SOLUCIÓN: Buscar o crear cliente en Odoo
+      let odooPartnerId = 1; 
+      try {
+        const partners = await odoo.searchRead(session.uid, session.apiKey, 'res.partner', 
+          [['mobile', '=', customerData.telefono]], ['id'], { limit: 1, context });
+        
+        if (partners && partners.length > 0) {
+          odooPartnerId = partners[0].id;
+        } else {
+          odooPartnerId = await odoo.create(session.uid, session.apiKey, 'res.partner', {
+            name: customerData.nombre,
+            mobile: customerData.telefono,
+            street: customerData.metodoEntrega === 'delivery' ? customerData.direccion : 'Recojo en Sede',
+            comment: 'Cliente registrado desde Tienda Online LEMON BI'
+          }, context);
+        }
+      } catch (err) {
+        console.warn("Fallo al gestionar partner, usando ID 1", err);
+      }
+
       await odoo.create(session.uid, session.apiKey, 'sale.order', {
-        partner_id: 1, 
+        partner_id: odooPartnerId, 
         order_line: cart.map(item => [0, 0, { product_id: item.producto.id, product_uom_qty: item.cantidad, price_unit: item.producto.precio }]),
-        note: `🛒 PEDIDO WEB #${supaOrder.id}\n👤 Cliente: ${customerData.nombre}\n📍 Entrega: ${customerData.metodoEntrega === 'pickup' ? 'RECOJO EN ' + sedeNombre : customerData.direccion}\n💳 Pago: ${paymentMethod.toUpperCase()}\n🖼️ Comprobante: ${publicUrl}`,
+        note: `🛒 PEDIDO WEB #${supaOrder.id}\n👤 Cliente: ${customerData.nombre}\n📍 Entrega: ${customerData.metodoEntrega === 'pickup' ? 'RECOJO EN ' + sedeNombre : customerData.direccion}\n📱 Teléfono: ${customerData.telefono}\n💳 Pago: ${paymentMethod.toUpperCase()}\n🖼️ Comprobante: ${publicUrl}`,
         company_id: session.companyId
       }, context);
 
