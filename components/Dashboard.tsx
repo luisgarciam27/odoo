@@ -3,13 +3,11 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, Area, AreaChart 
 } from 'recharts';
-/* Fix: Corrected typo from lucide-center to lucide-react */
 import { TrendingUp, DollarSign, Package, ArrowUpRight, RefreshCw, AlertCircle, Store, Download, FileSpreadsheet, ArrowUp, ArrowDown, Receipt, Target, PieChart as PieChartIcon, MapPin, CreditCard, Wallet, CalendarRange, Zap, X } from 'lucide-react';
 import { Venta, Filtros, AgrupadoPorDia, OdooSession } from '../types';
 import OdooConfigModal from './OdooConfigModal';
 import { OdooClient } from '../services/odoo';
-/* Fix: Standard ESM import for XLSX */
-import XLSX from 'xlsx';
+import * as XLSX from 'xlsx';
 
 const generarDatosVentas = (startStr: string, endStr: string): Venta[] => {
   const estructura = [
@@ -337,12 +335,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const kpisPorSede = useMemo(() => {
     const agrupado: Record<string, { name: string; ventas: number; costo: number; margen: number; transacciones: number; margenPct: number }> = {};
     filteredData.forEach(v => {
-        /* Fix: Corrected typo 'agruado' to 'agrupado' */
         if (!agrupado[v.sede]) agrupado[v.sede] = { name: v.sede, ventas: 0, costo: 0, margen: 0, transacciones: 0, margenPct: 0 };
-        /* Fix: Corrected typo 'agruado' to 'agrupado' */
         agrupado[v.sede].ventas += v.total; agrupado[v.sede].costo += v.costo; agrupado[v.sede].margen += v.margen; agrupado[v.sede].transacciones += 1;
     });
-    /* Fix: Corrected typo 'agruado' to 'agrupado' */
     return Object.values(agrupado).map(item => ({ ...item, margenPct: item.ventas > 0 ? (item.margen / item.ventas) * 100 : 0 })).sort((a, b) => b.ventas - a.ventas);
   }, [filteredData]);
 
