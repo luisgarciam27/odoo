@@ -335,6 +335,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
   const kpisPorSede = useMemo(() => {
     const agrupado: Record<string, { name: string; ventas: number; costo: number; margen: number; transacciones: number; margenPct: number }> = {};
     filteredData.forEach(v => {
+        // Fix: Typo corrigido 'agruado' -> 'agrupado'
         if (!agrupado[v.sede]) agrupado[v.sede] = { name: v.sede, ventas: 0, costo: 0, margen: 0, transacciones: 0, margenPct: 0 };
         agrupado[v.sede].ventas += v.total; agrupado[v.sede].costo += v.costo; agrupado[v.sede].margen += v.margen; agrupado[v.sede].transacciones += 1;
     });
@@ -430,7 +431,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, view = 'general' }) => {
               <h1 className="text-3xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
                 {view === 'comparativa' ? 'Rendimiento de Sedes y Cajas' : view === 'pagos' ? 'Ingresos y Tesorería' : 'Dashboard de Operaciones'}
                 {filterMode === 'hoy' && <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-brand-100 text-brand-700 border border-brand-200 animate-pulse uppercase"><Zap className="w-3 h-3 mr-1" /> Tiempo Real</span>}
-              </h1>
+           </h1>
               <p className="text-slate-500 text-sm font-light mt-1">Sincronizado con: <span className="text-brand-600 font-bold">{session?.companyName || 'Modo Demo'}</span> | {dateRange.start}</p>
            </div>
            <div className="mt-4 md:mt-0 flex gap-3">

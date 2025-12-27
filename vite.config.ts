@@ -7,7 +7,16 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
-      external: ['xlsx', '@google/genai', 'lucide-react', 'recharts', '@supabase/supabase-js']
+      external: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'recharts',
+        'lucide-react',
+        'xlsx',
+        '@supabase/supabase-js',
+        '@google/genai'
+      ]
     }
   }
 })
