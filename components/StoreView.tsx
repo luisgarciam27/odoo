@@ -313,7 +313,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                 <div className="aspect-square bg-[#F1F3F5] rounded-[2rem] mb-4 overflow-hidden relative border border-slate-50 flex items-center justify-center">
                   {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={p.nombre} /> : <Package className="w-12 h-12 text-slate-200"/>}
                   <button onClick={(e) => addToCart(p, e)} className="absolute bottom-3 right-3 p-3 bg-white rounded-2xl shadow-xl text-slate-800 hover:bg-slate-900 hover:text-white transition-all md:opacity-0 group-hover:opacity-100"><Plus className="w-5 h-5"/></button>
-                  {p.stock <= 5 && p.stock > 0 && <span className="absolute top-3 left-3 bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest">Últimas uds</span>}
+                  {/* FIX VERCEL TS18048: Asegurando que p.stock no sea undefined para la comparación */}
+                  {(p.stock ?? 0) <= 5 && (p.stock ?? 0) > 0 && <span className="absolute top-3 left-3 bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest">Últimas uds</span>}
                 </div>
                 <div className="flex-1 px-1">
                   <span className="text-[9px] font-black text-brand-600 uppercase tracking-widest mb-1 block">{p.categoria}</span>
