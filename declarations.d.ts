@@ -37,10 +37,12 @@ declare module '@google/genai' {
   }
 }
 
-/* Fix: Mejorar declaración para soportar import * as XLSX y evitar errores de default export runtime */
 declare module 'xlsx' {
   export const utils: any;
   export function writeFile(wb: any, filename: string): void;
+  export function aoa_to_sheet(data: any[][]): any;
+  export function book_new(): any;
+  export function book_append_sheet(wb: any, ws: any, name: string): void;
   export function read(data: any, options?: any): any;
   const XLSX: any;
   export default XLSX;
