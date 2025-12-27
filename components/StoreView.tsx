@@ -2,9 +2,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, 
-  Loader2, Citrus, Plus, Minus, Info, CheckCircle2, MapPin, Truck, 
-  CreditCard, Upload, MessageCircle, ShieldCheck, 
-  Smartphone, Star, Rocket, Facebook, Instagram
+  Loader2, Citrus, Plus, Minus, Info, CheckCircle2, MapPin, 
+  Smartphone, Star, Rocket, Facebook, Instagram, MessageCircle
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -135,7 +134,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
   const handleSubmitOrder = async () => {
     if (!paymentMethod || !comprobante) {
-      alert("Completa el pago.");
+      alert("Completa el pago adjuntando tu comprobante.");
       return;
     }
     setIsSubmitting(true);
@@ -168,8 +167,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         } else {
           odooPartnerId = await odoo.create(session.uid, session.apiKey, 'res.partner', {
             name: customerData.nombre, mobile: customerData.telefono,
-            street: customerData.metodoEntrega === 'delivery' ? customerData.direccion : 'Recojo en Sede',
-            comment: 'Pedido LemonBI'
+            street: customerData.metodoEntrega === 'delivery' ? customerData.direccion : 'Recojo en Tienda Online',
+            comment: `Pedido Online LemonBI #${supaOrder.id}`
           }, context);
         }
       } catch (err) { console.warn(err); }
@@ -177,13 +176,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       await odoo.create(session.uid, session.apiKey, 'sale.order', {
         partner_id: odooPartnerId, 
         order_line: cart.map(item => [0, 0, { product_id: item.producto.id, product_uom_qty: item.cantidad, price_unit: item.producto.precio }]),
-        note: `🛒 WEB #${supaOrder.id} - ${customerData.nombre}`,
+        note: `🛒 WEB #${supaOrder.id} - ${customerData.nombre}\n🖼️ Comprobante: ${publicUrl}`,
         company_id: session.companyId
       }, context);
 
       setCheckoutStep('success');
       setCart([]);
-    } catch (e) { alert("Error al procesar."); } finally { setIsSubmitting(false); }
+    } catch (e) { alert("Error al procesar el pedido."); } finally { setIsSubmitting(false); }
   };
 
   if (!config || !session) return null;
@@ -199,7 +198,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         className="fixed bottom-8 right-8 z-[60] group flex items-center gap-3"
       >
         <div className="bg-white px-4 py-2 rounded-2xl shadow-xl border border-slate-100 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 pointer-events-none">
-          <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest whitespace-nowrap">¿Necesitas ayuda?</p>
+          <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest whitespace-nowrap">Chatea con nosotros</p>
         </div>
         <div className="w-16 h-16 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all animate-bounce-slow" style={{backgroundColor: '#10B981'}}>
            <MessageCircle className="w-8 h-8 fill-white/20" />
@@ -210,9 +209,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       {/* 🔝 BANNER SUPERIOR */}
       <div className="text-white py-2 text-center overflow-hidden" style={{backgroundColor: colorS}}>
         <div className="animate-pulse flex items-center justify-center gap-4">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">🚚 Envíos seguros a domicilio</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em]">🚚 Envíos seguros a todo el país</span>
           <div className="h-1 w-1 bg-white/30 rounded-full"></div>
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">🔒 Pagos Garantizados</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em]">🔒 Compra 100% Protegida</span>
         </div>
       </div>
 
@@ -246,7 +245,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
             <input 
               type="text" 
-              placeholder="Encuentra lo que buscas..." 
+              placeholder="¿Qué estás buscando hoy?" 
               className="w-full pl-11 pr-4 py-3 bg-slate-100/50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:bg-white transition-all text-sm font-medium" 
               style={{'--tw-ring-color': colorP} as any}
               value={searchTerm} 
@@ -297,21 +296,21 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* 🦶 FOOTER SLIM & MINIMALISTA */}
+      {/* 🦶 FOOTER SLIM, MINIMALISTA Y COMPACTO */}
       <footer className="text-white mt-12 py-8 border-t border-white/5" style={{backgroundColor: colorS}}>
         <div className="max-w-6xl mx-auto px-6">
            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-              {/* Marca */}
+              {/* Branding */}
               <div className="flex items-center gap-3">
                  <div className="p-2 rounded-xl shadow-lg" style={{backgroundColor: colorP}}>
                    {config.logoUrl ? (
-                     <img src={config.logoUrl} className="w-5 h-5 object-contain brightness-0 invert" alt="logo" />
+                     <img src={config.logoUrl} className="w-6 h-6 object-contain brightness-0 invert" alt="logo" />
                    ) : (
-                     <Citrus className="w-5 h-5 text-white" />
+                     <Citrus className="w-6 h-6 text-white" />
                    )}
                  </div>
                  <div className="flex flex-col">
-                    <span className="font-black text-lg tracking-tighter uppercase leading-none">{config.nombreComercial || config.code}</span>
+                    <span className="font-black text-xl tracking-tighter uppercase leading-none">{config.nombreComercial || config.code}</span>
                     <p className="text-[9px] text-slate-400 font-medium max-w-xs mt-1 leading-relaxed">
                       {config.footer_description}
                     </p>
@@ -333,9 +332,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                    >
                       <MessageCircle className="w-4 h-4 fill-white/20"/> {config.whatsappNumbers?.split(',')[0] || 'Chatear Ahora'}
                    </a>
-                   <div className="flex gap-4 pr-1">
-                      {config.facebook_url && <a href={config.facebook_url} target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><Facebook className="w-4 h-4"/></a>}
-                      {config.instagram_url && <a href={config.instagram_url} target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><Instagram className="w-4 h-4"/></a>}
+                   <div className="flex items-center gap-2 text-slate-500 pr-1">
+                      <Smartphone className="w-3.5 h-3.5" style={{color: colorP}} />
+                      <span className="text-xs font-bold tracking-widest">{config.whatsappNumbers?.split(',')[0] || '51975615244'}</span>
                    </div>
                  </div>
               </div>
@@ -344,7 +343,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
            {/* Créditos Slim */}
            <div className="mt-8 pt-6 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
               <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.3em]">
-                &copy; 2025 {config.nombreComercial || config.code}.
+                &copy; 2025 {config.nombreComercial || config.code}. Reservados todos los derechos.
               </p>
               <div className="flex items-center gap-8">
                  <div className="flex items-center gap-1.5 text-slate-500">
@@ -381,16 +380,16 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                 <div className="p-6 rounded-2xl flex items-center justify-between" style={{backgroundColor: `${colorP}10`}}>
                   <p className="text-4xl font-black" style={{color: colorP}}>S/ {selectedProduct.precio.toFixed(2)}</p>
                   <div className="text-right">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">En Stock</p>
-                    <p className="text-xs font-bold text-slate-900">{selectedProduct.stock} unidades</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Estado</p>
+                    <p className="text-xs font-bold text-slate-900">Disponible</p>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 text-xs text-slate-600 font-medium">
-                    <ShieldCheck className="w-4 h-4 text-emerald-500"/> Registro: {selectedProduct.registro_sanitario || 'Vigente'}
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500"/> Garantía de Calidad
                   </div>
                   <div className="flex items-center gap-3 text-xs text-slate-600 font-medium">
-                    <MapPin className="w-4 h-4 text-blue-500"/> Sucursal: {config.nombreComercial}
+                    <MapPin className="w-4 h-4 text-blue-500"/> Punto de venta: {config.nombreComercial}
                   </div>
                 </div>
                 <button 
@@ -435,6 +434,12 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                   </div>
                 </div>
               ))}
+              {cart.length === 0 && (
+                <div className="h-full flex flex-col items-center justify-center opacity-30 text-slate-300">
+                  <ShoppingCart className="w-20 h-20 mb-4" />
+                  <p className="font-black uppercase tracking-widest text-xs">Tu carrito está vacío</p>
+                </div>
+              )}
             </div>
 
             {cart.length > 0 && (
@@ -453,6 +458,16 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {checkoutStep === 'success' && (
+        <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
+           <div className="w-32 h-32 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-8 shadow-xl shadow-emerald-50"><CheckCircle2 className="w-16 h-16"/></div>
+           <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight uppercase">¡Pedido Enviado!</h2>
+           <p className="text-slate-500 font-medium leading-relaxed max-w-sm mb-10">Tu pedido ha sido recibido correctamente. Te contactaremos vía WhatsApp para confirmar los detalles.</p>
+           <button onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setCart([]); }} className="w-full max-w-xs py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all">Volver al catálogo</button>
         </div>
       )}
     </div>
