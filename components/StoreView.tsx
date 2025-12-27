@@ -4,7 +4,7 @@ import {
   ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, 
   Loader2, Citrus, Plus, Minus, Info, CheckCircle2, MapPin, Truck, 
   CreditCard, Upload, MessageCircle, Instagram, Facebook, ShieldCheck, 
-  Smartphone, Star, HeartPulse
+  Smartphone, Star, HeartPulse, Rocket
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -64,15 +64,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             finalDomain.push(['categ_id', 'child_of', cats[0].id]);
           }
         }
-        // Intentar obtener con campos personalizados primero
         data = await client.searchRead(session.uid, session.apiKey, 'product.product', finalDomain, [...coreFields, ...extraFields], { limit: 500, context });
       } catch (e: any) {
-        // Fallback si fallan los campos personalizados o el dominio complejo
         const errorMessage = e.message || '';
         const isInvalidField = errorMessage.includes('Invalid field') || errorMessage.includes('ValueError');
-        
         console.debug(isInvalidField ? "Odoo no cuenta con campos médicos personalizados. Usando campos estándar." : "Reintentando carga básica...", e);
-        
         data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], coreFields, { limit: 500, context });
       }
 
@@ -167,7 +163,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       try {
         const partners = await odoo.searchRead(session.uid, session.apiKey, 'res.partner', 
           [['mobile', '=', customerData.telefono]], ['id'], { limit: 1, context });
-        
         if (partners && partners.length > 0) {
           odooPartnerId = partners[0].id;
         } else {
@@ -322,114 +317,80 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* 🦶 FOOTER PREMIUM TOTALMENTE EDITABLE */}
-      <footer className="bg-slate-900 text-white mt-20 pt-20 pb-10">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16">
-           {/* Col 1: Marca & Redes */}
-           <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                 <div className="p-2.5 bg-brand-500 rounded-2xl shadow-lg shadow-brand-500/20">
+      {/* 🦶 FOOTER COMPACTO Y ELEGANTE */}
+      <footer className="bg-[#0F172A] text-white mt-12 py-10">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-10">
+           {/* Col 1: Marca & Logo */}
+           <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                 <div className="p-2 bg-brand-500 rounded-xl shadow-lg">
                    {config.logoUrl ? (
-                     <img src={config.logoUrl} className="w-8 h-8 object-contain brightness-0 invert" alt="logo" />
+                     <img src={config.logoUrl} className="w-6 h-6 object-contain brightness-0 invert" alt="logo" />
                    ) : (
-                     <Citrus className="w-8 h-8 text-white" />
+                     <Citrus className="w-6 h-6 text-white" />
                    )}
                  </div>
-                 <span className="font-black text-2xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
+                 <span className="font-black text-xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
               </div>
-              <p className="text-sm text-slate-400 leading-relaxed font-medium">
+              <p className="text-xs text-slate-400 leading-relaxed font-medium max-w-sm">
                 {config.footer_description}
               </p>
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-3 pt-2">
                 {config.facebook_url && (
-                  <a href={config.facebook_url} target="_blank" rel="noreferrer" className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-brand-500 hover:border-brand-500 transition-all transform hover:-translate-y-1">
-                    <Facebook className="w-5 h-5 fill-white/10"/>
+                  <a href={config.facebook_url} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-brand-500 transition-all">
+                    <Facebook className="w-4 h-4 fill-white/10"/>
                   </a>
                 )}
                 {config.instagram_url && (
-                  <a href={config.instagram_url} target="_blank" rel="noreferrer" className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-brand-500 hover:border-brand-500 transition-all transform hover:-translate-y-1">
-                    <Instagram className="w-5 h-5"/>
+                  <a href={config.instagram_url} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-brand-500 transition-all">
+                    <Instagram className="w-4 h-4"/>
                   </a>
                 )}
-                <a href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || ''}`} className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-brand-500 hover:border-brand-500 transition-all transform hover:-translate-y-1">
-                  <MessageCircle className="w-5 h-5 fill-white/10"/>
-                </a>
               </div>
            </div>
 
-           {/* Col 2: Pagos y Garantía (Iconos mejorados) */}
-           <div className="space-y-8">
+           {/* Col 2: Soporte al Cliente */}
+           <div className="space-y-4 md:text-right md:flex md:flex-col md:items-end">
               <div>
-                <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 mb-6 flex items-center gap-2">
-                   <div className="w-1 h-3 bg-brand-500 rounded-full"></div>
-                   Métodos de Pago
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 flex items-center gap-2 md:justify-end">
+                   Soporte al Cliente
+                   <div className="w-1 h-3 bg-brand-500 rounded-full hidden md:block"></div>
                 </h4>
-                <div className="flex flex-wrap gap-4">
-                   <div className="h-14 w-20 bg-white rounded-xl flex items-center justify-center border border-white/5 hover:border-purple-500/50 transition-all cursor-help relative group" title="Yape">
-                      <div className="absolute inset-0 bg-purple-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      <img src="https://logodownload.org/wp-content/uploads/2021/01/yape-logo.png" className="h-8 object-contain grayscale group-hover:grayscale-0 transition-all" alt="yape" />
-                   </div>
-                   <div className="h-14 w-20 bg-white rounded-xl flex items-center justify-center border border-white/5 hover:border-cyan-500/50 transition-all cursor-help relative group" title="Plin">
-                      <div className="absolute inset-0 bg-cyan-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      <img src="https://logodownload.org/wp-content/uploads/2021/01/plin-logo.png" className="h-6 object-contain grayscale group-hover:grayscale-0 transition-all" alt="plin" />
-                   </div>
-                   <div className="h-14 w-20 bg-white rounded-xl flex items-center justify-center border border-white/5 hover:border-blue-500/50 transition-all cursor-help relative group" title="Visa">
-                      <div className="absolute inset-0 bg-blue-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      <img src="https://upload.wikimedia.org/wikipedia/commons/d/d6/Visa_2021.svg" className="h-4 object-contain grayscale group-hover:grayscale-0 transition-all" alt="visa" />
-                   </div>
-                </div>
+                <p className="text-xs text-slate-400 font-medium leading-relaxed mb-4">
+                  {config.support_text}
+                </p>
               </div>
               
-              <div className="pt-8 border-t border-white/5">
-                 <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 mb-6 flex items-center gap-2">
-                   <div className="w-1 h-3 bg-emerald-500 rounded-full"></div>
-                   Garantía de Calidad
-                 </h4>
-                 <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5 group hover:border-emerald-500/30 transition-all">
-                    <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl group-hover:scale-110 transition-transform">
-                       <HeartPulse className="w-6 h-6" />
-                    </div>
-                    <p className="text-[11px] text-slate-300 font-bold leading-relaxed">
-                      {config.quality_text}
-                    </p>
-                 </div>
-              </div>
-           </div>
-
-           {/* Col 3: Soporte */}
-           <div className="space-y-6">
-              <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 mb-6 flex items-center gap-2">
-                 <div className="w-1 h-3 bg-brand-500 rounded-full"></div>
-                 Soporte al Cliente
-              </h4>
-              <p className="text-sm text-slate-400 font-medium leading-relaxed">
-                {config.support_text}
-              </p>
               <a 
                 href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || ''}`} 
-                className="inline-flex w-full items-center justify-center gap-4 bg-emerald-500 text-white px-8 py-5 rounded-2xl font-black text-xs uppercase shadow-2xl hover:bg-emerald-600 hover:scale-[1.02] transition-all transform active:scale-95"
+                className="inline-flex items-center justify-center gap-3 bg-[#10B981] text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl hover:bg-emerald-600 transition-all active:scale-95"
               >
-                 <MessageCircle className="w-5 h-5 fill-white/20"/> Chatear por WhatsApp
+                 <MessageCircle className="w-4 h-4 fill-white/20"/> Chatear por WhatsApp
               </a>
-              <div className="flex items-center justify-center gap-3 text-slate-500 py-4 border-t border-white/5 mt-4">
-                <Smartphone className="w-5 h-5 text-brand-500" />
-                <span className="text-sm font-black tracking-[0.2em]">{config.whatsappNumbers?.split(',')[0]}</span>
+              
+              <div className="flex items-center gap-2 text-slate-500 pt-2">
+                <Smartphone className="w-4 h-4 text-brand-500" />
+                <span className="text-xs font-black tracking-widest">{config.whatsappNumbers?.split(',')[0]}</span>
               </div>
            </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-6 mt-20 pt-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-8">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em]">
-            &copy; 2025 {config.nombreComercial || config.code}. Todos los derechos reservados.
+        {/* Bottom Bar: Certificada & GaorSystem */}
+        <div className="max-w-7xl mx-auto px-6 mt-10 pt-6 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
+          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.3em]">
+            &copy; 2025 {config.nombreComercial || config.code}.
           </p>
           <div className="flex items-center gap-8">
-             <div className="flex items-center gap-2 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all cursor-default">
-               <Star className="w-4 h-4 fill-brand-500 text-brand-500" />
-               <span className="text-[10px] font-black uppercase tracking-[0.2em]">Tienda Certificada</span>
+             <div className="flex items-center gap-2 text-slate-500">
+               <Star className="w-3.5 h-3.5 fill-brand-500 text-brand-500" />
+               <span className="text-[9px] font-black uppercase tracking-[0.2em]">Tienda Certificada</span>
              </div>
-             <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
-               Powered by <span className="text-white">LEMON BI</span>
-             </p>
+             <a href="https://gaorsystem.vercel.app/" target="_blank" rel="noreferrer" className="flex items-center gap-2 group">
+                <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest group-hover:text-slate-400 transition-colors">
+                  Powered by <span className="text-white">GaorSystem</span>
+                </span>
+                <Rocket className="w-3 h-3 text-violet-500 group-hover:scale-110 transition-transform" />
+             </a>
           </div>
         </div>
       </footer>
@@ -680,7 +641,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
-      {/* SUCCESS SCREEN */}
       {checkoutStep === 'success' && (
         <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
            <div className="relative mb-12">
