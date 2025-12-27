@@ -16,12 +16,12 @@ export const changeAdminPassword = (newPassword: string) => {
 
 const mapRowToConfig = (row: any): ClientConfig => ({
     code: row.codigo_acceso,
-    url: row.odoo_url,
-    db: row.odoo_db,
-    username: row.odoo_username,
-    apiKey: row.odoo_api_key,
-    companyFilter: row.filtro_compania,
-    whatsappNumbers: row.whatsapp_numeros,
+    url: row.odoo_url || '',
+    db: row.odoo_db || '',
+    username: row.odoo_username || '',
+    apiKey: row.odoo_api_key || '',
+    companyFilter: row.filtro_compania || 'ALL',
+    whatsappNumbers: row.whatsapp_numeros || '',
     isActive: row.estado ?? true,
     nombreComercial: row.nombre_comercial || row.codigo_acceso,
     logoUrl: row.logo_url || '',
@@ -59,7 +59,7 @@ export const getClients = async (): Promise<ClientConfig[]> => {
         return [];
     }
 
-    return data.map(mapRowToConfig);
+    return (data || []).map(mapRowToConfig);
 };
 
 export const getClientByCode = async (code: string): Promise<ClientConfig | null> => {
@@ -123,8 +123,15 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
     } catch (err: any) {
         console.error('Error saving client:', err);
         let msg = 'Error desconocido';
+        
         if (err.message) msg = err.message;
         if (err.details) msg += ` (${err.details})`;
+        if (err.hint) msg += ` Hint: ${err.hint}`;
+
+        // Manejo específico del error de caché de Supabase
+        if (msg.toLowerCase().includes('schema cache') || msg.toLowerCase().includes('column')) {
+            msg = "Error de estructura en base de datos. Por favor, ejecute el script SQL de reparación en el panel de Supabase y recargue la página.";
+        }
         
         return { 
             success: false, 
