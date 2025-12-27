@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, 
-  Citrus, Plus, Minus, Info, MapPin, 
-  Star, Rocket, MessageCircle
+  Loader2, Citrus, Plus, Minus, Info, CheckCircle2, MapPin, Truck, 
+  CreditCard, Upload, MessageCircle, ShieldCheck, 
+  Smartphone, Star, Rocket, Facebook, Instagram
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -134,7 +135,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
   const handleSubmitOrder = async () => {
     if (!paymentMethod || !comprobante) {
-      alert("Completa el pago adjuntando tu comprobante.");
+      alert("Completa el pago.");
       return;
     }
     setIsSubmitting(true);
@@ -167,8 +168,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         } else {
           odooPartnerId = await odoo.create(session.uid, session.apiKey, 'res.partner', {
             name: customerData.nombre, mobile: customerData.telefono,
-            street: customerData.metodoEntrega === 'delivery' ? customerData.direccion : 'Recojo en Tienda Online',
-            comment: `Pedido Online LemonBI #${supaOrder.id}`
+            street: customerData.metodoEntrega === 'delivery' ? customerData.direccion : 'Recojo en Sede',
+            comment: 'Pedido LemonBI'
           }, context);
         }
       } catch (err) { console.warn(err); }
@@ -176,13 +177,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       await odoo.create(session.uid, session.apiKey, 'sale.order', {
         partner_id: odooPartnerId, 
         order_line: cart.map(item => [0, 0, { product_id: item.producto.id, product_uom_qty: item.cantidad, price_unit: item.producto.precio }]),
-        note: `🛒 WEB #${supaOrder.id} - ${customerData.nombre}\n🖼️ Comprobante: ${publicUrl}`,
+        note: `🛒 WEB #${supaOrder.id} - ${customerData.nombre}`,
         company_id: session.companyId
       }, context);
 
       setCheckoutStep('success');
       setCart([]);
-    } catch (e) { alert("Error al procesar el pedido."); } finally { setIsSubmitting(false); }
+    } catch (e) { alert("Error al procesar."); } finally { setIsSubmitting(false); }
   };
 
   if (!config || !session) return null;
@@ -198,9 +199,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         className="fixed bottom-8 right-8 z-[60] group flex items-center gap-3"
       >
         <div className="bg-white px-4 py-2 rounded-2xl shadow-xl border border-slate-100 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 pointer-events-none">
-          <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest whitespace-nowrap">Chatea con nosotros</p>
+          <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest whitespace-nowrap">¿Necesitas ayuda?</p>
         </div>
-        <div className="w-16 h-16 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all" style={{backgroundColor: '#10B981'}}>
+        <div className="w-16 h-16 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all animate-bounce-slow" style={{backgroundColor: '#10B981'}}>
            <MessageCircle className="w-8 h-8 fill-white/20" />
            <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-20"></div>
         </div>
@@ -209,9 +210,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       {/* 🔝 BANNER SUPERIOR */}
       <div className="text-white py-2 text-center overflow-hidden" style={{backgroundColor: colorS}}>
         <div className="animate-pulse flex items-center justify-center gap-4">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">🚚 Envíos seguros a todo el país</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em]">🚚 Envíos seguros a domicilio</span>
           <div className="h-1 w-1 bg-white/30 rounded-full"></div>
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">🔒 Compra 100% Protegida</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em]">🔒 Pagos Garantizados</span>
         </div>
       </div>
 
@@ -245,7 +246,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
             <input 
               type="text" 
-              placeholder="¿Qué estás buscando hoy?" 
+              placeholder="Encuentra lo que buscas..." 
               className="w-full pl-11 pr-4 py-3 bg-slate-100/50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:bg-white transition-all text-sm font-medium" 
               style={{'--tw-ring-color': colorP} as any}
               value={searchTerm} 
@@ -296,21 +297,21 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* 🦶 FOOTER SLIM, MINIMALISTA Y COMPACTO */}
+      {/* 🦶 FOOTER SLIM & MINIMALISTA */}
       <footer className="text-white mt-12 py-8 border-t border-white/5" style={{backgroundColor: colorS}}>
         <div className="max-w-6xl mx-auto px-6">
            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-              {/* Branding */}
+              {/* Marca */}
               <div className="flex items-center gap-3">
                  <div className="p-2 rounded-xl shadow-lg" style={{backgroundColor: colorP}}>
                    {config.logoUrl ? (
-                     <img src={config.logoUrl} className="w-6 h-6 object-contain brightness-0 invert" alt="logo" />
+                     <img src={config.logoUrl} className="w-5 h-5 object-contain brightness-0 invert" alt="logo" />
                    ) : (
-                     <Citrus className="w-6 h-6 text-white" />
+                     <Citrus className="w-5 h-5 text-white" />
                    )}
                  </div>
                  <div className="flex flex-col">
-                    <span className="font-black text-xl tracking-tighter uppercase leading-none">{config.nombreComercial || config.code}</span>
+                    <span className="font-black text-lg tracking-tighter uppercase leading-none">{config.nombreComercial || config.code}</span>
                     <p className="text-[9px] text-slate-400 font-medium max-w-xs mt-1 leading-relaxed">
                       {config.footer_description}
                     </p>
@@ -332,8 +333,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                    >
                       <MessageCircle className="w-4 h-4 fill-white/20"/> {config.whatsappNumbers?.split(',')[0] || 'Chatear Ahora'}
                    </a>
-                   <div className="flex items-center gap-2 text-slate-500 pr-1 text-xs">
-                      51975615244
+                   <div className="flex gap-4 pr-1">
+                      {config.facebook_url && <a href={config.facebook_url} target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><Facebook className="w-4 h-4"/></a>}
+                      {config.instagram_url && <a href={config.instagram_url} target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><Instagram className="w-4 h-4"/></a>}
                    </div>
                  </div>
               </div>
@@ -342,7 +344,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
            {/* Créditos Slim */}
            <div className="mt-8 pt-6 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
               <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.3em]">
-                &copy; 2025 {config.nombreComercial || config.code}. Reservados todos los derechos.
+                &copy; 2025 {config.nombreComercial || config.code}.
               </p>
               <div className="flex items-center gap-8">
                  <div className="flex items-center gap-1.5 text-slate-500">
@@ -360,7 +362,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       </footer>
 
-      {/* MODALES Y CARRITO */}
+      {/* MODALES Y CARRITO (SIMPLIFICADOS) */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setSelectedProduct(null)}></div>
@@ -379,11 +381,14 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                 <div className="p-6 rounded-2xl flex items-center justify-between" style={{backgroundColor: `${colorP}10`}}>
                   <p className="text-4xl font-black" style={{color: colorP}}>S/ {selectedProduct.precio.toFixed(2)}</p>
                   <div className="text-right">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Estado</p>
-                    <p className="text-xs font-bold text-slate-900">Disponible</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">En Stock</p>
+                    <p className="text-xs font-bold text-slate-900">{selectedProduct.stock} unidades</p>
                   </div>
                 </div>
                 <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-xs text-slate-600 font-medium">
+                    <ShieldCheck className="w-4 h-4 text-emerald-500"/> Registro: {selectedProduct.registro_sanitario || 'Vigente'}
+                  </div>
                   <div className="flex items-center gap-3 text-xs text-slate-600 font-medium">
                     <MapPin className="w-4 h-4 text-blue-500"/> Sucursal: {config.nombreComercial}
                   </div>
@@ -411,97 +416,43 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
-              {checkoutStep === 'catalog' ? (
-                cart.map(item => (
-                  <div key={item.producto.id} className="flex gap-4 items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-                    <div className="w-16 h-16 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
-                      {item.producto.imagen ? <img src={`data:image/png;base64,${item.producto.imagen}`} className="w-full h-full object-cover" alt=""/> : <Package className="w-6 h-6 text-slate-200"/>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-[11px] font-bold text-slate-800 line-clamp-1">{item.producto.nombre}</h4>
-                      <p className="text-sm font-black mt-0.5" style={{color: colorP}}>S/ {item.producto.precio.toFixed(2)}</p>
-                      <div className="flex items-center gap-3 mt-2">
-                        <div className="flex items-center bg-slate-50 rounded-lg p-0.5 border">
-                          <button onClick={() => updateQuantity(item.producto.id, -1)} className="p-1 bg-white rounded shadow-sm"><Minus className="w-2.5 h-2.5"/></button>
-                          <span className="text-xs font-bold px-3">{item.cantidad}</span>
-                          <button onClick={() => updateQuantity(item.producto.id, 1)} className="p-1 bg-white rounded shadow-sm"><Plus className="w-2.5 h-2.5"/></button>
-                        </div>
-                        <button onClick={() => removeFromCart(item.producto.id)} className="text-xs font-bold text-red-400 hover:text-red-600 transition-colors ml-auto">Quitar</button>
+              {cart.map(item => (
+                <div key={item.producto.id} className="flex gap-4 items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                  <div className="w-16 h-16 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+                    {item.producto.imagen ? <img src={`data:image/png;base64,${item.producto.imagen}`} className="w-full h-full object-cover" alt=""/> : <Package className="w-6 h-6 text-slate-200"/>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-[11px] font-bold text-slate-800 line-clamp-1">{item.producto.nombre}</h4>
+                    <p className="text-sm font-black mt-0.5" style={{color: colorP}}>S/ {item.producto.precio.toFixed(2)}</p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <div className="flex items-center bg-slate-50 rounded-lg p-0.5 border">
+                        <button onClick={() => updateQuantity(item.producto.id, -1)} className="p-1 bg-white rounded shadow-sm"><Minus className="w-2.5 h-2.5"/></button>
+                        <span className="text-xs font-bold px-3">{item.cantidad}</span>
+                        <button onClick={() => updateQuantity(item.producto.id, 1)} className="p-1 bg-white rounded shadow-sm"><Plus className="w-2.5 h-2.5"/></button>
                       </div>
+                      <button onClick={() => removeFromCart(item.producto.id)} className="text-xs font-bold text-red-400 hover:text-red-600 transition-colors ml-auto">Quitar</button>
                     </div>
                   </div>
-                ))
-              ) : checkoutStep === 'shipping' ? (
-                <div className="space-y-4 p-2 animate-in slide-in-from-bottom-5">
-                   <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest mb-4">Datos de Entrega</h3>
-                   <input type="text" placeholder="Nombre Completo" className="w-full p-4 bg-white border rounded-xl text-sm" value={customerData.nombre} onChange={e => setCustomerData({...customerData, nombre: e.target.value})} />
-                   <input type="tel" placeholder="Teléfono" className="w-full p-4 bg-white border rounded-xl text-sm" value={customerData.telefono} onChange={e => setCustomerData({...customerData, telefono: e.target.value})} />
-                   <div className="flex gap-2">
-                     <button onClick={() => setCustomerData({...customerData, metodoEntrega: 'delivery'})} className={`flex-1 p-3 border rounded-xl text-[10px] font-black uppercase ${customerData.metodoEntrega === 'delivery' ? 'bg-slate-900 text-white' : 'bg-slate-50'}`}>Delivery</button>
-                     <button onClick={() => setCustomerData({...customerData, metodoEntrega: 'pickup'})} className={`flex-1 p-3 border rounded-xl text-[10px] font-black uppercase ${customerData.metodoEntrega === 'pickup' ? 'bg-slate-900 text-white' : 'bg-slate-50'}`}>Recojo</button>
-                   </div>
-                   {customerData.metodoEntrega === 'delivery' ? (
-                     <input type="text" placeholder="Dirección de Envío" className="w-full p-4 bg-white border rounded-xl text-sm" value={customerData.direccion} onChange={e => setCustomerData({...customerData, direccion: e.target.value})} />
-                   ) : (
-                     <select className="w-full p-4 bg-white border rounded-xl text-sm" value={customerData.sedeId} onChange={e => setCustomerData({...customerData, sedeId: e.target.value})}>
-                       <option value="">Selecciona Sede</option>
-                       {config.sedes_recojo?.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                     </select>
-                   )}
-                   <textarea placeholder="Notas adicionales..." className="w-full p-4 bg-white border rounded-xl text-sm h-24" value={customerData.notas} onChange={e => setCustomerData({...customerData, notas: e.target.value})}></textarea>
                 </div>
-              ) : (
-                <div className="space-y-4 p-2 animate-in slide-in-from-bottom-5">
-                   <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest mb-4">Método de Pago</h3>
-                   <div className="grid grid-cols-1 gap-3">
-                     {['yape', 'plin', 'transferencia'].map(method => (
-                       <button 
-                         key={method} 
-                         onClick={() => setPaymentMethod(method as any)}
-                         className={`p-4 border rounded-xl text-left uppercase font-black text-[10px] transition-all ${paymentMethod === method ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-200' : 'bg-white'}`}
-                       >
-                         {method}
-                       </button>
-                     ))}
-                   </div>
-                   <div className="mt-4 p-8 border-2 border-dashed rounded-2xl text-center relative bg-slate-50">
-                      <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setComprobante(e.target.files?.[0] || null)} />
-                      {comprobante ? <span className="text-emerald-600 font-bold text-xs">{comprobante.name}</span> : <span className="text-slate-400 font-bold text-xs uppercase">Sube tu comprobante</span>}
-                   </div>
-                </div>
-              )}
+              ))}
             </div>
 
             {cart.length > 0 && (
               <div className="p-8 border-t border-slate-100 space-y-5 bg-white">
                 <div className="flex justify-between items-end">
-                  <span className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Total</span>
+                  <span className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Total del Pedido</span>
                   <span className="text-3xl font-black text-slate-900 leading-none">S/ {cartTotal.toFixed(2)}</span>
                 </div>
                 <button 
-                  onClick={() => {
-                    if (checkoutStep === 'catalog') setCheckoutStep('shipping');
-                    else if (checkoutStep === 'shipping') setCheckoutStep('payment');
-                    else handleSubmitOrder();
-                  }}
-                  disabled={isSubmitting}
+                  onClick={() => checkoutStep === 'catalog' ? setCheckoutStep('shipping') : handleSubmitOrder()} 
                   className="w-full py-5 text-white rounded-2xl font-black shadow-2xl transition-all active:scale-95 uppercase tracking-widest text-[11px]" 
                   style={{backgroundColor: colorA}}
                 >
-                  {isSubmitting ? 'Procesando...' : checkoutStep === 'catalog' ? 'Siguiente' : checkoutStep === 'shipping' ? 'Ir al Pago' : 'Finalizar Pedido'}
+                  {checkoutStep === 'catalog' ? 'Continuar Compra' : 'Confirmar Pedido'}
                 </button>
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {checkoutStep === 'success' && (
-        <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
-           <div className="w-32 h-32 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-8 shadow-xl shadow-emerald-50"><Star className="w-16 h-16"/></div>
-           <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight uppercase">¡Pedido Enviado!</h2>
-           <p className="text-slate-500 font-medium leading-relaxed max-w-sm mb-10">Tu pedido ha sido recibido. Te contactaremos vía WhatsApp pronto.</p>
-           <button onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setCart([]); }} className="w-full max-w-xs py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all">Cerrar</button>
         </div>
       )}
     </div>
