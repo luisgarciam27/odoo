@@ -3,8 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, 
   Loader2, Citrus, Plus, Minus, Info, CheckCircle2, MapPin, Truck, 
-  CreditCard, Upload, MessageCircle, Instagram, Facebook, ShieldCheck, 
-  Smartphone, Star, HeartPulse, Rocket
+  CreditCard, Upload, MessageCircle, ShieldCheck, 
+  Smartphone, Star, Rocket
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -199,7 +199,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       
       {/* 💚 WHATSAPP FLOTANTE PREMIUM */}
       <a 
-        href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || ''}`}
+        href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || '51975615244'}`}
         target="_blank"
         rel="noopener noreferrer"
         className="fixed bottom-8 right-8 z-[60] group flex items-center gap-3"
@@ -317,81 +317,62 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* 🦶 FOOTER COMPACTO Y ELEGANTE */}
-      <footer className="bg-[#0F172A] text-white mt-12 py-10">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-10">
-           {/* Col 1: Marca & Logo */}
-           <div className="space-y-4">
+      {/* 🦶 FOOTER COMPACTO, MINIMALISTA Y SLIM */}
+      <footer className="bg-[#0F172A] text-white mt-12 py-8 border-t border-white/5">
+        <div className="max-w-5xl mx-auto px-6">
+           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+              {/* Branding (Nombre y Logo) */}
               <div className="flex items-center gap-3">
                  <div className="p-2 bg-brand-500 rounded-xl shadow-lg">
                    {config.logoUrl ? (
-                     <img src={config.logoUrl} className="w-6 h-6 object-contain brightness-0 invert" alt="logo" />
+                     <img src={config.logoUrl} className="w-5 h-5 object-contain brightness-0 invert" alt="logo" />
                    ) : (
-                     <Citrus className="w-6 h-6 text-white" />
+                     <Citrus className="w-5 h-5 text-white" />
                    )}
                  </div>
-                 <span className="font-black text-xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
+                 <span className="font-black text-lg tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed font-medium max-w-sm">
-                {config.footer_description}
+
+              {/* Soporte al Cliente */}
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8">
+                 <div className="space-y-0.5">
+                   <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Soporte al Cliente</h4>
+                   <p className="text-xs text-slate-400 font-medium">¿Tienes dudas con tu pedido? Escríbenos.</p>
+                 </div>
+                 
+                 <div className="flex flex-col items-start md:items-end gap-1.5">
+                   <a 
+                     href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || '51975615244'}`} 
+                     className="inline-flex items-center justify-center gap-2 bg-[#10B981] text-white px-5 py-3 rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-emerald-600 transition-all active:scale-95"
+                   >
+                      <MessageCircle className="w-4 h-4 fill-white/20"/> Chatear por WhatsApp
+                   </a>
+                   <div className="flex items-center gap-2 text-slate-500 pr-1">
+                     <Smartphone className="w-3.5 h-3.5 text-brand-500" />
+                     <span className="text-xs font-bold tracking-widest">{config.whatsappNumbers?.split(',')[0] || '51975615244'}</span>
+                   </div>
+                 </div>
+              </div>
+           </div>
+
+           {/* Créditos y Certificación */}
+           <div className="mt-8 pt-6 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
+              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.3em]">
+                &copy; 2025 {config.nombreComercial || config.code}.
               </p>
-              <div className="flex gap-3 pt-2">
-                {config.facebook_url && (
-                  <a href={config.facebook_url} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-brand-500 transition-all">
-                    <Facebook className="w-4 h-4 fill-white/10"/>
-                  </a>
-                )}
-                {config.instagram_url && (
-                  <a href={config.instagram_url} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-brand-500 transition-all">
-                    <Instagram className="w-4 h-4"/>
-                  </a>
-                )}
+              <div className="flex items-center gap-8">
+                 <div className="flex items-center gap-1.5 text-slate-500">
+                   <Star className="w-3 h-3 fill-brand-500 text-brand-500" />
+                   <span className="text-[9px] font-black uppercase tracking-[0.2em]">Tienda Certificada</span>
+                 </div>
+                 <a href="https://gaorsystem.vercel.app/" target="_blank" rel="noreferrer" className="flex items-center gap-2 group">
+                    <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest group-hover:text-slate-400 transition-colors">
+                      Powered by <span className="text-white">GaorSystem</span>
+                    </span>
+                    <Rocket className="w-3 h-3 text-violet-500 group-hover:translate-x-0.5 transition-transform" />
+                 </a>
               </div>
            </div>
-
-           {/* Col 2: Soporte al Cliente */}
-           <div className="space-y-4 md:text-right md:flex md:flex-col md:items-end">
-              <div>
-                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 flex items-center gap-2 md:justify-end">
-                   Soporte al Cliente
-                   <div className="w-1 h-3 bg-brand-500 rounded-full hidden md:block"></div>
-                </h4>
-                <p className="text-xs text-slate-400 font-medium leading-relaxed mb-4">
-                  {config.support_text}
-                </p>
-              </div>
-              
-              <a 
-                href={`https://wa.me/${config.whatsappNumbers?.split(',')[0] || ''}`} 
-                className="inline-flex items-center justify-center gap-3 bg-[#10B981] text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl hover:bg-emerald-600 transition-all active:scale-95"
-              >
-                 <MessageCircle className="w-4 h-4 fill-white/20"/> Chatear por WhatsApp
-              </a>
-              
-              <div className="flex items-center gap-2 text-slate-500 pt-2">
-                <Smartphone className="w-4 h-4 text-brand-500" />
-                <span className="text-xs font-black tracking-widest">{config.whatsappNumbers?.split(',')[0]}</span>
-              </div>
-           </div>
-        </div>
-
-        {/* Bottom Bar: Certificada & GaorSystem */}
-        <div className="max-w-7xl mx-auto px-6 mt-10 pt-6 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
-          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.3em]">
-            &copy; 2025 {config.nombreComercial || config.code}.
-          </p>
-          <div className="flex items-center gap-8">
-             <div className="flex items-center gap-2 text-slate-500">
-               <Star className="w-3.5 h-3.5 fill-brand-500 text-brand-500" />
-               <span className="text-[9px] font-black uppercase tracking-[0.2em]">Tienda Certificada</span>
-             </div>
-             <a href="https://gaorsystem.vercel.app/" target="_blank" rel="noreferrer" className="flex items-center gap-2 group">
-                <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest group-hover:text-slate-400 transition-colors">
-                  Powered by <span className="text-white">GaorSystem</span>
-                </span>
-                <Rocket className="w-3 h-3 text-violet-500 group-hover:scale-110 transition-transform" />
-             </a>
-          </div>
         </div>
       </footer>
 
@@ -641,6 +622,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
+      {/* SUCCESS SCREEN */}
       {checkoutStep === 'success' && (
         <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
            <div className="relative mb-12">
@@ -648,7 +630,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
              <div className="w-40 h-40 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center relative shadow-xl shadow-emerald-100"><CheckCircle2 className="w-20 h-20"/></div>
            </div>
            <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">¡Pedido Recibido!</h2>
-           <div className="bg-slate-50 px-8 py-6 rounded-[2.5rem] border border-slate-100 max-sm mb-12"><p className="text-slate-500 font-medium leading-relaxed">Estamos procesando tu pedido. Recibirás una confirmación vía WhatsApp en los próximos minutos.</p></div>
+           <div className="bg-slate-50 px-8 py-6 rounded-[2.5rem] border border-slate-100 max-w-sm mb-12"><p className="text-slate-500 font-medium leading-relaxed">Estamos procesando tu pedido. Recibirás una confirmación vía WhatsApp en los próximos minutos.</p></div>
            <button onClick={() => { setCheckoutStep('catalog'); setIsCartOpen(false); setCart([]); }} className="w-full max-w-xs py-6 bg-slate-900 text-white rounded-[2rem] font-black transition-all active:scale-95 shadow-xl uppercase tracking-widest text-xs">Volver a la Tienda</button>
         </div>
       )}
