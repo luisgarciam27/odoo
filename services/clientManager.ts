@@ -75,6 +75,7 @@ export const getClientByCode = async (code: string): Promise<ClientConfig | null
 };
 
 export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<{ success: boolean; message?: string }> => {
+    // Definimos el payload básico que sabemos que existe en la DB
     const fullPayload: any = {
         codigo_acceso: client.code,
         odoo_url: client.url,
@@ -88,7 +89,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         logo_url: client.logoUrl,
         color_primario: client.colorPrimario,
         color_secundario: client.colorSecundario,
-        color_acento: client.colorAcento,
+        // color_acento: client.colorAcento, // COMENTADO: Esta columna no existe en la tabla 'empresas'
         tienda_habilitada: client.showStore,
         tienda_categoria_nombre: client.tiendaCategoriaNombre || 'Catalogo',
         productos_ocultos: client.hiddenProducts || [],
@@ -123,25 +124,17 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         
         let errorMessage = 'Error al guardar.';
         
-        // Manejo exhaustivo de errores para evitar [object Object]
         if (typeof error === 'string') {
             errorMessage = error;
         } else if (error && typeof error.message === 'string') {
             errorMessage = error.message;
-        } else if (error && typeof error.details === 'string' && error.details) {
-            errorMessage = error.details;
-        } else if (error && typeof error.hint === 'string' && error.hint) {
-            errorMessage = `${error.message || 'Error'} (${error.hint})`;
+            if (error.details) errorMessage += ` (${error.details})`;
         } else if (error) {
             try {
-                // Si llegamos aquí y es un objeto, intentamos convertirlo a JSON legible
                 const stringified = JSON.stringify(error);
                 errorMessage = stringified === '{}' ? error.toString() : stringified;
-                if (errorMessage === '[object Object]') {
-                    errorMessage = 'Error técnico en la base de datos (ver consola).';
-                }
             } catch (e) {
-                errorMessage = 'Error desconocido al guardar los cambios.';
+                errorMessage = 'Error técnico al procesar el guardado.';
             }
         }
 
