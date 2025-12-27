@@ -123,18 +123,25 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         
         let errorMessage = 'Error al guardar.';
         
+        // Manejo exhaustivo de errores para evitar [object Object]
         if (typeof error === 'string') {
             errorMessage = error;
         } else if (error && typeof error.message === 'string') {
             errorMessage = error.message;
         } else if (error && typeof error.details === 'string' && error.details) {
             errorMessage = error.details;
+        } else if (error && typeof error.hint === 'string' && error.hint) {
+            errorMessage = `${error.message || 'Error'} (${error.hint})`;
         } else if (error) {
             try {
-                const stringified = error.toString();
-                errorMessage = stringified === '[object Object]' ? JSON.stringify(error) : stringified;
+                // Si llegamos aquí y es un objeto, intentamos convertirlo a JSON legible
+                const stringified = JSON.stringify(error);
+                errorMessage = stringified === '{}' ? error.toString() : stringified;
+                if (errorMessage === '[object Object]') {
+                    errorMessage = 'Error técnico en la base de datos (ver consola).';
+                }
             } catch (e) {
-                errorMessage = 'Error desconocido al guardar.';
+                errorMessage = 'Error desconocido al guardar los cambios.';
             }
         }
 
