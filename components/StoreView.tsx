@@ -50,8 +50,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const configCategory = (config.tiendaCategoriaNombre || '').trim();
       let data: any[] = [];
 
-      // ESTRATEGIA 1: Búsqueda por categoría específica (Intento inicial)
-      if (configCategory && configCategory.toUpperCase() !== 'TODAS') {
+      // NIVEL 1: Intento por categoría específica (si existe configuración)
+      if (configCategory && configCategory.toUpperCase() !== 'TODAS' && configCategory.toUpperCase() !== 'CATALOGO') {
         try {
           const cats = await client.searchRead(session.uid, session.apiKey, 'product.category', [['name', 'ilike', configCategory]], ['id']);
           if (cats && cats.length > 0) {
@@ -62,12 +62,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             );
           }
         } catch (e) {
-          console.warn("Fallo búsqueda por categoría, reintentando modo general...");
+          console.warn("Fallo por categoría, reintentando carga general...");
         }
       }
 
-      // ESTRATEGIA 2: Si no hay resultados o falló, traer TODO lo que esté marcado para la venta
-      // Importante: Si esto falla, Odoo suele quejarse por restricciones de compañía, por lo que el fallback 3 es vital
+      // NIVEL 2: Carga general de productos para la venta (Fallback principal)
       if (data.length === 0) {
         try {
           data = await client.searchRead(session.uid, session.apiKey, 'product.product', 
@@ -76,8 +75,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             { limit: 500, order: 'image_128 desc, display_name asc' }
           );
         } catch (e) {
-          console.warn("Fallo búsqueda general, intentando modo ultra-permisivo...");
-          // ESTRATEGIA 3: Modo Ultra-Resiliente (Sin filtros, solo lo básico)
+          console.warn("Fallo general, intentando carga sin filtros de venta...");
+          // NIVEL 3: Carga de emergencia (sin filtros)
           data = await client.searchRead(session.uid, session.apiKey, 'product.product', [], fields, { limit: 100 });
         }
       }
@@ -98,7 +97,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       }));
       setProductos(mapped);
     } catch (e) {
-      console.error("Error crítico en catálogo:", e);
+      console.error("Error definitivo cargando productos:", e);
     } finally {
       setLoading(false);
     }
@@ -208,7 +207,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           <div className="py-20 flex flex-col items-center justify-center text-center">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6 text-slate-300"><Package className="w-12 h-12" /></div>
             <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Catálogo Disponible</h3>
-            <p className="text-slate-400 text-sm mt-2 font-medium">No se encontraron productos con el filtro aplicado.</p>
+            <p className="text-slate-400 text-sm mt-2 font-medium">Estamos actualizando nuestra lista de productos.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 animate-in fade-in duration-500">
