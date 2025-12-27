@@ -29,7 +29,6 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     colorSecundario: row.color_secundario || '#1e293b',
     colorAcento: row.color_acento || '#0ea5e9',
     showStore: row.tienda_habilitada ?? true,
-    storeCategories: row.tienda_categorias || '',
     tiendaCategoriaNombre: row.tienda_categoria_nombre || 'Catalogo',
     hiddenProducts: Array.isArray(row.productos_ocultos) ? row.productos_ocultos.map(Number) : [],
     hiddenCategories: Array.isArray(row.categorias_ocultas) ? row.categorias_ocultas : [],
@@ -41,12 +40,12 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     plinQR: row.plin_qr || '',
     sedes_recojo: Array.isArray(row.sedes_recojo) ? row.sedes_recojo : [],
     campos_medicos_visibles: Array.isArray(row.campos_medicos_visibles) ? row.campos_medicos_visibles : ["registro", "laboratorio", "principio"],
-    footer_description: row.footer_description || 'Ofrecemos los mejores productos con la garantía de expertos.',
+    footer_description: row.footer_description || '',
     facebook_url: row.facebook_url || '',
     instagram_url: row.instagram_url || '',
     tiktok_url: row.tiktok_url || '',
-    quality_text: row.quality_text || 'Autorizado por entidades competentes.',
-    support_text: row.support_text || '¿Tienes dudas? Escríbenos.'
+    quality_text: row.quality_text || '',
+    support_text: row.support_text || ''
 });
 
 export const getClients = async (): Promise<ClientConfig[]> => {
@@ -75,7 +74,6 @@ export const getClientByCode = async (code: string): Promise<ClientConfig | null
 };
 
 export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<{ success: boolean; message?: string }> => {
-    // Definimos el payload básico que sabemos que existe en la DB
     const fullPayload: any = {
         codigo_acceso: client.code,
         odoo_url: client.url,
@@ -87,9 +85,9 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         estado: client.isActive,
         nombre_comercial: client.nombreComercial,
         logo_url: client.logoUrl,
-        color_primario: client.colorPrimario,
+        color_primario: client.colorPrimario, 
         color_secundario: client.colorSecundario,
-        // color_acento: client.colorAcento, // COMENTADO: Esta columna no existe en la tabla 'empresas'
+        color_acento: client.colorAcento, 
         tienda_habilitada: client.showStore,
         tienda_categoria_nombre: client.tiendaCategoriaNombre || 'Catalogo',
         productos_ocultos: client.hiddenProducts || [],
@@ -111,34 +109,27 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
     };
 
     try {
+        let error;
         if (isNew) {
-            const { error } = await supabase.from('empresas').insert([fullPayload]);
-            if (error) throw error;
+            const result = await supabase.from('empresas').insert([fullPayload]);
+            error = result.error;
         } else {
-            const { error } = await supabase.from('empresas').update(fullPayload).eq('codigo_acceso', client.code);
-            if (error) throw error;
+            const result = await supabase.from('empresas').update(fullPayload).eq('codigo_acceso', client.code);
+            error = result.error;
         }
+        
+        if (error) throw error;
         return { success: true };
-    } catch (error: any) {
-        console.error('Error saving client:', error);
+    } catch (err: any) {
+        console.error('Error saving client:', err);
+        let msg = 'Error desconocido';
+        if (err.message) msg = err.message;
+        if (err.details) msg += ` (${err.details})`;
         
-        let errorMessage = 'Error al guardar.';
-        
-        if (typeof error === 'string') {
-            errorMessage = error;
-        } else if (error && typeof error.message === 'string') {
-            errorMessage = error.message;
-            if (error.details) errorMessage += ` (${error.details})`;
-        } else if (error) {
-            try {
-                const stringified = JSON.stringify(error);
-                errorMessage = stringified === '{}' ? error.toString() : stringified;
-            } catch (e) {
-                errorMessage = 'Error técnico al procesar el guardado.';
-            }
-        }
-
-        return { success: false, message: errorMessage };
+        return { 
+            success: false, 
+            message: msg === '[object Object]' ? 'Error de conexión con la base de datos' : msg 
+        };
     }
 };
 
