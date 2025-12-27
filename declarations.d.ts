@@ -37,10 +37,13 @@ declare module '@google/genai' {
   }
 }
 
-/* Fix: Simplify xlsx module declaration to avoid property access errors and support namespace/direct usage */
+/* Fix: Mejorar declaración para soportar import * as XLSX y evitar errores de default export runtime */
 declare module 'xlsx' {
+  export const utils: any;
+  export function writeFile(wb: any, filename: string): void;
+  export function read(data: any, options?: any): any;
   const XLSX: any;
-  export = XLSX;
+  export default XLSX;
 }
 
 declare namespace NodeJS {

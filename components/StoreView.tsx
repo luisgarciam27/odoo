@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
-import { supabase } from '../services/supabaseClient';
 
 interface StoreViewProps {
   session: OdooSession;
@@ -35,7 +34,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   });
   const [paymentMethod] = useState<'yape' | 'plin' | 'transferencia' | null>(null);
   const [comprobante] = useState<File | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting] = useState(false);
 
   // Paleta de colores dinámica
   const colorP = config?.colorPrimario || '#84cc16'; 
