@@ -13,7 +13,12 @@ export interface Producto {
   principio_activo?: string;
   principio_activo_id?: number;
   presentacion?: string;
+  uso_sugerido?: string;
+  especie?: string; // Para Veterinaria
+  duracion_sesion?: string; // Para Podología
 }
+
+export type BusinessType = 'pharmacy' | 'veterinary' | 'podiatry' | 'general';
 
 export interface SedeStore {
   id: string;
@@ -54,6 +59,7 @@ export interface ClientConfig {
   tiktok_url?: string;
   quality_text?: string;
   support_text?: string;
+  businessType?: BusinessType;
 }
 
 export interface OdooSession {

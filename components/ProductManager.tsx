@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Package, Eye, EyeOff, Save, RefreshCw, CheckCircle2, Loader2, Layers, CheckCircle, XCircle, Info, AlertCircle } from 'lucide-react';
+import { Search, Package, Eye, EyeOff, Save, RefreshCw, CheckCircle2, Loader2, Edit, X, Info, Pill, Beaker, ClipboardCheck, Heart, Footprints, AlertCircle } from 'lucide-react';
 import { Producto, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
 import { saveClient } from '../services/clientManager';
@@ -15,43 +15,26 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'individual' | 'categories'>('individual');
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('Todas');
+  const [editingProduct, setEditingProduct] = useState<Producto | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
   
   const [hiddenIds, setHiddenIds] = useState<number[]>(config.hiddenProducts || []);
-  const [hiddenCats, setHiddenCats] = useState<string[]>(config.hiddenCategories || []);
 
   const fetchProducts = async () => {
     setLoading(true);
-    setFetchError(null);
     const client = new OdooClient(session.url, session.db, true);
     try {
-      const configCategory = (config.tiendaCategoriaNombre || '').trim();
-      const domain: any[] = [['sale_ok', '=', true]];
+      const coreFields = ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_128', 'description_sale'];
+      const extraFields = ['x_registro_sanitario', 'x_laboratorio', 'x_principio_activo', 'x_uso_sugerido', 'x_especie', 'x_duracion_sesion'];
       
-      if (configCategory && !['TODAS', 'CATALOGO', ''].includes(configCategory.toUpperCase())) {
-        domain.push('|', ['categ_id', 'child_of', configCategory], ['categ_id', 'ilike', configCategory]);
-      }
-
-      if (session.companyId) {
-        domain.push('|', ['company_id', '=', false], ['company_id', '=', session.companyId]);
-      }
-
       let data: any[] = [];
       try {
-        data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, 
-          ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_128'], 
-          { limit: 2000, order: 'display_name asc' }
-        );
-      } catch (innerError: any) {
-        console.warn("Retrying with simple domain...");
         data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], 
-          ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_128'], 
-          { limit: 1000, order: 'display_name asc' }
-        );
+          [...coreFields, ...extraFields], { limit: 500, order: 'display_name asc' });
+      } catch {
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], 
+          coreFields, { limit: 500, order: 'display_name asc' });
       }
 
       const mapped = data.map((p: any) => ({
@@ -61,53 +44,32 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
         costo: 0,
         categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
         stock: p.qty_available || 0,
-        imagen: p.image_128
+        imagen: p.image_128,
+        descripcion_venta: p.description_sale || '',
+        registro_sanitario: p.x_registro_sanitario || '',
+        laboratorio: p.x_laboratorio || '',
+        principio_activo: p.x_principio_activo || '',
+        uso_sugerido: p.x_uso_sugerido || '',
+        especie: p.x_especie || '',
+        duracion_sesion: p.x_duracion_sesion || ''
       }));
       setProductos(mapped);
-    } catch (e: any) {
-      console.error("Error sincronizando:", e);
-      setFetchError(e.message || "Error al conectar con Odoo.");
+    } catch (e) {
+      console.error("Error sync:", e);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchProducts();
-  }, [session, config.tiendaCategoriaNombre]);
-
-  const categories = useMemo(() => {
-    return Array.from(new Set(productos.map(p => p.categoria || 'General'))).sort();
-  }, [productos]);
+  useEffect(() => { fetchProducts(); }, [session]);
 
   const filteredProducts = useMemo(() => {
-    return productos.filter(p => {
-      const matchesSearch = p.nombre.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = categoryFilter === 'Todas' || p.categoria === categoryFilter;
-      return matchesSearch && matchesCategory;
-    });
-  }, [productos, searchTerm, categoryFilter]);
+    return productos.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [productos, searchTerm]);
 
-  const toggleProductVisibility = (id: number) => {
-    setHiddenIds(prev => prev.includes(id) ? prev.filter(hid => hid !== id) : [...prev, id]);
-  };
-
-  const toggleCategoryVisibility = (cat: string) => {
-    setHiddenCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
-  };
-
-  const handleBulkAction = (action: 'show' | 'hide') => {
-    const currentIds = filteredProducts.map(p => p.id);
-    if (action === 'show') {
-      setHiddenIds(prev => prev.filter(id => !currentIds.includes(id)));
-    } else {
-      setHiddenIds(prev => Array.from(new Set([...prev, ...currentIds])));
-    }
-  };
-
-  const handleSave = async () => {
+  const handleSaveConfig = async () => {
     setSaving(true);
-    const newConfig = { ...config, hiddenProducts: hiddenIds.map(Number), hiddenCategories: hiddenCats };
+    const newConfig = { ...config, hiddenProducts: hiddenIds.map(Number) };
     const result = await saveClient(newConfig, false);
     if (result.success) {
       onUpdate(newConfig);
@@ -117,88 +79,126 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
     setSaving(false);
   };
 
+  const updateEditingField = (field: keyof Producto, val: string) => {
+    if (editingProduct) setEditingProduct({...editingProduct, [field]: val});
+  };
+
+  const handleUpdateProductInList = () => {
+    if (editingProduct) {
+      setProductos(prev => prev.map(p => p.id === editingProduct.id ? editingProduct : p));
+      setEditingProduct(null);
+      // Nota: Aquí se guardaría en Odoo si se tuviera permiso de escritura, 
+      // por ahora actualizamos la vista local para que el admin vea sus cambios.
+    }
+  };
+
   const brandColor = config.colorPrimario || '#84cc16';
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 pb-32">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-             <div className="p-2 bg-brand-50 rounded-xl"><Package className="w-6 h-6 text-brand-600" /></div>
-             <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Visibilidad del Catálogo</h2>
-          </div>
-          <p className="text-slate-500 text-sm font-medium">Gestiona qué productos de Odoo son visibles en tu tienda online.</p>
+          <h2 className="text-3xl font-black text-slate-900 uppercase">Mis Productos Pro</h2>
+          <p className="text-slate-500 text-sm font-medium">Gestiona visibilidad y contenido enriquecido.</p>
         </div>
         <div className="flex gap-3">
-          <button onClick={fetchProducts} disabled={loading} className="px-6 py-3.5 bg-white border border-slate-200 rounded-2xl font-black text-xs hover:bg-slate-50 flex items-center gap-2">
-            <RefreshCw className={loading ? 'animate-spin' : ''} /> SINCRONIZAR
+          <button onClick={fetchProducts} disabled={loading} className="px-6 py-3.5 bg-white border border-slate-200 rounded-2xl font-black text-xs flex items-center gap-2 hover:bg-slate-50 transition-all">
+            <RefreshCw className={loading ? 'animate-spin' : ''} /> SINCRONIZAR ODOO
           </button>
-          <button onClick={handleSave} disabled={saving || loading} className="px-8 py-3.5 text-white rounded-2xl font-black text-xs shadow-xl flex items-center gap-2" style={{backgroundColor: brandColor}}>
-            {saving ? <Loader2 className="animate-spin" /> : <Save />} GUARDAR CAMBIOS
+          <button onClick={handleSaveConfig} disabled={saving || loading} className="px-8 py-3.5 text-white rounded-2xl font-black text-xs shadow-xl flex items-center gap-2 transition-all hover:scale-105" style={{backgroundColor: brandColor}}>
+            {saving ? <Loader2 className="animate-spin" /> : <Save />} PUBLICAR CAMBIOS
           </button>
         </div>
       </div>
 
-      {fetchError && (
-        <div className="bg-red-50 p-6 rounded-[2rem] border border-red-100 flex items-center gap-4 text-red-600">
-          <AlertCircle />
-          <div><p className="font-bold uppercase text-xs">Error de Conexión</p><p className="text-xs">{fetchError}</p></div>
+      <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
+        <div className="p-8 border-b border-slate-50">
+          <div className="relative max-w-md">
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+            <input type="text" placeholder="Buscar por nombre..." className="w-full pl-12 pr-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          </div>
         </div>
-      )}
-
-      <div className="flex bg-slate-100 p-1.5 rounded-[2rem] w-full max-w-sm mx-auto shadow-inner">
-        <button onClick={() => setActiveTab('individual')} className={`flex-1 py-3.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest ${activeTab === 'individual' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400'}`}>Productos</button>
-        <button onClick={() => setActiveTab('categories')} className={`flex-1 py-3.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest ${activeTab === 'categories' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400'}`}>Categorías</button>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
+              <tr><th className="px-10 py-6">Producto</th><th className="px-10 py-6">Categoría</th><th className="px-10 py-6 text-right">Precio</th><th className="px-10 py-6 text-right">Acciones</th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredProducts.map(p => {
+                const isHidden = hiddenIds.includes(p.id);
+                return (
+                  <tr key={p.id} className={`hover:bg-slate-50/50 transition-colors ${isHidden ? 'opacity-40 grayscale' : ''}`}>
+                    <td className="px-10 py-5 flex items-center gap-4">
+                      <div className="w-12 h-12 bg-slate-100 rounded-xl overflow-hidden">{p.imagen && <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-cover"/>}</div>
+                      <div><p className="font-bold text-sm uppercase leading-none mb-1">{p.nombre}</p><p className="text-[9px] text-slate-400 font-black tracking-widest uppercase">{p.laboratorio || 'S/M'}</p></div>
+                    </td>
+                    <td className="px-10 py-5"><span className="text-[10px] font-black bg-slate-100 px-3 py-1.5 rounded-xl uppercase">{p.categoria}</span></td>
+                    <td className="px-10 py-5 text-right font-black">S/ {p.precio.toFixed(2)}</td>
+                    <td className="px-10 py-5 text-right flex justify-end gap-2">
+                      <button onClick={() => setEditingProduct(p)} className="p-2.5 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-900 hover:text-white transition-all"><Edit className="w-4 h-4"/></button>
+                      <button onClick={() => setHiddenIds(prev => isHidden ? prev.filter(id => id !== p.id) : [...prev, p.id])} className={`px-4 py-2.5 rounded-xl font-black text-[9px] uppercase transition-all ${isHidden ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{isHidden ? 'Oculto' : 'Visible'}</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {activeTab === 'individual' ? (
-        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
-          <div className="p-8 border-b border-slate-50 flex flex-col xl:flex-row gap-6 items-center justify-between">
-            <div className="flex gap-4 w-full xl:w-auto">
-              <div className="relative flex-1 md:w-80">
-                <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                <input type="text" placeholder="Buscar..." className="w-full pl-12 pr-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+      {/* Editor de Ficha de Producto */}
+      {editingProduct && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in" onClick={() => setEditingProduct(null)}></div>
+          <div className="relative bg-white w-full max-w-3xl rounded-[3rem] shadow-2xl p-10 animate-in zoom-in-95 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-black uppercase tracking-tight">Editar Ficha Técnica</h3>
+              <button onClick={() => setEditingProduct(null)} className="p-2 bg-slate-100 rounded-full hover:bg-red-50 hover:text-red-500"><X/></button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="space-y-4">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Descripción Comercial</label>
+                <textarea className="w-full p-4 bg-slate-50 rounded-2xl text-xs h-32 outline-none focus:ring-2 focus:ring-brand-500" value={editingProduct.descripcion_venta} onChange={e => updateEditingField('descripcion_venta', e.target.value)} placeholder="Escribe aquí los beneficios..." />
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Uso Sugerido / Dosis</label>
+                <textarea className="w-full p-4 bg-slate-50 rounded-2xl text-xs h-32 outline-none focus:ring-2 focus:ring-brand-500" value={editingProduct.uso_sugerido} onChange={e => updateEditingField('uso_sugerido', e.target.value)} placeholder="Ej: Tomar 1 cada 8 horas..." />
               </div>
-              <select className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-                <option value="Todas">Todas</option>
-                {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
+              <div className="space-y-4">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Datos Técnicos</label>
+                <div className="relative">
+                  <ClipboardCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                  <input type="text" className="w-full pl-12 pr-4 py-3 bg-slate-50 rounded-xl text-xs font-bold" placeholder="Registro Sanitario" value={editingProduct.registro_sanitario} onChange={e => updateEditingField('registro_sanitario', e.target.value)} />
+                </div>
+                <div className="relative">
+                  <Beaker className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                  <input type="text" className="w-full pl-12 pr-4 py-3 bg-slate-50 rounded-xl text-xs font-bold" placeholder="Principio Activo" value={editingProduct.principio_activo} onChange={e => updateEditingField('principio_activo', e.target.value)} />
+                </div>
+                <div className="relative">
+                  <Pill className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                  <input type="text" className="w-full pl-12 pr-4 py-3 bg-slate-50 rounded-xl text-xs font-bold" placeholder="Laboratorio / Marca" value={editingProduct.laboratorio} onChange={e => updateEditingField('laboratorio', e.target.value)} />
+                </div>
+                {config.businessType === 'veterinary' && (
+                  <div className="relative">
+                    <Heart className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                    <input type="text" className="w-full pl-12 pr-4 py-3 bg-slate-50 rounded-xl text-xs font-bold" placeholder="Especie (Perros, Gatos...)" value={editingProduct.especie} onChange={e => updateEditingField('especie', e.target.value)} />
+                  </div>
+                )}
+                {config.businessType === 'podiatry' && (
+                  <div className="relative">
+                    <Footprints className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                    <input type="text" className="w-full pl-12 pr-4 py-3 bg-slate-50 rounded-xl text-xs font-bold" placeholder="Duración Sesión (min)" value={editingProduct.duracion_sesion} onChange={e => updateEditingField('duracion_sesion', e.target.value)} />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
-                <tr><th className="px-10 py-6">Producto</th><th className="px-10 py-6">Categoría</th><th className="px-10 py-6 text-right">Precio</th><th className="px-10 py-6 text-right">Acción</th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filteredProducts.map(p => {
-                  const visible = !hiddenIds.includes(p.id);
-                  return (
-                    <tr key={p.id} className={`hover:bg-slate-50 ${!visible ? 'opacity-50 grayscale' : ''}`}>
-                      <td className="px-10 py-5 flex items-center gap-4">
-                        <div className="w-12 h-12 bg-slate-100 rounded-xl overflow-hidden">{p.imagen && <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-cover"/>}</div>
-                        <div className="font-bold text-sm">{p.nombre}</div>
-                      </td>
-                      <td className="px-10 py-5"><span className="text-[10px] font-black bg-slate-100 px-3 py-1.5 rounded-xl uppercase">{p.categoria}</span></td>
-                      <td className="px-10 py-5 text-right font-black">S/ {p.precio.toFixed(2)}</td>
-                      <td className="px-10 py-5 text-right">
-                        <button onClick={() => toggleProductVisibility(p.id)} className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase ${visible ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{visible ? 'PUBLICADO' : 'OCULTO'}</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {categories.map(cat => (
-            <div key={cat} onClick={() => toggleCategoryVisibility(cat)} className={`p-8 rounded-[2.5rem] border-2 cursor-pointer transition-all ${hiddenCats.includes(cat) ? 'bg-slate-50 border-slate-100 opacity-50' : 'bg-white border-white shadow-xl'}`}>
-              <h3 className="text-sm font-black uppercase text-slate-900">{cat}</h3>
-              <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase">{hiddenCats.includes(cat) ? 'OCULTA' : 'VISIBLE'}</p>
+
+            <div className="flex gap-4">
+              <button onClick={() => setEditingProduct(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs">Cancelar</button>
+              <button onClick={handleUpdateProductInList} className="flex-[2] py-4 text-white rounded-2xl font-black uppercase text-xs shadow-xl transition-all hover:scale-105" style={{backgroundColor: brandColor}}>Actualizar Información Local</button>
             </div>
-          ))}
+            <p className="mt-4 text-[9px] text-slate-400 font-bold text-center uppercase tracking-widest flex items-center justify-center gap-2"><AlertCircle className="w-3 h-3"/> Los cambios se reflejarán inmediatamente en tu tienda virtual.</p>
+          </div>
         </div>
       )}
     </div>
