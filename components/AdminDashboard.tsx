@@ -49,7 +49,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
         setIsGeneratingPalette(true);
         try {
-            // Acceso directo a la variable definida por Vite
             const apiKey = process.env.API_KEY || '';
             if (!apiKey) throw new Error("API_KEY no configurada.");
 
@@ -152,9 +151,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         try {
             const odoo = new OdooClient(client.url, client.db, true);
             const uid = await odoo.authenticate(client.username, client.apiKey);
-            alert(`Conexión Exitosa. UID: ${uid}`);
+            alert(`✅ Conexión Exitosa con Odoo.\nUsuario ID: ${uid}`);
         } catch (error: any) {
-            alert("Error: " + error.message);
+            alert("❌ Error de Conexión: " + (error.message || "Odoo no responde. Revisa la URL y credenciales."));
         } finally {
             setTestingClient(null);
         }
@@ -215,7 +214,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                         </div>
                                     </td>
                                     <td className="px-8 py-5 flex justify-end gap-2">
-                                        <button onClick={() => handleTestConnection(c)} className="p-2 bg-slate-100 rounded-lg hover:bg-blue-100 transition-colors"><Activity className="w-4 h-4"/></button>
+                                        <button 
+                                            onClick={() => handleTestConnection(c)} 
+                                            disabled={testingClient === c.code}
+                                            className={`p-2 rounded-lg transition-colors ${testingClient === c.code ? 'bg-blue-100 text-blue-600 cursor-not-allowed' : 'bg-slate-100 hover:bg-blue-100'}`}
+                                            title="Probar Conexión Odoo"
+                                        >
+                                            {testingClient === c.code ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Activity className="w-4 h-4"/>}
+                                        </button>
                                         <button onClick={() => handleEdit(c)} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"><Edit className="w-4 h-4"/></button>
                                         <button onClick={() => handleDelete(c.code)} className="p-2 bg-slate-100 rounded-lg hover:bg-red-100 transition-colors"><Trash2 className="w-4 h-4"/></button>
                                     </td>

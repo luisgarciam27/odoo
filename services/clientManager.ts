@@ -109,33 +109,38 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
     };
 
     try {
-        let error;
+        let response;
         if (isNew) {
-            const result = await supabase.from('empresas').insert([fullPayload]);
-            error = result.error;
+            response = await supabase.from('empresas').insert([fullPayload]);
         } else {
-            const result = await supabase.from('empresas').update(fullPayload).eq('codigo_acceso', client.code);
-            error = result.error;
+            response = await supabase.from('empresas').update(fullPayload).eq('codigo_acceso', client.code);
         }
         
-        if (error) throw error;
+        if (response.error) {
+            // Si Supabase devuelve un error, lo lanzamos para que lo capture el catch
+            throw response.error;
+        }
         return { success: true };
     } catch (err: any) {
         console.error('Error saving client:', err);
-        let msg = 'Error desconocido';
         
-        if (err.message) msg = err.message;
-        if (err.details) msg += ` (${err.details})`;
-        if (err.hint) msg += ` Hint: ${err.hint}`;
+        let msg = 'Error desconocido';
+        if (typeof err === 'string') {
+            msg = err;
+        } else if (err.message) {
+            msg = err.message;
+            if (err.details) msg += ` (${err.details})`;
+        } else {
+            msg = JSON.stringify(err);
+        }
 
-        // Manejo específico del error de caché de Supabase
         if (msg.toLowerCase().includes('schema cache') || msg.toLowerCase().includes('column')) {
-            msg = "Error de estructura en base de datos. Por favor, ejecute el script SQL de reparación en el panel de Supabase y recargue la página.";
+            msg = "Estructura de BD desactualizada. Ejecute el script de reparación en Supabase.";
         }
         
         return { 
             success: false, 
-            message: msg === '[object Object]' ? 'Error de conexión con la base de datos' : msg 
+            message: msg
         };
     }
 };
