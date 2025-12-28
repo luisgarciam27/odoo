@@ -14,8 +14,16 @@ export interface Producto {
   principio_activo_id?: number;
   presentacion?: string;
   uso_sugerido?: string;
-  especie?: string; // Para Veterinaria
-  duracion_sesion?: string; // Para Podología
+  especie?: string; 
+  duracion_sesion?: string; 
+}
+
+export interface ProductoExtra {
+  odoo_id: number;
+  empresa_code: string;
+  descripcion_lemon?: string;
+  instrucciones_lemon?: string;
+  ficha_tecnica_json?: any;
 }
 
 export type BusinessType = 'pharmacy' | 'veterinary' | 'podiatry' | 'general';

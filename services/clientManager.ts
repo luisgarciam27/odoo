@@ -1,6 +1,6 @@
 
 import { supabase } from './supabaseClient';
-import { ClientConfig } from '../types';
+import { ClientConfig, ProductoExtra } from '../types';
 
 const ADMIN_PWD_KEY = 'LEMON_BI_ADMIN_PWD';
 const DEFAULT_ADMIN_PWD = 'Luis2021.';
@@ -126,6 +126,37 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         console.error('Error saving client:', err);
         return { success: false, message: err.message || JSON.stringify(err) };
     }
+};
+
+// GESTIÓN DE METADATOS EXTRA DE PRODUCTOS
+export const saveProductExtra = async (extra: ProductoExtra) => {
+  const { data, error } = await supabase
+    .from('productos_extra')
+    .upsert([
+      { 
+        odoo_id: extra.odoo_id, 
+        empresa_code: extra.empresa_code, 
+        descripcion_lemon: extra.descripcion_lemon,
+        instrucciones_lemon: extra.instrucciones_lemon
+      }
+    ], { onConflict: 'odoo_id,empresa_code' });
+    
+  return { success: !error, error };
+};
+
+export const getProductExtras = async (empresaCode: string): Promise<Record<number, ProductoExtra>> => {
+  const { data, error } = await supabase
+    .from('productos_extra')
+    .select('*')
+    .eq('empresa_code', empresaCode);
+    
+  if (error) return {};
+  
+  const map: Record<number, ProductoExtra> = {};
+  data.forEach((row: any) => {
+    map[row.odoo_id] = row;
+  });
+  return map;
 };
 
 export const deleteClient = async (code: string): Promise<boolean> => {
