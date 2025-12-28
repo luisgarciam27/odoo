@@ -45,7 +45,8 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     instagram_url: row.instagram_url || '',
     tiktok_url: row.tiktok_url || '',
     quality_text: row.quality_text || '',
-    support_text: row.support_text || ''
+    support_text: row.support_text || '',
+    businessType: row.business_type || 'pharmacy'
 });
 
 export const getClients = async (): Promise<ClientConfig[]> => {
@@ -105,7 +106,8 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         instagram_url: client.instagram_url,
         tiktok_url: client.tiktok_url,
         quality_text: client.quality_text,
-        support_text: client.support_text
+        support_text: client.support_text,
+        business_type: client.businessType
     };
 
     try {
@@ -117,31 +119,12 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         }
         
         if (response.error) {
-            // Si Supabase devuelve un error, lo lanzamos para que lo capture el catch
             throw response.error;
         }
         return { success: true };
     } catch (err: any) {
         console.error('Error saving client:', err);
-        
-        let msg = 'Error desconocido';
-        if (typeof err === 'string') {
-            msg = err;
-        } else if (err.message) {
-            msg = err.message;
-            if (err.details) msg += ` (${err.details})`;
-        } else {
-            msg = JSON.stringify(err);
-        }
-
-        if (msg.toLowerCase().includes('schema cache') || msg.toLowerCase().includes('column')) {
-            msg = "Estructura de BD desactualizada. Ejecute el script de reparación en Supabase.";
-        }
-        
-        return { 
-            success: false, 
-            message: msg
-        };
+        return { success: false, message: err.message || JSON.stringify(err) };
     }
 };
 
