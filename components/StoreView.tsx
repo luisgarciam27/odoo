@@ -7,7 +7,7 @@ import {
   Star, Facebook, Instagram, Pill, Beaker, ClipboardCheck, AlertCircle,
   Stethoscope, Footprints, PawPrint, Calendar, Wallet, CheckCircle2, Camera, ChevronRight,
   Loader2, BadgeCheck, Send, UserCheck, Sparkles, Zap, Award, HeartHandshake, ShieldAlert,
-  RefreshCw, Trash2, CreditCard, Building2, Smartphone, CheckCircle, QrCode
+  RefreshCw, Trash2, CreditCard, Building2, Smartphone, CheckCircle, QrCode, Music2, Upload
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -38,27 +38,28 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin' | 'efectivo'>('yape');
   const [deliveryType, setDeliveryType] = useState<'recojo' | 'delivery'>('recojo');
   const [clientData, setClientData] = useState({ nombre: '', telefono: '', direccion: '', sede: '' });
+  const [voucherImage, setVoucherImage] = useState<string | null>(null);
 
   const colorP = config?.colorPrimario || '#84cc16'; 
   const colorA = config?.colorAcento || '#0ea5e9';
   const bizType = config?.businessType || 'pharmacy';
 
-  const slides = [
-    {
-      title: "Salud y Confianza Certificada",
-      desc: "Productos validados para tu bienestar total.",
-      icon: ShieldCheck,
-      bg: `linear-gradient(135deg, ${colorP} 0%, ${colorP}dd 100%)`,
-      badge: "Garantía Premium"
-    },
-    {
-      title: "Delivery Express Seguro",
-      desc: "Llevamos tus productos en tiempo récord.",
-      icon: Truck,
-      bg: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
-      badge: "Envío Hoy"
-    }
+  const defaultSlides = [
+    { title: "Salud y Confianza Certificada", desc: "Productos validados para tu bienestar total.", icon: ShieldCheck, badge: "Garantía Premium" },
+    { title: "Delivery Express Seguro", desc: "Llevamos tus productos en tiempo récord.", icon: Truck, badge: "Envío Hoy" }
   ];
+
+  const slides = useMemo(() => {
+    if (config.slide_images && config.slide_images.length > 0) {
+      return config.slide_images.map((url, i) => ({
+        image: url,
+        title: config.nombreComercial || "Nuestros Productos",
+        desc: "Calidad garantizada para tu familia.",
+        badge: "Promoción"
+      }));
+    }
+    return defaultSlides;
+  }, [config.slide_images, config.nombreComercial]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -131,6 +132,15 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const removeFromCart = (id: number) => setCart(prev => prev.filter(i => i.producto.id !== id));
   const cartTotal = cart.reduce((sum, item) => sum + (item.producto.precio * item.cantidad), 0);
 
+  const handleVoucherUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setVoucherImage(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleFinalOrder = async () => {
     if (clientData.nombre.length < 3 || clientData.telefono.length < 9) {
       alert("Por favor completa tus datos de contacto.");
@@ -155,11 +165,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       setCurrentStep('success');
       
       const itemsText = cart.map(item => `• ${item.cantidad}x ${item.producto.nombre}`).join('%0A');
-      const message = `*NUEVA ORDEN: ${orderInfo[0]?.name || newOrderId}*%0A%0A*Cliente:* ${clientData.nombre}%0A*Total:* S/ ${cartTotal.toFixed(2)}%0A*Pago:* ${paymentMethod.toUpperCase()}%0A%0A*Productos:*%0A${itemsText}`;
+      const voucherStatus = voucherImage ? "✅ COMPROBANTE ADJUNTO" : "❌ PENDIENTE DE VOUCHER";
+      const message = `*NUEVA ORDEN: ${orderInfo[0]?.name || newOrderId}*%0A%0A*Cliente:* ${clientData.nombre}%0A*Total:* S/ ${cartTotal.toFixed(2)}%0A*Pago:* ${paymentMethod.toUpperCase()}%0A${voucherStatus}%0A%0A*Productos:*%0A${itemsText}`;
       
       setTimeout(() => {
         window.open(`https://wa.me/${config.whatsappNumbers?.split(',')[0]}?text=${message}`);
         setCart([]);
+        setVoucherImage(null);
       }, 2000);
     } catch (e: any) {
       alert("Error al procesar: " + e.message);
@@ -174,9 +186,21 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   }[bizType] || { icon: Package, label: 'Tienda Online' };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col overflow-x-hidden">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col overflow-x-hidden pb-20">
       
-      {/* HEADER COMPACTO Y RESPONSIVO */}
+      {/* BOTÓN FLOTANTE DE AYUDA */}
+      {config.whatsappHelpNumber && (
+        <a 
+          href={`https://wa.me/${config.whatsappHelpNumber}?text=Hola, tengo una duda sobre mi compra.`} 
+          target="_blank" rel="noreferrer"
+          className="fixed bottom-6 right-6 z-[80] bg-emerald-500 text-white p-4 rounded-full shadow-2xl hover:scale-110 transition-all flex items-center justify-center animate-bounce group"
+        >
+          <MessageCircle className="w-6 h-6" />
+          <span className="absolute right-full mr-3 bg-white text-emerald-600 font-black text-[10px] px-4 py-2 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest whitespace-nowrap">¿Necesitas Ayuda?</span>
+        </a>
+      )}
+
+      {/* HEADER */}
       <header className="bg-white/90 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-2 md:gap-4">
           <div className="flex items-center gap-2 md:gap-4 shrink-0">
@@ -202,23 +226,28 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       </header>
 
-      {/* HERO SLIDER REDEFINIDO */}
+      {/* HERO SLIDER DINÁMICO */}
       <div className="px-4 md:px-6 pt-3 md:pt-4">
-        <div className="max-w-7xl mx-auto overflow-hidden rounded-[1.5rem] md:rounded-[2rem] shadow-lg relative h-[140px] md:h-[240px]">
-          {slides.map((slide, idx) => (
+        <div className="max-w-7xl mx-auto overflow-hidden rounded-[1.5rem] md:rounded-[2rem] shadow-lg relative h-[140px] md:h-[280px]">
+          {slides.map((slide: any, idx) => (
             <div 
               key={idx} 
-              className={`absolute inset-0 p-6 md:p-10 flex items-center transition-all duration-700 ${activeSlide === idx ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-              style={{ background: slide.bg }}
+              className={`absolute inset-0 transition-all duration-700 ${activeSlide === idx ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
             >
-              <div className="max-w-sm text-white space-y-2 md:space-y-3">
-                <span className="text-[7px] md:text-[9px] font-black uppercase tracking-[0.2em] bg-white/20 px-3 py-1 rounded-full">{slide.badge}</span>
-                <h2 className="text-xl md:text-4xl font-black uppercase tracking-tighter leading-none">{slide.title}</h2>
-                <p className="text-white/80 text-[10px] md:text-sm font-medium leading-snug">{slide.desc}</p>
-              </div>
+              {slide.image ? (
+                <img src={slide.image} className="w-full h-full object-cover" alt="Banner"/>
+              ) : (
+                <div className="w-full h-full flex items-center p-8 md:p-12" style={{ background: slide.bg || `linear-gradient(135deg, ${colorP}, ${colorA})` }}>
+                   <div className="max-w-sm text-white space-y-2 md:space-y-3 relative z-10">
+                      <span className="text-[7px] md:text-[9px] font-black uppercase tracking-[0.2em] bg-white/20 px-3 py-1 rounded-full">{slide.badge}</span>
+                      <h2 className="text-xl md:text-4xl font-black uppercase tracking-tighter leading-none">{slide.title}</h2>
+                      <p className="text-white/80 text-[10px] md:text-sm font-medium leading-snug">{slide.desc}</p>
+                   </div>
+                </div>
+              )}
             </div>
           ))}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
              {slides.map((_, i) => <button key={i} onClick={() => setActiveSlide(i)} className={`h-1 rounded-full transition-all ${activeSlide === i ? 'w-6 bg-white' : 'w-1.5 bg-white/30'}`}></button>)}
           </div>
         </div>
@@ -226,10 +255,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6">
         <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-3">
-           <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter text-slate-900">Productos</h2>
-           <div className="hidden xs:flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg border border-emerald-100">
-              <BadgeCheck className="w-3.5 h-3.5"/>
-              <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest">Garantía Odoo</span>
+           <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter text-slate-900">Catálogo</h2>
+           <div className="flex items-center gap-2 text-slate-400">
+              <span className="text-[9px] font-black uppercase tracking-widest">{filteredProducts.length} Items</span>
            </div>
         </div>
 
@@ -258,7 +286,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* CARRITO / CHECKOUT LATERAL RESPONSIVO */}
+      {/* CARRITO / CHECKOUT LATERAL */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in" onClick={() => setIsCartOpen(false)}></div>
@@ -315,11 +343,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                    <div className="space-y-3">
                       <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Entrega</label>
                       <div className="grid grid-cols-2 gap-3">
-                        <button onClick={() => setDeliveryType('recojo')} className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${deliveryType === 'recojo' ? 'border-brand-500 bg-brand-50' : 'bg-white'}`}>
+                        <button onClick={() => setDeliveryType('recojo')} className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${deliveryType === 'recojo' ? 'border-brand-500 bg-brand-50 shadow-md' : 'bg-white'}`}>
                           <Building2 className={`w-4 h-4 ${deliveryType === 'recojo' ? 'text-brand-600' : 'text-slate-300'}`}/>
                           <span className="text-[8px] font-black uppercase tracking-tighter">Recojo</span>
                         </button>
-                        <button onClick={() => setDeliveryType('delivery')} className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${deliveryType === 'delivery' ? 'border-brand-500 bg-brand-50' : 'bg-white'}`}>
+                        <button onClick={() => setDeliveryType('delivery')} className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${deliveryType === 'delivery' ? 'border-brand-500 bg-brand-50 shadow-md' : 'bg-white'}`}>
                           <Truck className={`w-4 h-4 ${deliveryType === 'delivery' ? 'text-brand-600' : 'text-slate-300'}`}/>
                           <span className="text-[8px] font-black uppercase tracking-tighter">Envío</span>
                         </button>
@@ -337,19 +365,19 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               )}
 
               {currentStep === 'payment' && (
-                <div className="space-y-5 animate-in fade-in">
+                <div className="space-y-5 animate-in fade-in pb-10">
                    <div className="space-y-3">
                       <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Método de Pago</label>
                       <div className="space-y-2">
-                        <button onClick={() => setPaymentMethod('yape')} className={`w-full p-4 rounded-xl border flex items-center gap-3 transition-all ${paymentMethod === 'yape' ? 'border-[#742284] bg-[#742284]/5' : 'bg-white'}`}>
+                        <button onClick={() => setPaymentMethod('yape')} className={`w-full p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${paymentMethod === 'yape' ? 'border-[#742284] bg-[#742284]/5 shadow-sm' : 'border-transparent bg-white shadow-sm'}`}>
                           <div className="w-8 h-8 bg-[#742284] rounded-lg flex items-center justify-center text-white font-black text-xs">Y</div>
                           <div className="text-left"><p className="text-[9px] font-black uppercase text-[#742284]">Pagar con Yape</p></div>
                         </button>
-                        <button onClick={() => setPaymentMethod('plin')} className={`w-full p-4 rounded-xl border flex items-center gap-3 transition-all ${paymentMethod === 'plin' ? 'border-[#00A9E0] bg-[#00A9E0]/5' : 'bg-white'}`}>
+                        <button onClick={() => setPaymentMethod('plin')} className={`w-full p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${paymentMethod === 'plin' ? 'border-[#00A9E0] bg-[#00A9E0]/5 shadow-sm' : 'border-transparent bg-white shadow-sm'}`}>
                           <div className="w-8 h-8 bg-[#00A9E0] rounded-lg flex items-center justify-center text-white font-black text-xs">P</div>
                           <div className="text-left"><p className="text-[9px] font-black uppercase text-[#00A9E0]">Pagar con Plin</p></div>
                         </button>
-                        <button onClick={() => setPaymentMethod('efectivo')} className={`w-full p-4 rounded-xl border flex items-center gap-3 transition-all ${paymentMethod === 'efectivo' ? 'border-slate-900 bg-slate-50' : 'bg-white'}`}>
+                        <button onClick={() => setPaymentMethod('efectivo')} className={`w-full p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${paymentMethod === 'efectivo' ? 'border-slate-800 bg-slate-50' : 'border-transparent bg-white shadow-sm'}`}>
                           <Wallet className="w-8 h-8 text-slate-400 p-1.5"/>
                           <div className="text-left"><p className="text-[9px] font-black uppercase">Efectivo / POS</p></div>
                         </button>
@@ -357,8 +385,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                    </div>
 
                    {(paymentMethod === 'yape' || paymentMethod === 'plin') && (
-                     <div className="p-5 bg-white rounded-2xl border border-slate-100 flex flex-col items-center text-center space-y-4 shadow-sm animate-in zoom-in-95">
-                        <Smartphone className="w-6 h-6 text-brand-500" />
+                     <div className="p-5 bg-white rounded-3xl border border-slate-100 flex flex-col items-center text-center space-y-4 shadow-sm animate-in zoom-in-95">
                         <div className="space-y-1">
                           <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">{paymentMethod === 'yape' ? config.yapeName : config.plinName}</p>
                           <p className="text-lg font-black text-slate-900">{paymentMethod === 'yape' ? config.yapeNumber : config.plinNumber}</p>
@@ -374,7 +401,28 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                              </div>
                            )}
                         </div>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase leading-snug">Escanea el código o usa el número.<br/>Adjunta tu captura al finalizar.</p>
+                        
+                        {/* SECCIÓN ADJUNTAR PAGO */}
+                        <div className="w-full space-y-3 pt-4 border-t border-slate-50">
+                           <p className="text-[8px] font-black uppercase text-brand-600 tracking-widest">Adjuntar Comprobante</p>
+                           <label className="w-full flex items-center justify-center gap-3 p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 cursor-pointer hover:border-brand-500 hover:bg-brand-50/30 transition-all">
+                              {voucherImage ? (
+                                <div className="flex items-center gap-3">
+                                   <div className="w-8 h-8 rounded-lg overflow-hidden border border-brand-200">
+                                      <img src={voucherImage} className="w-full h-full object-cover" alt="Voucher"/>
+                                   </div>
+                                   <span className="text-[8px] font-black uppercase text-brand-600">¡Imagen Cargada!</span>
+                                   <CheckCircle2 className="w-3 h-3 text-brand-500"/>
+                                </div>
+                              ) : (
+                                <>
+                                  <Camera className="w-5 h-5 text-slate-300"/>
+                                  <span className="text-[8px] font-black uppercase text-slate-400">Seleccionar Captura</span>
+                                </>
+                              )}
+                              <input type="file" className="hidden" accept="image/*" onChange={handleVoucherUpload} />
+                           </label>
+                        </div>
                      </div>
                    )}
                 </div>
@@ -401,7 +449,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               )}
             </div>
 
-            {/* BARRA DE TOTAL Y ACCIÓN */}
+            {/* BOTÓN DE ACCIÓN */}
             {currentStep !== 'processing' && currentStep !== 'success' && cart.length > 0 && (
               <div className="p-6 border-t border-slate-100 bg-white space-y-4 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
                 <div className="flex items-center justify-between">
@@ -414,7 +462,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                    </button>
                 ) : (
                    <div className="flex gap-2">
-                      <button onClick={() => setCurrentStep(currentStep === 'details' ? 'cart' : 'details')} className="p-4 bg-slate-100 text-slate-400 rounded-xl"><ArrowLeft className="w-4 h-4"/></button>
+                      <button onClick={() => setCurrentStep(currentStep === 'details' ? 'cart' : 'details')} className="p-4 bg-slate-100 text-slate-400 rounded-xl hover:bg-slate-200 transition-all"><ArrowLeft className="w-4 h-4"/></button>
                       <button onClick={currentStep === 'details' ? () => setCurrentStep('payment') : handleFinalOrder} className="flex-1 py-4 bg-brand-500 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-brand-500/20">
                         {currentStep === 'details' ? 'Elegir Pago' : 'Confirmar Pedido'}
                       </button>
@@ -426,99 +474,23 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
-      {/* MODAL DETALLE PRODUCTO OPTIMIZADO */}
-      {selectedProduct && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm animate-in fade-in" onClick={() => setSelectedProduct(null)}></div>
-          <div className="relative bg-white w-full max-w-2xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[85vh] animate-in zoom-in-95">
-             <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-900 hover:text-white rounded-full z-20 transition-all shadow-sm"><X className="w-4 h-4"/></button>
-             
-             <div className="md:w-[45%] bg-slate-50 flex items-center justify-center p-8 shrink-0 relative">
-               <div className="w-full aspect-square bg-white rounded-2xl shadow-sm p-8 flex items-center justify-center border border-slate-100 relative group overflow-hidden">
-                 {selectedProduct.imagen ? <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform" /> : <ImageIcon className="w-16 h-16 text-slate-100"/>}
-                 <div className="absolute bottom-4 left-4 right-4 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 flex items-center gap-2">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600"/>
-                    <span className="text-[8px] font-black uppercase text-emerald-700 tracking-widest">Validado</span>
-                 </div>
-               </div>
-             </div>
-
-             <div className="md:w-[55%] p-6 md:p-8 flex flex-col min-h-0 bg-white">
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md bg-brand-50 text-brand-600">{selectedProduct.categoria}</span>
-                    <Star className="w-3 h-3 text-amber-400 fill-amber-400"/>
-                  </div>
-                  <h2 className="text-lg md:text-xl font-black text-slate-900 leading-tight tracking-tight uppercase mb-2">{selectedProduct.nombre}</h2>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <UserCheck className="w-3 h-3 text-brand-500"/> Farmacia Autorizada
-                  </p>
-                </div>
-
-                <div className="flex border-b border-slate-100 mb-4 gap-4 overflow-x-auto no-scrollbar">
-                  {['info', 'tech', 'usage'].map(id => (
-                    <button key={id} onClick={() => setActiveTab(id as any)} className={`pb-2 text-[10px] font-black uppercase tracking-widest transition-all relative shrink-0 ${activeTab === id ? 'text-slate-900' : 'text-slate-300'}`}>
-                      {id === 'info' ? 'Resumen' : id === 'tech' ? 'Ficha' : 'Uso'}
-                      {activeTab === id && <div className="absolute bottom-0 left-0 right-0 h-1 bg-brand-500 rounded-full animate-in slide-in-from-left"></div>}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar text-slate-600 text-[11px] leading-relaxed">
-                   {activeTab === 'info' && (
-                     <div className="animate-in fade-in space-y-4">
-                       <p className="italic bg-brand-50/20 p-4 border-l-2 border-brand-500 rounded-r-xl">"{selectedProduct.descripcion_venta || 'Información de producto validada para garantizar seguridad y eficacia.'}"</p>
-                       <div className="p-5 bg-slate-900 text-white rounded-2xl flex items-center justify-between">
-                         <div>
-                           <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Valor Online</p>
-                           <p className="text-2xl font-black tracking-tighter">S/ {selectedProduct.precio.toFixed(2)}</p>
-                         </div>
-                         <div className="text-right"><div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse inline-block mr-2"></div><span className="text-[9px] font-black uppercase text-emerald-400">En Stock</span></div>
-                       </div>
-                     </div>
-                   )}
-                   {activeTab === 'tech' && (
-                     <div className="animate-in fade-in grid grid-cols-2 gap-3">
-                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100"><p className="text-[7px] font-black text-slate-400 uppercase mb-0.5">Lab.</p><p className="text-[9px] font-bold uppercase">{selectedProduct.laboratorio || 'Validado'}</p></div>
-                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100"><p className="text-[7px] font-black text-slate-400 uppercase mb-0.5">Tipo</p><p className="text-[9px] font-bold uppercase">Clínico</p></div>
-                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 col-span-2"><p className="text-[7px] font-black text-slate-400 uppercase mb-0.5">Registro</p><p className="text-[9px] font-bold uppercase truncate">{selectedProduct.registro_sanitario || 'DIGEMID Validado'}</p></div>
-                     </div>
-                   )}
-                   {activeTab === 'usage' && (
-                     <div className="animate-in fade-in p-4 bg-brand-50/30 rounded-xl border border-brand-100/50">
-                        <h4 className="text-[9px] font-black uppercase text-brand-600 mb-2">Protocolo Sugerido</h4>
-                        <p className="italic font-bold">"{selectedProduct.uso_sugerido || 'Consulte con su profesional de salud. Siga la posología recomendada.'}"</p>
-                     </div>
-                   )}
-                </div>
-
-                <div className="pt-6 mt-4 border-t border-slate-50">
-                   <button onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); }} className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg flex items-center justify-center gap-3">
-                     <ShoppingCart className="w-4 h-4" /> Añadir a mi Pedido
-                   </button>
-                </div>
-             </div>
-          </div>
-        </div>
-      )}
-
-      {/* FOOTER ESTILIZADO Y VISIBLE */}
+      {/* FOOTER */}
       <footer className="mt-auto py-12 md:py-16 bg-slate-900 text-white">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
            <div className="space-y-5">
-              <div className="flex items-center gap-3">
-                 <div className="p-2.5 rounded-xl bg-brand-500 shadow-lg shadow-brand-500/20"><bizMeta.icon className="w-5 h-5 text-white" /></div>
+              <div className="flex items-center gap-3 justify-center md:justify-start">
+                 <div className="p-2.5 rounded-xl bg-brand-500 shadow-xl shadow-brand-500/20"><bizMeta.icon className="w-5 h-5 text-white" /></div>
                  <span className="font-black text-lg md:text-xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
               </div>
-              <p className="text-[10px] md:text-[11px] text-slate-400 font-medium leading-relaxed italic opacity-80 border-l-2 border-slate-700 pl-4">
+              <p className="text-[10px] md:text-[11px] text-slate-400 font-medium leading-relaxed italic opacity-80 border-l-2 border-slate-700 pl-4 text-center md:text-left">
                 "{config.footer_description || 'Excelencia profesional y cuidado integral de su salud con tecnología Odoo.'}"
               </p>
            </div>
-           <div className="flex flex-col md:items-end gap-6">
+           <div className="flex flex-col md:items-end gap-6 items-center">
               <div className="flex gap-3">
-                  <button className="p-3 bg-white/5 rounded-xl hover:bg-brand-500 transition-all"><Facebook className="w-5 h-5"/></button>
-                  <button className="p-3 bg-white/5 rounded-xl hover:bg-brand-500 transition-all"><Instagram className="w-5 h-5"/></button>
-                  <button className="p-3 bg-white/5 rounded-xl hover:bg-brand-500 transition-all"><MessageCircle className="w-5 h-5"/></button>
+                  {config.facebook_url && <a href={config.facebook_url} target="_blank" rel="noreferrer" className="p-3 bg-white/5 rounded-xl hover:bg-brand-500 transition-all"><Facebook className="w-5 h-5"/></a>}
+                  {config.instagram_url && <a href={config.instagram_url} target="_blank" rel="noreferrer" className="p-3 bg-white/5 rounded-xl hover:bg-brand-500 transition-all"><Instagram className="w-5 h-5"/></a>}
+                  {config.tiktok_url && <a href={config.tiktok_url} target="_blank" rel="noreferrer" className="p-3 bg-white/5 rounded-xl hover:bg-brand-500 transition-all"><Music2 className="w-5 h-5"/></a>}
               </div>
               <p className="text-[8px] md:text-[9px] font-bold text-slate-500 uppercase tracking-[0.3em]">
                 © 2025 LEMON BI ANALYTICS • POWERED BY GAORSYSTEM

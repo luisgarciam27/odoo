@@ -22,6 +22,7 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     apiKey: row.odoo_api_key || '',
     companyFilter: row.filtro_compania || 'ALL',
     whatsappNumbers: row.whatsapp_numeros || '',
+    whatsappHelpNumber: row.whatsapp_help_number || '',
     isActive: row.estado ?? true,
     nombreComercial: row.nombre_comercial || row.codigo_acceso,
     logoUrl: row.logo_url || '',
@@ -44,6 +45,7 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     facebook_url: row.facebook_url || '',
     instagram_url: row.instagram_url || '',
     tiktok_url: row.tiktok_url || '',
+    slide_images: Array.isArray(row.slide_images) ? row.slide_images : [],
     quality_text: row.quality_text || '',
     support_text: row.support_text || '',
     businessType: row.business_type || 'pharmacy'
@@ -83,6 +85,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         odoo_api_key: client.apiKey,
         filtro_compania: client.companyFilter,
         whatsapp_numeros: client.whatsappNumbers,
+        whatsapp_help_number: client.whatsappHelpNumber,
         estado: client.isActive,
         nombre_comercial: client.nombreComercial,
         logo_url: client.logoUrl,
@@ -105,6 +108,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         facebook_url: client.facebook_url,
         instagram_url: client.instagram_url,
         tiktok_url: client.tiktok_url,
+        slide_images: client.slide_images || [],
         quality_text: client.quality_text,
         support_text: client.support_text,
         business_type: client.businessType

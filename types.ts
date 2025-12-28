@@ -42,6 +42,7 @@ export interface ClientConfig {
   apiKey: string;
   companyFilter: string;
   whatsappNumbers?: string;
+  whatsappHelpNumber?: string; // Nuevo
   isActive: boolean;
   nombreComercial?: string;
   logoUrl?: string;
@@ -65,6 +66,7 @@ export interface ClientConfig {
   facebook_url?: string;
   instagram_url?: string;
   tiktok_url?: string;
+  slide_images?: string[]; // Nuevo: URLs de imágenes para el slider
   quality_text?: string;
   support_text?: string;
   businessType?: BusinessType;
