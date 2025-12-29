@@ -5,7 +5,7 @@ import {
   Sparkles, Wallet, Phone, X, Facebook, Instagram, MessageCircle,
   RefreshCw, Share2, LayoutPanelTop, QrCode, Upload, Smartphone, AlertCircle,
   Eye, Image as ImageIcon, Paintbrush, Footprints, Layout, AlignLeft, Citrus,
-  Video, Layers, User
+  Video, Layers, User, Dog, Tag
 } from 'lucide-react';
 import { ClientConfig, SedeStore } from '../types';
 import { saveClient } from '../services/clientManager';
@@ -42,7 +42,10 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
   const addCustomCategory = () => {
     if (!newCat.trim()) return;
     const cat = newCat.trim().toUpperCase();
-    if (currentConfig.customCategories?.includes(cat)) return;
+    if (currentConfig.customCategories?.includes(cat)) {
+        setNewCat('');
+        return;
+    }
     setCurrentConfig(prev => ({
       ...prev,
       customCategories: [...(prev.customCategories || []), cat]
@@ -51,10 +54,12 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
   };
 
   const removeCustomCategory = (cat: string) => {
-    setCurrentConfig(prev => ({
-      ...prev,
-      customCategories: (prev.customCategories || []).filter(c => c !== cat)
-    }));
+    if (window.confirm(`¿Seguro que quieres eliminar la categoría "${cat}"? Esto no borrará los productos, pero ya no estarán agrupados bajo este nombre.`)) {
+        setCurrentConfig(prev => ({
+          ...prev,
+          customCategories: (prev.customCategories || []).filter(c => c !== cat)
+        }));
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -90,25 +95,26 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
   const secondaryColor = currentConfig.colorSecundario || '#1e293b';
 
   return (
-    <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-6 pb-32">
+    <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-6 pb-32 font-sans">
       
+      {/* HEADER DINÁMICO */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="flex items-center gap-6">
-           <div className="p-4 bg-white rounded-[2.5rem] shadow-xl border border-slate-100" style={{ color: brandColor }}>
+           <div className="p-5 bg-white rounded-[2.5rem] shadow-xl border border-slate-100" style={{ color: brandColor }}>
               <Palette className="w-10 h-10" />
            </div>
            <div>
-              <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">Estética & Configuración</h2>
-              <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">Logo, Pagos, Redes y Categorías</p>
+              <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none">Estética & Marca</h2>
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Configuración integral Lemon BI</p>
            </div>
         </div>
         <button 
           onClick={handleSave} 
           disabled={isSaving} 
-          className="px-12 py-6 text-white rounded-[2.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl flex items-center gap-4 transition-all hover:scale-105 active:scale-95" 
+          className="px-12 py-6 text-white rounded-[2.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl flex items-center gap-4 transition-all hover:scale-105 active:scale-95 shadow-brand-500/20" 
           style={{backgroundColor: brandColor}}
         >
-          {isSaving ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />} Guardar Diseño
+          {isSaving ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />} Guardar Cambios
         </button>
       </div>
 
@@ -116,156 +122,166 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
         
         {/* PANEL IZQUIERDO */}
         <div className="lg:col-span-7 space-y-8">
+          
           {/* IDENTIDAD VISUAL */}
           <section className="bg-white p-8 md:p-12 rounded-[3.5rem] shadow-xl border border-slate-100 relative overflow-hidden">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-4 uppercase tracking-tighter mb-8">
-              <ImageIcon className="w-7 h-7 text-brand-500"/> Logotipos e Imagen
+              <ImageIcon className="w-7 h-7 text-brand-500"/> Identidad Visual
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-               <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Logo Principal (Header)</label>
+               <div className="space-y-4">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Logotipo Header</label>
                   <div className="flex gap-2">
-                     <input type="text" placeholder="URL logo" className="flex-1 p-4 bg-slate-50 rounded-2xl text-xs font-bold" value={currentConfig.logoUrl || ''} onChange={e => setCurrentConfig({...currentConfig, logoUrl: e.target.value})} />
-                     <label className="cursor-pointer p-4 bg-slate-100 rounded-2xl hover:bg-slate-200 transition-colors">
-                        <Upload className="w-5 h-5 text-slate-500"/>
+                     <input type="text" placeholder="URL logo" className="flex-1 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[11px] font-bold outline-none" value={currentConfig.logoUrl || ''} onChange={e => setCurrentConfig({...currentConfig, logoUrl: e.target.value})} />
+                     <label className="cursor-pointer p-4 bg-slate-900 text-white rounded-2xl hover:bg-brand-500 transition-colors">
+                        <Upload className="w-5 h-5"/>
                         <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload('logoUrl')} />
                      </label>
                   </div>
                </div>
-               <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Logo Footer (Opcional)</label>
+               <div className="space-y-4">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Logotipo Footer</label>
                   <div className="flex gap-2">
-                     <input type="text" placeholder="URL logo footer" className="flex-1 p-4 bg-slate-50 rounded-2xl text-xs font-bold" value={currentConfig.footerLogoUrl || ''} onChange={e => setCurrentConfig({...currentConfig, footerLogoUrl: e.target.value})} />
-                     <label className="cursor-pointer p-4 bg-slate-100 rounded-2xl hover:bg-slate-200 transition-colors">
-                        <Upload className="w-5 h-5 text-slate-500"/>
+                     <input type="text" placeholder="URL logo footer" className="flex-1 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[11px] font-bold outline-none" value={currentConfig.footerLogoUrl || ''} onChange={e => setCurrentConfig({...currentConfig, footerLogoUrl: e.target.value})} />
+                     <label className="cursor-pointer p-4 bg-slate-900 text-white rounded-2xl hover:bg-brand-500 transition-colors">
+                        <Upload className="w-5 h-5"/>
                         <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload('footerLogoUrl')} />
                      </label>
                   </div>
                </div>
             </div>
-            
-            <div className="mt-8 space-y-3">
-               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Descripción de Marca (Footer)</label>
-               <textarea 
-                  className="w-full p-6 bg-slate-50 rounded-3xl border-none shadow-inner text-xs font-bold h-24 resize-none" 
-                  placeholder="Escribe el mensaje de confianza que verán tus clientes en el pie de página..."
-                  value={currentConfig.footer_description || ''}
-                  onChange={e => setCurrentConfig({...currentConfig, footer_description: e.target.value})}
-               />
-            </div>
           </section>
 
-          {/* GESTOR DE CATEGORÍAS VIRTUALES (PARA PERROS, ETC) */}
+          {/* GESTOR DE CATEGORÍAS VIRTUALES */}
           <section className="bg-white p-8 md:p-12 rounded-[3.5rem] shadow-xl border border-slate-100">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4 uppercase tracking-tighter mb-8">
-              <Layers className="w-7 h-7 text-orange-500"/> Categorías Virtuales (Filtros)
-            </h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">Crea categorías personalizadas para organizar tu tienda (ej: PERROS, GATOS, OFERTAS)</p>
+            <div className="flex items-center justify-between mb-8">
+                <h3 className="text-xl font-black text-slate-800 flex items-center gap-4 uppercase tracking-tighter">
+                  <Layers className="w-7 h-7 text-orange-500"/> Categorías Virtuales
+                </h3>
+                <span className="bg-orange-50 text-orange-600 px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Filtros Tienda</span>
+            </div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6 leading-relaxed">Estas categorías aparecerán como pestañas en tu tienda para organizar mejor tus productos (ej: PERROS, GATOS, ACCESORIOS).</p>
             
-            <div className="flex gap-3 mb-8">
+            <div className="flex gap-3 mb-10">
                <input 
                   type="text" 
-                  placeholder="Nueva categoría..." 
-                  className="flex-1 p-4 bg-slate-50 rounded-2xl border-none font-black text-xs uppercase"
+                  placeholder="NOMBRE DE LA CATEGORÍA (Ej: PERROS)" 
+                  className="flex-1 p-5 bg-slate-50 border border-slate-100 rounded-2xl font-black text-xs uppercase shadow-inner outline-none focus:ring-4 focus:ring-orange-500/10"
                   value={newCat}
                   onChange={e => setNewCat(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && addCustomCategory()}
                />
-               <button onClick={addCustomCategory} className="px-6 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase transition-all hover:bg-orange-500"><Plus className="w-5 h-5"/></button>
+               <button onClick={addCustomCategory} className="px-8 bg-orange-500 text-white rounded-2xl font-black text-xs uppercase transition-all hover:bg-orange-600 shadow-xl shadow-orange-500/20"><Plus className="w-6 h-6"/></button>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                {(currentConfig.customCategories || []).length === 0 ? (
-                  <p className="text-[10px] font-bold text-slate-300 uppercase py-4">Aún no has creado categorías virtuales.</p>
+                  <div className="col-span-full py-10 bg-slate-50 rounded-[2rem] border border-dashed border-slate-200 text-center">
+                     <p className="text-[10px] font-black uppercase text-slate-300 tracking-widest">No hay categorías virtuales creadas</p>
+                  </div>
                ) : (
                   currentConfig.customCategories?.map(cat => (
-                     <div key={cat} className="flex items-center gap-2 bg-slate-50 px-5 py-2.5 rounded-full border border-slate-100 shadow-sm animate-in zoom-in">
-                        <span className="text-[10px] font-black uppercase text-slate-700 tracking-widest">{cat}</span>
-                        <button onClick={() => removeCustomCategory(cat)} className="text-red-400 hover:text-red-600 transition-colors"><X className="w-4 h-4"/></button>
+                     <div key={cat} className="flex items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-orange-200 transition-all group">
+                        <div className="flex items-center gap-3">
+                           {cat.toLowerCase().includes('perro') ? <Dog className="w-4 h-4 text-orange-500"/> : <Tag className="w-4 h-4 text-slate-300"/>}
+                           <span className="text-[10px] font-black uppercase text-slate-700 tracking-tighter">{cat}</span>
+                        </div>
+                        <button onClick={() => removeCustomCategory(cat)} className="text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4"/></button>
                      </div>
                   ))
                )}
             </div>
           </section>
 
-          {/* COLORES */}
+          {/* COLORES CORPORATIVOS */}
           <section className="bg-white p-8 md:p-12 rounded-[3.5rem] shadow-xl border border-slate-100">
-             <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter mb-8">Colores Corporativos</h3>
-             <div className="grid grid-cols-3 gap-6">
-                <div className="flex flex-col items-center gap-3">
-                   <input type="color" className="w-16 h-16 rounded-3xl cursor-pointer border-4 border-white shadow-xl" value={currentConfig.colorPrimario} onChange={e => setCurrentConfig({...currentConfig, colorPrimario: e.target.value})} />
-                   <span className="text-[8px] font-black text-slate-400 uppercase">Principal</span>
+             <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter mb-10">Colores de Marca</h3>
+             <div className="grid grid-cols-3 gap-8">
+                <div className="flex flex-col items-center gap-4">
+                   <div className="relative">
+                      <input type="color" className="w-20 h-20 rounded-[2rem] cursor-pointer border-4 border-white shadow-2xl relative z-10" value={currentConfig.colorPrimario} onChange={e => setCurrentConfig({...currentConfig, colorPrimario: e.target.value})} />
+                      <div className="absolute inset-0 blur-2xl opacity-20" style={{backgroundColor: currentConfig.colorPrimario}}></div>
+                   </div>
+                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Color Primario</span>
                 </div>
-                <div className="flex flex-col items-center gap-3">
-                   <input type="color" className="w-16 h-16 rounded-3xl cursor-pointer border-4 border-white shadow-xl" value={currentConfig.colorSecundario} onChange={e => setCurrentConfig({...currentConfig, colorSecundario: e.target.value})} />
-                   <span className="text-[8px] font-black text-slate-400 uppercase">Footer/Fondo</span>
+                <div className="flex flex-col items-center gap-4">
+                   <div className="relative">
+                      <input type="color" className="w-20 h-20 rounded-[2rem] cursor-pointer border-4 border-white shadow-2xl relative z-10" value={currentConfig.colorSecundario} onChange={e => setCurrentConfig({...currentConfig, colorSecundario: e.target.value})} />
+                      <div className="absolute inset-0 blur-2xl opacity-20" style={{backgroundColor: currentConfig.colorSecundario}}></div>
+                   </div>
+                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fondo Footer</span>
                 </div>
-                <div className="flex flex-col items-center gap-3">
-                   <input type="color" className="w-16 h-16 rounded-3xl cursor-pointer border-4 border-white shadow-xl" value={currentConfig.colorAcento} onChange={e => setCurrentConfig({...currentConfig, colorAcento: e.target.value})} />
-                   <span className="text-[8px] font-black text-slate-400 uppercase">Acento</span>
+                <div className="flex flex-col items-center gap-4">
+                   <div className="relative">
+                      <input type="color" className="w-20 h-20 rounded-[2rem] cursor-pointer border-4 border-white shadow-2xl relative z-10" value={currentConfig.colorAcento} onChange={e => setCurrentConfig({...currentConfig, colorAcento: e.target.value})} />
+                      <div className="absolute inset-0 blur-2xl opacity-20" style={{backgroundColor: currentConfig.colorAcento}}></div>
+                   </div>
+                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Color Acento</span>
                 </div>
              </div>
           </section>
         </div>
 
         {/* PANEL DERECHO */}
-        <div className="lg:col-span-5 space-y-8">
+        <div className="lg:col-span-5 space-y-8 font-sans">
            
            {/* QR Y PAGOS DIGITALES */}
-           <section className="bg-white p-8 rounded-[3rem] shadow-xl border border-slate-100 space-y-6">
-             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter">
-               <QrCode className="w-6 h-6 text-purple-600"/> Pagos con Yape / Plin
+           <section className="bg-white p-8 md:p-10 rounded-[3.5rem] shadow-xl border border-slate-100 space-y-8">
+             <h3 className="text-xl font-black text-slate-800 flex items-center gap-4 uppercase tracking-tighter">
+               <QrCode className="w-7 h-7 text-purple-600"/> Pasarela QR
              </h3>
-             <div className="space-y-8">
+             <div className="space-y-10">
                 {/* YAPE */}
-                <div className="p-6 bg-slate-50 rounded-3xl space-y-4 border border-slate-100">
-                   <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-black text-[10px]">Y</div>
-                      <span className="text-[10px] font-black uppercase text-slate-700 tracking-widest">Configuración Yape</span>
+                <div className="p-8 bg-slate-50 rounded-[2.5rem] space-y-6 border border-slate-100 shadow-inner">
+                   <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-purple-600 rounded-2xl flex items-center justify-center text-white font-black text-xs shadow-lg">Y</div>
+                      <span className="text-xs font-black uppercase text-slate-700 tracking-widest">Configuración Yape</span>
                    </div>
-                   <div className="flex gap-4">
-                      <div className="relative group w-24 h-24 bg-white rounded-2xl overflow-hidden shadow-inner flex items-center justify-center border-2 border-dashed border-slate-200 shrink-0">
-                         {currentConfig.yapeQR ? <img src={currentConfig.yapeQR} className="w-full h-full object-cover" /> : <QrCode className="w-8 h-8 text-slate-200" />}
-                         <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
-                            <Upload className="text-white w-6 h-6"/>
+                   <div className="flex flex-col items-center gap-6">
+                      <div className="relative group w-44 h-44 bg-white rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center border-4 border-white">
+                         {currentConfig.yapeQR ? <img src={currentConfig.yapeQR} className="w-full h-full object-cover" /> : <QrCode className="w-12 h-12 text-slate-100" />}
+                         <label className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all duration-300">
+                            <Upload className="text-white w-8 h-8 mb-2"/>
+                            <span className="text-[8px] font-black text-white uppercase tracking-widest">Subir QR Yape</span>
                             <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload('yapeQR')} />
                          </label>
                       </div>
-                      <div className="flex-1 space-y-3">
+                      <div className="w-full space-y-4">
                          <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300"/>
-                            <input type="text" placeholder="Titular de cuenta" className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-100 rounded-xl text-[10px] font-bold outline-none" value={currentConfig.yapeName || ''} onChange={e => setCurrentConfig({...currentConfig, yapeName: e.target.value})} />
+                            <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
+                            <input type="text" placeholder="Nombre Completo del Titular" className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-tight outline-none focus:ring-4 focus:ring-purple-500/10 shadow-sm" value={currentConfig.yapeName || ''} onChange={e => setCurrentConfig({...currentConfig, yapeName: e.target.value})} />
                          </div>
                          <div className="relative">
-                            <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300"/>
-                            <input type="text" placeholder="Número Yape" className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-100 rounded-xl text-[10px] font-bold outline-none" value={currentConfig.yapeNumber || ''} onChange={e => setCurrentConfig({...currentConfig, yapeNumber: e.target.value})} />
+                            <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
+                            <input type="text" placeholder="Número de Celular Yape" className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-purple-500/10 shadow-sm" value={currentConfig.yapeNumber || ''} onChange={e => setCurrentConfig({...currentConfig, yapeNumber: e.target.value})} />
                          </div>
                       </div>
                    </div>
                 </div>
 
                 {/* PLIN */}
-                <div className="p-6 bg-slate-50 rounded-3xl space-y-4 border border-slate-100">
-                   <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white font-black text-[10px]">P</div>
-                      <span className="text-[10px] font-black uppercase text-slate-700 tracking-widest">Configuración Plin</span>
+                <div className="p-8 bg-slate-50 rounded-[2.5rem] space-y-6 border border-slate-100 shadow-inner">
+                   <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-500 rounded-2xl flex items-center justify-center text-white font-black text-xs shadow-lg">P</div>
+                      <span className="text-xs font-black uppercase text-slate-700 tracking-widest">Configuración Plin</span>
                    </div>
-                   <div className="flex gap-4">
-                      <div className="relative group w-24 h-24 bg-white rounded-2xl overflow-hidden shadow-inner flex items-center justify-center border-2 border-dashed border-slate-200 shrink-0">
-                         {currentConfig.plinQR ? <img src={currentConfig.plinQR} className="w-full h-full object-cover" /> : <QrCode className="w-8 h-8 text-slate-200" />}
-                         <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
-                            <Upload className="text-white w-6 h-6"/>
+                   <div className="flex flex-col items-center gap-6">
+                      <div className="relative group w-44 h-44 bg-white rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center border-4 border-white">
+                         {currentConfig.plinQR ? <img src={currentConfig.plinQR} className="w-full h-full object-cover" /> : <QrCode className="w-12 h-12 text-slate-100" />}
+                         <label className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all duration-300">
+                            <Upload className="text-white w-8 h-8 mb-2"/>
+                            <span className="text-[8px] font-black text-white uppercase tracking-widest">Subir QR Plin</span>
                             <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload('plinQR')} />
                          </label>
                       </div>
-                      <div className="flex-1 space-y-3">
+                      <div className="w-full space-y-4">
                          <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300"/>
-                            <input type="text" placeholder="Titular de cuenta" className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-100 rounded-xl text-[10px] font-bold outline-none" value={currentConfig.plinName || ''} onChange={e => setCurrentConfig({...currentConfig, plinName: e.target.value})} />
+                            <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
+                            <input type="text" placeholder="Nombre Completo del Titular" className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-tight outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm" value={currentConfig.plinName || ''} onChange={e => setCurrentConfig({...currentConfig, plinName: e.target.value})} />
                          </div>
                          <div className="relative">
-                            <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300"/>
-                            <input type="text" placeholder="Número Plin" className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-100 rounded-xl text-[10px] font-bold outline-none" value={currentConfig.plinNumber || ''} onChange={e => setCurrentConfig({...currentConfig, plinNumber: e.target.value})} />
+                            <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
+                            <input type="text" placeholder="Número de Celular Plin" className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm" value={currentConfig.plinNumber || ''} onChange={e => setCurrentConfig({...currentConfig, plinNumber: e.target.value})} />
                          </div>
                       </div>
                    </div>
@@ -274,26 +290,26 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
            </section>
 
            {/* REDES SOCIALES */}
-           <section className="bg-white p-8 rounded-[3rem] shadow-xl border border-slate-100 space-y-6">
-             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter">
-               <Share2 className="w-6 h-6 text-blue-500"/> Redes Sociales
+           <section className="bg-white p-8 md:p-10 rounded-[3.5rem] shadow-xl border border-slate-100 space-y-8">
+             <h3 className="text-xl font-black text-slate-800 flex items-center gap-4 uppercase tracking-tighter">
+               <Share2 className="w-7 h-7 text-blue-500"/> Presencia Social
              </h3>
-             <div className="space-y-3">
-                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                   <Facebook className="w-5 h-5 text-blue-600"/>
-                   <input type="text" placeholder="URL Facebook" className="w-full bg-transparent outline-none text-[10px] font-bold" value={currentConfig.facebook_url || ''} onChange={e => setCurrentConfig({...currentConfig, facebook_url: e.target.value})} />
+             <div className="space-y-4">
+                <div className="flex items-center gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100 group transition-all hover:bg-white hover:shadow-md">
+                   <div className="p-3 bg-blue-600 rounded-xl text-white shadow-lg"><Facebook className="w-5 h-5"/></div>
+                   <input type="text" placeholder="URL Facebook" className="flex-1 bg-transparent outline-none text-[10px] font-black uppercase tracking-tight" value={currentConfig.facebook_url || ''} onChange={e => setCurrentConfig({...currentConfig, facebook_url: e.target.value})} />
                 </div>
-                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                   <Instagram className="w-5 h-5 text-pink-500"/>
-                   <input type="text" placeholder="URL Instagram" className="w-full bg-transparent outline-none text-[10px] font-bold" value={currentConfig.instagram_url || ''} onChange={e => setCurrentConfig({...currentConfig, instagram_url: e.target.value})} />
+                <div className="flex items-center gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100 group transition-all hover:bg-white hover:shadow-md">
+                   <div className="p-3 bg-pink-500 rounded-xl text-white shadow-lg"><Instagram className="w-5 h-5"/></div>
+                   <input type="text" placeholder="URL Instagram" className="flex-1 bg-transparent outline-none text-[10px] font-black uppercase tracking-tight" value={currentConfig.instagram_url || ''} onChange={e => setCurrentConfig({...currentConfig, instagram_url: e.target.value})} />
                 </div>
-                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                   <Video className="w-5 h-5 text-black"/>
-                   <input type="text" placeholder="URL TikTok" className="w-full bg-transparent outline-none text-[10px] font-bold" value={currentConfig.tiktok_url || ''} onChange={e => setCurrentConfig({...currentConfig, tiktok_url: e.target.value})} />
+                <div className="flex items-center gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100 group transition-all hover:bg-white hover:shadow-md">
+                   <div className="p-3 bg-black rounded-xl text-white shadow-lg"><Video className="w-5 h-5"/></div>
+                   <input type="text" placeholder="URL TikTok" className="flex-1 bg-transparent outline-none text-[10px] font-black uppercase tracking-tight" value={currentConfig.tiktok_url || ''} onChange={e => setCurrentConfig({...currentConfig, tiktok_url: e.target.value})} />
                 </div>
-                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                   <MessageCircle className="w-5 h-5 text-emerald-500"/>
-                   <input type="text" placeholder="WhatsApp Consultas" className="w-full bg-transparent outline-none text-[10px] font-bold" value={currentConfig.whatsappHelpNumber || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappHelpNumber: e.target.value})} />
+                <div className="flex items-center gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100 group transition-all hover:bg-white hover:shadow-md">
+                   <div className="p-3 bg-emerald-500 rounded-xl text-white shadow-lg"><MessageCircle className="w-5 h-5"/></div>
+                   <input type="text" placeholder="WhatsApp Ayuda" className="flex-1 bg-transparent outline-none text-[10px] font-black uppercase tracking-tight" value={currentConfig.whatsappHelpNumber || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappHelpNumber: e.target.value})} />
                 </div>
              </div>
            </section>
@@ -301,11 +317,13 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
       </div>
 
       {showSuccess && (
-         <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[300] bg-slate-900 text-white px-12 py-6 rounded-full shadow-2xl animate-in slide-in-from-bottom-12 flex items-center gap-6 border border-white/10">
-            <CheckCircle2 className="text-brand-400 w-10 h-10"/>
+         <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[300] bg-slate-900 text-white px-12 py-7 rounded-[2.5rem] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-12 flex items-center gap-6 border border-white/10">
+            <div className="w-12 h-12 bg-brand-500 rounded-2xl flex items-center justify-center text-white shadow-2xl animate-bounce">
+                <CheckCircle2 className="w-7 h-7"/>
+            </div>
             <div className="flex flex-col">
-                <span className="text-sm font-black uppercase tracking-widest leading-none">¡Diseño Guardado!</span>
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Los cambios ya están en vivo</span>
+                <span className="text-base font-black uppercase tracking-tighter leading-none">¡Éxito Lemon BI!</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-2">Tus cambios ya son públicos</span>
             </div>
          </div>
       )}
