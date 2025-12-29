@@ -20,6 +20,7 @@ export interface Producto {
   peso_rango?: string;
   duracion_sesion?: string; 
   categoria_personalizada?: string; 
+  uom_id?: number;
 }
 
 export interface PedidoTienda {
