@@ -14,31 +14,30 @@ export const DAILY_WORKFLOW_JSON = {
       "typeVersion": 1.2,
       "position": [0, 300]
     }
-    // ... rest of daily nodes (omitted for brevity)
   ],
   "connections": {}
 };
 
-// NUEVO WORKFLOW: NOTIFICACIÓN DE PEDIDOS (STORES)
-export const ORDER_NOTIFICATION_WORKFLOW_JSON = {
-  "name": "LemonBI - Notificación de Pedidos v1",
+// WORKFLOW PROFESIONAL: WEBHOOK + EVOLUTION API
+export const ORDER_WEBHOOK_WORKFLOW_JSON = {
+  "name": "LemonBI - Checkout Pro (Webhook)",
   "nodes": [
     {
       "parameters": {
-        "event": "inserted",
-        "schema": "public",
-        "table": "pedidos_tienda"
+        "httpMethod": "POST",
+        "path": "lemon-order-webhook",
+        "options": {}
       },
-      "name": "Supabase Trigger",
-      "type": "n8n-nodes-base.supabaseTrigger",
+      "name": "Webhook Order",
+      "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [0, 300]
     },
     {
       "parameters": {
-        "jsCode": "const data = $json;\nconst meta = data.metadata || {};\nconst items = Array.isArray(meta.carrito) ? meta.carrito.join('\\n') : 'Detalle no disponible';\n\nreturn {\n  json: {\n    cliente_phone: meta.telefono ? meta.telefono.replace(/\\D/g, '') : '',\n    dueno_phone: '51975615244', // REEMPLAZAR CON NUMERO DEL DUEÑO\n    monto: data.monto,\n    nombre: data.cliente_nombre,\n    ref: data.order_name,\n    voucher: data.voucher_url,\n    items: items,\n    entrega: meta.entrega === 'delivery' ? `🚚 Delivery a: ${meta.direccion}` : `📍 Recojo en: ${meta.sede}`\n  }\n};"
+        "jsCode": "const body = $json.body;\nconst meta = body.metadata || {};\nconst items = Array.isArray(meta.carrito) ? meta.carrito.join('\\n') : 'Detalle no disponible';\n\n// Formatear teléfono\nlet phone = meta.telefono ? meta.telefono.replace(/\\D/g, '') : '';\nif (phone.length === 9) phone = '51' + phone;\n\nreturn {\n  json: {\n    cliente_phone: phone,\n    dueno_phone: '51975615244', // <--- CAMBIAR AL TEL DEL DUEÑO\n    monto: body.monto,\n    nombre: body.cliente_nombre,\n    ref: body.order_name,\n    voucher: body.voucher_url,\n    items: items,\n    entrega: meta.entrega === 'delivery' ? `🚚 *Delivery:* ${meta.direccion}` : `📍 *Recojo:* ${meta.sede}`,\n    metodo: meta.metodo_pago ? meta.metodo_pago.toUpperCase() : 'YAPE/PLIN'\n  }\n};"
       },
-      "name": "Formatear Datos",
+      "name": "Format Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [220, 300]
@@ -47,15 +46,15 @@ export const ORDER_NOTIFICATION_WORKFLOW_JSON = {
       "parameters": {
         "method": "POST",
         "url": "https://api.red51.site/message/sendText/farmacia",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "apikey", "value": "TU_API_KEY" }]
+        },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            { "name": "number", "value": "={{$json.cliente_phone}}" },
-            { "name": "text", "value": "=¡Hola {{$json.nombre}}! 🌟 Gracias por tu pedido en nuestra tienda web.\n\nHemos recibido tu comprobante de pago por S/ {{$json.monto.toFixed(2)}} (Ref: {{$json.ref}}).\n\n⏳ *Estado:* Validación de pago en curso.\nNuestro equipo confirmará tu pedido en unos minutos. ¡Gracias por tu confianza!" }
-          ]
-        }
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{$json.cliente_phone}}\",\n  \"textMessage\": {\n    \"text\": \"✅ *¡PEDIDO RECIBIDO CON ÉXITO!*\\n\\nHola *{{$json.nombre}}*, gracias por comprar en nuestra tienda oficial.\\n\\nHemos recibido tu comprobante por *S/ {{$json.monto.toFixed(2)}}* (Referencia: {{$json.ref}}).\\n\\n🛡️ *Próximos pasos:*\\n1. Nuestro equipo validará la transferencia.\\n2. Recibirás un mensaje de confirmación final.\\n3. Procederemos con tu {{$json.entrega.includes('📍') ? 'recojo' : 'envío'}}.\\n\\nCualquier duda, estamos aquí para ayudarte. ✨\"\n  }\n}"
       },
-      "name": "WhatsApp a Cliente",
+      "name": "Evolution API - Cliente",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [440, 200]
@@ -64,24 +63,22 @@ export const ORDER_NOTIFICATION_WORKFLOW_JSON = {
       "parameters": {
         "method": "POST",
         "url": "https://api.red51.site/message/sendMedia/farmacia",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "apikey", "value": "TU_API_KEY" }]
+        },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            { "name": "number", "value": "={{$json.dueno_phone}}" },
-            { "name": "media", "value": "={{$json.voucher}}" },
-            { "name": "mediatype", "value": "image" },
-            { "name": "caption", "value": "=🔔 *NUEVO PEDIDO RECIBIDO*\n\n👤 *Cliente:* {{$json.nombre}}\n💰 *Monto:* S/ {{$json.monto.toFixed(2)}}\n🆔 *Ref:* {{$json.ref}}\n\n📦 *Pedido:* \n{{$json.items}}\n\n{{$json.entrega}}\n\n_Valida el voucher arriba y confirma en Odoo._" }
-          ]
-        }
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{$json.dueno_phone}}\",\n  \"mediatype\": \"image\",\n  \"media\": \"{{$json.voucher}}\",\n  \"caption\": \"🚀 *¡NUEVA VENTA WEB!*\\n\\n👤 *Cliente:* {{$json.nombre}}\\n💰 *Total:* S/ {{$json.monto.toFixed(2)}} ({{$json.metodo}})\\n🆔 *Ref:* {{$json.ref}}\\n\\n🛒 *Pedido:*\\n{{$json.items}}\\n\\n{{$json.entrega}}\\n\\n_Valida el voucher arriba para confirmar el pedido._\"\n}"
       },
-      "name": "WhatsApp a Dueño",
+      "name": "Evolution API - Dueño",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [440, 400]
     }
   ],
   "connections": {
-    "Supabase Trigger": { "main": [[{ "node": "Formatear Datos", "type": "main", "index": 0 }]] },
-    "Formatear Datos": { "main": [[{ "node": "WhatsApp a Cliente", "type": "main", "index": 0 }, { "node": "WhatsApp a Dueño", "type": "main", "index": 0 }]] }
+    "Webhook Order": { "main": [[{ "node": "Format Data", "type": "main", "index": 0 }]] },
+    "Format Data": { "main": [[{ "node": "Evolution API - Cliente", "type": "main", "index": 0 }, { "node": "Evolution API - Dueño", "type": "main", "index": 0 }]] }
   }
 };

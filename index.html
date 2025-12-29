@@ -36,6 +36,16 @@
             sans: ['"Ubuntu Sans"', 'sans-serif'],
             condensed: ['"Ubuntu Condensed"', 'sans-serif'],
             mono: ['"Ubuntu Mono"', 'monospace'],
+          },
+          animation: {
+            'progress-fast': 'progress 1s ease-in-out infinite',
+          },
+          keyframes: {
+            progress: {
+              '0%': { width: '0%', marginLeft: '0%' },
+              '50%': { width: '50%', marginLeft: '25%' },
+              '100%': { width: '100%', marginLeft: '100%' },
+            }
           }
         }
       }
@@ -51,6 +61,8 @@
       background-attachment: fixed;
       min-height: 100vh;
     }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
 
 <script type="importmap">

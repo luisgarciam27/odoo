@@ -9,7 +9,8 @@ import {
   Camera, Image as ImageIcon,
   QrCode, ChevronLeft,
   Citrus, ShieldCheck as Shield,
-  ExternalLink, Sparkles, Globe, Copy, Check, Clock, ShieldCheck, Zap
+  ExternalLink, Sparkles, Globe, Copy, Check, Clock, ShieldCheck, Zap,
+  BellRing, HeartHandshake, CreditCard
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig, SedeStore } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -179,41 +180,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const ref = `WEB-${Date.now().toString().slice(-6)}`;
       setOrderRef(ref);
       
-      // 1. Intentar crear pedido en Odoo
-      let odooOrderId = null;
-      try {
-        const client = new OdooClient(session.url, session.db, session.useProxy);
-        const odooLines = cart.map(item => ({
-          productId: item.producto.id,
-          qty: item.cantidad,
-          price: item.producto.precio
-        }));
-        
-        odooOrderId = await client.createSaleOrder(
-          session.uid, 
-          session.apiKey, 
-          { 
-            name: clientData.nombre, 
-            phone: clientData.telefono, 
-            address: deliveryType === 'delivery' ? clientData.direccion : (selectedSede?.nombre || ''),
-            paymentMethod
-          },
-          odooLines,
-          session.companyId || 1
-        );
-      } catch (err) {
-        console.error("Odoo fallback activated");
-      }
-
-      // 2. Guardar en Supabase (Trigger para n8n -> Evolution API)
-      await supabase.from('pedidos_tienda').insert([{
+      const payload = {
         order_name: ref, 
         cliente_nombre: clientData.nombre, 
         monto: cartTotal, 
         voucher_url: voucherImage,
         empresa_code: config.code, 
         estado: 'pendiente',
-        odoo_order_id: odooOrderId,
         metadata: {
           telefono: clientData.telefono,
           entrega: deliveryType,
@@ -222,19 +195,54 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           metodo_pago: paymentMethod,
           carrito: cart.map(i => `${i.cantidad}x ${i.producto.nombre}`)
         }
-      }]);
+      };
 
-      // 3. WhatsApp Directo (Como respaldo al bot)
+      // 1. Guardar en Supabase para registro permanente
+      await supabase.from('pedidos_tienda').insert([payload]);
+
+      // 2. Disparar Webhook a n8n para respuesta inmediata
+      // URL de ejemplo, reemplázala con la de tu n8n
+      const n8nWebhookUrl = 'https://n8n.tu-dominio.com/webhook/lemon-order-webhook';
+      try {
+        await fetch(n8nWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch(e) { console.error("Webhook n8n fallido, el trigger de Supabase servirá de respaldo."); }
+
+      // 3. Odoo Silencioso
+      try {
+        const client = new OdooClient(session.url, session.db, session.useProxy);
+        await client.createSaleOrder(
+          session.uid, 
+          session.apiKey, 
+          { 
+            name: clientData.nombre, 
+            phone: clientData.telefono, 
+            address: deliveryType === 'delivery' ? clientData.direccion : (selectedSede?.nombre || ''),
+            paymentMethod
+          },
+          cart.map(i => ({ productId: i.producto.id, qty: i.cantidad, price: i.producto.precio })),
+          session.companyId || 1
+        );
+      } catch (err) { console.warn("Fallo Odoo, el pedido se procesará via WhatsApp"); }
+
+      // 4. WhatsApp Backup (User-initiated)
       let locationText = '';
       if (deliveryType === 'recojo' && selectedSede) {
-          locationText = `\n📍 *Recojo:* ${selectedSede.nombre}\n🏠 *Dir:* ${selectedSede.direccion}`;
+          locationText = `\n📍 *Recojo:* ${selectedSede.nombre}`;
       } else if (deliveryType === 'delivery') {
           locationText = `\n🚚 *Delivery:* ${clientData.direccion}`;
       }
 
-      const message = `*NUEVO PEDIDO ${config.nombreComercial || ''}*\nRef: ${ref}\n\n👤 *Cliente:* ${clientData.nombre}\n📱 *Cel:* ${clientData.telefono}\n\n🛒 *Pedido:* \n${cart.map(i => `• ${i.cantidad}x ${i.producto.nombre}`).join('\n')}\n\n💰 *Total:* S/ ${cartTotal.toFixed(2)}\n💳 *Pago:* ${paymentMethod.toUpperCase()}${locationText}\n\n_Ya adjunto mi comprobante de pago abajo._`;
+      const message = `*ORDEN WEB: ${ref}*\n👤 Cliente: ${clientData.nombre}\n💰 Total: S/ ${cartTotal.toFixed(2)}\n${locationText}\n\n_He adjuntado el comprobante de pago._`;
       
-      window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
+      // Solo abrimos WhatsApp si el navegador lo permite, pero la UI ya cambió a Éxito
+      setTimeout(() => {
+        window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
+      }, 500);
+
       setCurrentStep('success');
     } catch (err: any) { 
       alert("Error al procesar pedido. Inténtelo nuevamente."); 
@@ -510,8 +518,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     <button onClick={handleFinishOrder} disabled={!voucherImage || isOrderLoading} className="w-full py-8 bg-brand-500 text-white rounded-[2.5rem] font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl flex items-center justify-center gap-4 transition-all hover:bg-brand-600 active:scale-95 disabled:opacity-50">
                        {isOrderLoading ? <Loader2 className="animate-spin w-5 h-5" /> : <CheckCircle2 className="w-5 h-5"/>} Finalizar y Enviar
                     </button>
-                    
-                    <button onClick={() => setCurrentStep('payment')} disabled={isOrderLoading} className="w-full text-[10px] font-black uppercase tracking-widest text-slate-400">Ver datos de pago nuevamente</button>
                  </div>
               )}
 
@@ -530,55 +536,59 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               )}
 
               {currentStep === 'success' && (
-                 <div className="flex-1 flex flex-col items-center justify-center text-center space-y-10 animate-in zoom-in duration-700 pb-10">
+                 <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8 animate-in zoom-in duration-700 pb-10">
                     <div className="relative">
-                      <div className="w-32 h-32 bg-brand-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-brand-500/50 animate-bounce">
-                        <CheckCircle2 className="w-16 h-16"/>
+                      <div className="w-32 h-32 bg-brand-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-brand-500/50">
+                        <HeartHandshake className="w-16 h-16"/>
                       </div>
                       <div className="absolute -top-4 -right-4 bg-white p-3 rounded-2xl shadow-xl animate-pulse">
-                        <Zap className="w-6 h-6 text-amber-500 fill-amber-500"/>
+                        <BellRing className="w-6 h-6 text-brand-500 fill-brand-500/10"/>
                       </div>
                     </div>
 
                     <div className="space-y-6">
-                       <div className="space-y-2">
-                          <h3 className="text-3xl font-black uppercase tracking-tighter leading-none">¡Pedido Registrado!</h3>
-                          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-brand-600">Referencia: {orderRef}</p>
+                       <div className="space-y-1">
+                          <h3 className="text-4xl font-black uppercase tracking-tighter leading-none">¡Recibido!</h3>
+                          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400">Orden ID: {orderRef}</p>
                        </div>
                        
                        <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 space-y-6">
-                          <div className="flex items-center gap-4 text-left">
-                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-slate-400 shrink-0">
-                               <Clock className="w-6 h-6"/>
-                            </div>
-                            <div>
-                               <p className="text-[10px] font-black uppercase text-slate-900 tracking-tight">Validación en curso</p>
-                               <p className="text-[9px] text-slate-500 font-bold uppercase">Nuestro equipo revisará tu pago en breve.</p>
-                            </div>
-                          </div>
+                          <div className="space-y-4">
+                             <div className="flex items-center gap-4 text-left">
+                                <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm text-brand-500 shrink-0">
+                                   <Clock className="w-5 h-5"/>
+                                </div>
+                                <div className="flex-1">
+                                   <p className="text-[10px] font-black uppercase text-slate-900 tracking-tight">Validando Transferencia</p>
+                                   <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                                      <div className="bg-brand-500 h-full animate-progress-fast"></div>
+                                   </div>
+                                </div>
+                             </div>
 
-                          <div className="flex items-center gap-4 text-left">
-                            <div className="w-12 h-12 bg-brand-100 rounded-2xl flex items-center justify-center shadow-sm text-brand-600 shrink-0">
-                               <MessageCircle className="w-6 h-6"/>
-                            </div>
-                            <div>
-                               <p className="text-[10px] font-black uppercase text-brand-600 tracking-tight">Confirmación por WhatsApp</p>
-                               <p className="text-[9px] text-slate-500 font-bold uppercase">Recibirás un mensaje automático de confirmación.</p>
-                            </div>
+                             <div className="flex items-center gap-4 text-left">
+                                <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm text-blue-500 shrink-0">
+                                   <MessageCircle className="w-5 h-5"/>
+                                </div>
+                                <div className="flex-1">
+                                   <p className="text-[10px] font-black uppercase text-slate-900 tracking-tight">Bot de WhatsApp Activado</p>
+                                   <p className="text-[9px] text-slate-500 font-bold uppercase leading-tight mt-1">Recibirás una notificación oficial en segundos.</p>
+                                </div>
+                             </div>
                           </div>
                        </div>
 
-                       <div className="flex items-center justify-center gap-2 py-4 px-6 bg-brand-50 rounded-2xl border border-brand-100">
-                          <ShieldCheck className="w-4 h-4 text-brand-500"/>
-                          <span className="text-[9px] font-black uppercase tracking-widest text-brand-700">Compra 100% segura con Lemon BI</span>
+                       <div className="flex items-center justify-center gap-3 py-4 px-8 bg-brand-500/10 rounded-2xl border border-brand-500/20">
+                          <ShieldCheck className="w-5 h-5 text-brand-600"/>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-brand-700">Garantía Lemon BI Analytics</span>
                        </div>
                     </div>
 
                     <button 
                       onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); setVoucherImage(null); }} 
-                      className="w-full py-7 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-xl hover:bg-brand-500 transition-all active:scale-95"
+                      className="w-full py-8 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl hover:bg-brand-500 transition-all active:scale-95 transform"
                     >
-                      Seguir Comprando
+                      Volver a la Tienda
                     </button>
                  </div>
               )}
