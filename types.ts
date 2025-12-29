@@ -18,6 +18,17 @@ export interface Producto {
   duracion_sesion?: string; 
 }
 
+export interface PedidoTienda {
+  id: string;
+  order_name: string;
+  cliente_nombre: string;
+  monto: number;
+  voucher_url: string;
+  estado: 'pendiente' | 'validado' | 'rechazado';
+  empresa_code: string;
+  created_at: string;
+}
+
 export interface ProductoExtra {
   odoo_id: number;
   empresa_code: string;
@@ -42,7 +53,7 @@ export interface ClientConfig {
   apiKey: string;
   companyFilter: string;
   whatsappNumbers?: string;
-  whatsappHelpNumber?: string; // Nuevo
+  whatsappHelpNumber?: string; 
   isActive: boolean;
   nombreComercial?: string;
   logoUrl?: string;
@@ -66,7 +77,7 @@ export interface ClientConfig {
   facebook_url?: string;
   instagram_url?: string;
   tiktok_url?: string;
-  slide_images?: string[]; // Nuevo: URLs de imágenes para el slider
+  slide_images?: string[]; 
   quality_text?: string;
   support_text?: string;
   businessType?: BusinessType;

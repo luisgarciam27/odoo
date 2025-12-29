@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   PieChart, 
@@ -13,8 +13,14 @@ import {
   Store,
   ShoppingCart,
   Palette,
-  PackageSearch
+  PackageSearch,
+  Bell,
+  CheckCircle,
+  Clock,
+  ExternalLink
 } from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
+import { PedidoTienda } from '../types';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -26,7 +32,30 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavigate, showStoreLink }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
+  const [notifications, setNotifications] = useState<PedidoTienda[]>([]);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [hasNew, setHasNew] = useState(false);
+
+  // Escuchar pedidos en tiempo real
+  useEffect(() => {
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'pedidos_tienda' },
+        (payload) => {
+          const newOrder = payload.new as PedidoTienda;
+          setNotifications(prev => [newOrder, ...prev]);
+          setHasNew(true);
+          // Opcional: Sonido de notificación
+          try { new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play(); } catch(e){}
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   const handleNavigate = (view: string) => {
     onNavigate(view);
     setIsMobileMenuOpen(false);
@@ -121,16 +150,61 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
       </aside>
 
       <main className="flex-1 transition-all w-full h-screen overflow-y-auto relative z-10 scroll-smooth">
-        <div className="md:hidden bg-white/90 backdrop-blur-md border-b border-slate-200 text-slate-800 p-4 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+        {/* TOP BAR CON CAMPANA */}
+        <div className="bg-white/90 backdrop-blur-md border-b border-slate-200 text-slate-800 p-4 flex items-center justify-between sticky top-0 z-20 shadow-sm px-8">
           <div className="flex items-center gap-2">
-            <Citrus className="w-6 h-6 text-brand-500" />
-            <span className="font-bold text-lg">LEMON BI</span>
+            <Citrus className="w-6 h-6 text-brand-500 md:hidden" />
+            <span className="font-bold text-lg hidden md:block uppercase tracking-tighter">Panel de Gestión</span>
           </div>
-          <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-500 hover:text-slate-800">
-            <Menu className="w-6 h-6" />
-          </button>
+          
+          <div className="flex items-center gap-4">
+             <div className="relative">
+                <button 
+                  onClick={() => { setShowNotifPanel(!showNotifPanel); setHasNew(false); }}
+                  className={`p-2.5 rounded-xl border transition-all relative ${hasNew ? 'bg-brand-50 border-brand-200 text-brand-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
+                >
+                  <Bell className="w-5 h-5" />
+                  {hasNew && <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></span>}
+                </button>
+
+                {showNotifPanel && (
+                  <div className="absolute top-14 right-0 w-80 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in slide-in-from-top-4 duration-300">
+                     <div className="p-5 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vouchers Recientes</span>
+                        <button onClick={() => setNotifications([])} className="text-[9px] font-bold text-slate-300 hover:text-red-500 uppercase">Limpiar</button>
+                     </div>
+                     <div className="max-h-96 overflow-y-auto p-2 space-y-2">
+                        {notifications.length === 0 ? (
+                           <div className="py-10 text-center opacity-20 flex flex-col items-center gap-2"><Clock className="w-10 h-10"/><p className="text-[10px] font-black uppercase tracking-widest">Sin actividad</p></div>
+                        ) : notifications.map(n => (
+                           <div key={n.id} className="p-4 bg-white border border-slate-50 rounded-2xl hover:bg-slate-50 transition-colors flex gap-4">
+                              <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center shrink-0 border border-brand-100">
+                                 {n.voucher_url ? <img src={n.voucher_url} className="w-full h-full object-cover rounded-lg" /> : <ShoppingBag className="w-5 h-5 text-brand-500"/>}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                 <p className="text-[10px] font-black uppercase truncate">{n.cliente_nombre}</p>
+                                 <p className="text-[11px] font-bold text-brand-600 mt-0.5">S/ {n.monto.toFixed(2)}</p>
+                                 <div className="flex items-center gap-2 mt-2">
+                                    <span className="text-[8px] font-black px-2 py-0.5 bg-slate-100 rounded text-slate-400">{n.order_name}</span>
+                                    {n.voucher_url && <a href={n.voucher_url} target="_blank" rel="noreferrer" className="text-brand-500 hover:underline"><ExternalLink className="w-3 h-3"/></a>}
+                                 </div>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+                )}
+             </div>
+
+             <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden text-slate-500 hover:text-slate-800">
+                <Menu className="w-6 h-6" />
+             </button>
+          </div>
         </div>
-        {children}
+        
+        <div className="p-4 md:p-0">
+          {children}
+        </div>
       </main>
     </div>
   );

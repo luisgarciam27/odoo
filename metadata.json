@@ -1,5 +1,7 @@
 {
-  "name": "tOdoo Sales Analytics",
-  "description": "A comprehensive sales dashboard simulating Odoo integration with real-time analytics, filtering, and data visualization.",
-  "requestFramePermissions": []
+  "name": "Lemon BI - Odoo Analytics & Store",
+  "description": "Dashboard de analítica y tienda online integrada con Odoo v17",
+  "requestFramePermissions": [
+    "camera"
+  ]
 }
