@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-// Added ArrowRight to imports to resolve "Cannot find name 'ArrowRight'" error on line 406
 import { 
   ShoppingCart, Package, Search, X, ArrowLeft, ArrowRight,
   Plus, Minus, Info, MapPin, Truck,
@@ -10,7 +9,7 @@ import {
   Camera, Image as ImageIcon,
   QrCode, ChevronLeft,
   Citrus, ShieldCheck as Shield,
-  ExternalLink, Sparkles, Globe, Copy, Check
+  ExternalLink, Sparkles, Globe, Copy, Check, Clock, ShieldCheck, Zap
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig, SedeStore } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -44,6 +43,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [clientData, setClientData] = useState({ nombre: '', telefono: '', direccion: '' });
   const [voucherImage, setVoucherImage] = useState<string | null>(null);
   const [isOrderLoading, setIsOrderLoading] = useState(false);
+  const [orderRef, setOrderRef] = useState('');
 
   const brandColor = config?.colorPrimario || '#84cc16'; 
   const secondaryColor = config?.colorSecundario || '#1e293b';
@@ -176,7 +176,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     
     try {
       const waNumber = (config.whatsappNumbers || config.whatsappHelpNumber || '51975615244').replace(/\D/g, '');
-      const orderRef = `WEB-${Date.now().toString().slice(-6)}`;
+      const ref = `WEB-${Date.now().toString().slice(-6)}`;
+      setOrderRef(ref);
       
       // 1. Intentar crear pedido en Odoo
       let odooOrderId = null;
@@ -201,12 +202,12 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           session.companyId || 1
         );
       } catch (err) {
-        console.error("Fallo creación en Odoo, guardando en Supabase como respaldo", err);
+        console.error("Odoo fallback activated");
       }
 
-      // 2. Guardar en Supabase (Trigger para n8n)
+      // 2. Guardar en Supabase (Trigger para n8n -> Evolution API)
       await supabase.from('pedidos_tienda').insert([{
-        order_name: orderRef, 
+        order_name: ref, 
         cliente_nombre: clientData.nombre, 
         monto: cartTotal, 
         voucher_url: voucherImage,
@@ -223,7 +224,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         }
       }]);
 
-      // 3. Preparar mensaje WhatsApp
+      // 3. WhatsApp Directo (Como respaldo al bot)
       let locationText = '';
       if (deliveryType === 'recojo' && selectedSede) {
           locationText = `\n📍 *Recojo:* ${selectedSede.nombre}\n🏠 *Dir:* ${selectedSede.direccion}`;
@@ -231,7 +232,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           locationText = `\n🚚 *Delivery:* ${clientData.direccion}`;
       }
 
-      const message = `*NUEVO PEDIDO ${config.nombreComercial || ''}*\nRef: ${orderRef}\n\n👤 *Cliente:* ${clientData.nombre}\n📱 *Cel:* ${clientData.telefono}\n\n🛒 *Pedido:* \n${cart.map(i => `• ${i.cantidad}x ${i.producto.nombre}`).join('\n')}\n\n💰 *Total:* S/ ${cartTotal.toFixed(2)}\n💳 *Pago:* ${paymentMethod.toUpperCase()}${locationText}\n\n_Ya adjunto mi comprobante de pago abajo._`;
+      const message = `*NUEVO PEDIDO ${config.nombreComercial || ''}*\nRef: ${ref}\n\n👤 *Cliente:* ${clientData.nombre}\n📱 *Cel:* ${clientData.telefono}\n\n🛒 *Pedido:* \n${cart.map(i => `• ${i.cantidad}x ${i.producto.nombre}`).join('\n')}\n\n💰 *Total:* S/ ${cartTotal.toFixed(2)}\n💳 *Pago:* ${paymentMethod.toUpperCase()}${locationText}\n\n_Ya adjunto mi comprobante de pago abajo._`;
       
       window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
       setCurrentStep('success');
@@ -342,25 +343,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             <p className="text-xl font-black leading-none">S/ {cartTotal.toFixed(2)}</p>
           </div>
         </button>
-      )}
-
-      {/* FOOTER */}
-      {!loading && (
-        <footer className="text-white py-16 px-6" style={{ backgroundColor: secondaryColor }}>
-           <div className="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-center gap-12">
-              <div className="flex-1 flex items-center gap-6">
-                 {config.footerLogoUrl ? <img src={config.footerLogoUrl} className="h-12 object-contain" /> : <div className="flex items-center gap-2"><Citrus className="w-8 h-8 text-brand-500" /><h2 className="text-xl font-black uppercase tracking-tighter leading-none">{config.nombreComercial || config.code}</h2></div>}
-                 <div className="h-10 w-px bg-white/10 hidden md:block"></div>
-                 <p className="text-[9px] font-black uppercase tracking-widest text-white/40 max-w-[220px] leading-relaxed">
-                    {config.footer_description || "Calidad y bienestar garantizado por Lemon BI."}
-                 </p>
-              </div>
-              <div className="flex-1 flex flex-col items-center lg:items-end gap-6">
-                 <p className="text-[8px] font-black uppercase tracking-widest opacity-30">Lemon BI Analytics © 2025</p>
-                 <a href="https://gaorsystem.vercel.app/" target="_blank" rel="noreferrer" className="text-[8px] font-black uppercase tracking-widest opacity-30 hover:opacity-100 transition-opacity mt-1">Desarrollado por gaorsystem peru</a>
-              </div>
-           </div>
-        </footer>
       )}
 
       {/* CHECKOUT DRAWER */}
@@ -494,7 +476,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
                     <div className="flex gap-4">
                        <button onClick={() => setCurrentStep('details')} className="flex-1 py-6 bg-slate-100 rounded-[2rem] text-[10px] font-black uppercase text-slate-400">Atrás</button>
-                       <button onClick={() => setCurrentStep('payment')} className="flex-[2] py-6 bg-slate-900 text-white rounded-[2rem] text-[10px] font-black uppercase shadow-xl">Siguiente Paso</button>
+                       <button onClick={() => setCurrentStep('voucher')} className="flex-[2] py-6 bg-slate-900 text-white rounded-[2rem] text-[10px] font-black uppercase shadow-xl">Siguiente Paso</button>
                     </div>
                  </div>
               )}
@@ -548,15 +530,56 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               )}
 
               {currentStep === 'success' && (
-                 <div className="flex-1 flex flex-col items-center justify-center text-center space-y-10 animate-in zoom-in duration-700">
-                    <div className="w-32 h-32 bg-brand-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-brand-500/50 animate-bounce">
-                       <CheckCircle2 className="w-16 h-16"/>
+                 <div className="flex-1 flex flex-col items-center justify-center text-center space-y-10 animate-in zoom-in duration-700 pb-10">
+                    <div className="relative">
+                      <div className="w-32 h-32 bg-brand-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-brand-500/50 animate-bounce">
+                        <CheckCircle2 className="w-16 h-16"/>
+                      </div>
+                      <div className="absolute -top-4 -right-4 bg-white p-3 rounded-2xl shadow-xl animate-pulse">
+                        <Zap className="w-6 h-6 text-amber-500 fill-amber-500"/>
+                      </div>
                     </div>
-                    <div className="space-y-4">
-                       <h3 className="text-4xl font-black uppercase tracking-tighter leading-none">¡Excelente Elección!</h3>
-                       <p className="text-[11px] text-slate-500 uppercase font-bold tracking-[0.2em] max-w-[280px] mx-auto leading-relaxed">Tu pedido ha sido enviado. Ahora completa el proceso en WhatsApp enviando el mensaje predefinido.</p>
+
+                    <div className="space-y-6">
+                       <div className="space-y-2">
+                          <h3 className="text-3xl font-black uppercase tracking-tighter leading-none">¡Pedido Registrado!</h3>
+                          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-brand-600">Referencia: {orderRef}</p>
+                       </div>
+                       
+                       <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 space-y-6">
+                          <div className="flex items-center gap-4 text-left">
+                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-slate-400 shrink-0">
+                               <Clock className="w-6 h-6"/>
+                            </div>
+                            <div>
+                               <p className="text-[10px] font-black uppercase text-slate-900 tracking-tight">Validación en curso</p>
+                               <p className="text-[9px] text-slate-500 font-bold uppercase">Nuestro equipo revisará tu pago en breve.</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 text-left">
+                            <div className="w-12 h-12 bg-brand-100 rounded-2xl flex items-center justify-center shadow-sm text-brand-600 shrink-0">
+                               <MessageCircle className="w-6 h-6"/>
+                            </div>
+                            <div>
+                               <p className="text-[10px] font-black uppercase text-brand-600 tracking-tight">Confirmación por WhatsApp</p>
+                               <p className="text-[9px] text-slate-500 font-bold uppercase">Recibirás un mensaje automático de confirmación.</p>
+                            </div>
+                          </div>
+                       </div>
+
+                       <div className="flex items-center justify-center gap-2 py-4 px-6 bg-brand-50 rounded-2xl border border-brand-100">
+                          <ShieldCheck className="w-4 h-4 text-brand-500"/>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-brand-700">Compra 100% segura con Lemon BI</span>
+                       </div>
                     </div>
-                    <button onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); setVoucherImage(null); }} className="w-full py-7 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-xl hover:bg-brand-500 transition-all">Seguir Comprando</button>
+
+                    <button 
+                      onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); setVoucherImage(null); }} 
+                      className="w-full py-7 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-xl hover:bg-brand-500 transition-all active:scale-95"
+                    >
+                      Seguir Comprando
+                    </button>
                  </div>
               )}
            </div>
