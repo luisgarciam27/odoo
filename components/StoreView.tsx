@@ -42,6 +42,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [isOrderLoading, setIsOrderLoading] = useState(false);
 
   const brandColor = config?.colorPrimario || '#84cc16'; 
+  const secondaryColor = config?.colorSecundario || '#1e293b';
   const slideImages = config.slide_images || [];
 
   const cartTotal = useMemo(() => {
@@ -268,7 +269,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                   {totalItems}
                </span>
             </div>
-            {/* Pequeño indicador de total flotante */}
             <div className="absolute -left-20 top-1/2 -translate-y-1/2 bg-white text-slate-900 px-4 py-2 rounded-2xl font-black text-xs shadow-xl border border-slate-100 pointer-events-none whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
                S/ {cartTotal.toFixed(2)}
             </div>
@@ -410,23 +410,27 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
-      {/* FOOTER */}
+      {/* FOOTER PROFESIONAL */}
       {!loading && (
-        <footer className="bg-slate-900 text-white pt-20 pb-10 px-6 md:px-12 relative overflow-hidden">
+        <footer className="text-white pt-20 pb-10 px-6 md:px-12 relative overflow-hidden" style={{ backgroundColor: secondaryColor }}>
            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
            <div className="max-w-7xl mx-auto relative z-10">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
                  <div className="col-span-1 md:col-span-1 space-y-6">
-                    <div className="flex items-center gap-3">
-                       <div className="bg-brand-500 p-2.5 rounded-2xl transform rotate-6 shadow-xl">
-                          <Pill className="w-6 h-6 text-white" />
-                       </div>
+                    <div className="flex items-center gap-4">
+                       {config.footerLogoUrl ? (
+                         <img src={config.footerLogoUrl} className="h-10 object-contain" alt="Footer Logo" />
+                       ) : (
+                         <div className="bg-brand-500 p-2.5 rounded-2xl transform rotate-6 shadow-xl" style={{ backgroundColor: brandColor }}>
+                            <Citrus className="w-6 h-6 text-white" />
+                         </div>
+                       )}
                        <h2 className="text-2xl font-black uppercase tracking-tighter">{config.nombreComercial || config.code}</h2>
                     </div>
                     <p className="text-slate-400 text-[11px] font-bold uppercase leading-relaxed tracking-wider">{config.footer_description || "Comprometidos con tu bienestar."}</p>
                     <div className="flex gap-4">
-                       {config.facebook_url && <a href={config.facebook_url} target="_blank" className="p-3 bg-slate-800 rounded-xl hover:bg-brand-500 transition-all"><Facebook className="w-5 h-5"/></a>}
-                       {config.instagram_url && <a href={config.instagram_url} target="_blank" className="p-3 bg-slate-800 rounded-xl hover:bg-pink-500 transition-all"><Instagram className="w-5 h-5"/></a>}
+                       {config.facebook_url && <a href={config.facebook_url} target="_blank" className="p-3 bg-white/5 rounded-xl hover:bg-brand-500 transition-all"><Facebook className="w-5 h-5"/></a>}
+                       {config.instagram_url && <a href={config.instagram_url} target="_blank" className="p-3 bg-white/5 rounded-xl hover:bg-pink-500 transition-all"><Instagram className="w-5 h-5"/></a>}
                     </div>
                  </div>
                  <div className="space-y-6">
@@ -439,14 +443,14 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-500">Atención</h3>
                     <div className="space-y-4">
                        <div className="flex items-center gap-4 group">
-                          <div className="p-3 bg-slate-800 rounded-2xl"><MessageCircle className="w-5 h-5 text-white"/></div>
+                          <div className="p-3 bg-white/5 rounded-2xl"><MessageCircle className="w-5 h-5 text-white"/></div>
                           <div><p className="text-[9px] font-black uppercase text-slate-500">WhatsApp</p><p className="text-xs font-black">{config.whatsappHelpNumber || 'Consultas Online'}</p></div>
                        </div>
                     </div>
                  </div>
                  <div className="space-y-6">
                     <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-500">Garantía</h3>
-                    <div className="bg-slate-800/50 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
+                    <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
                        <div className="flex items-center gap-3"><ShieldCheck className="w-5 h-5 text-brand-500"/><span className="text-[10px] font-black uppercase tracking-widest">Pago Seguro</span></div>
                        <div className="flex items-center gap-3"><Clock className="w-5 h-5 text-brand-500"/><span className="text-[10px] font-black uppercase tracking-widest">Entrega Veloz</span></div>
                     </div>
