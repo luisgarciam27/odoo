@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShoppingCart, Package, Search, X, ArrowLeft, 
@@ -151,12 +150,14 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         } catch (e) { console.warn("Fallback Odoo fields"); }
       }
       if (data && Array.isArray(data)) {
+        // Fix: Add missing 'costo' property to satisfy Producto interface requirement
         setProductos(data.map((p: any) => {
           const extra = extrasMap[p.id];
           return {
             id: p.id,
             nombre: p.display_name,
             precio: p.list_price || 0,
+            costo: 0,
             categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
             stock: p.qty_available || 0,
             imagen: p.image_128 || p.image_medium || p.image_small || p.image_1920,
@@ -737,7 +738,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     </div>
                     <div className="flex gap-4 pt-12">
                        <button onClick={() => setCurrentStep('details')} className="flex-1 py-8 bg-slate-100 rounded-[2.5rem] font-black uppercase text-[10px] text-slate-400 tracking-widest hover:bg-slate-200 transition-colors">Atrás</button>
-                       <button onClick={() => setCurrentStep('voucher')} className="flex-[2.5] py-8 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase tracking-[0.3em] text-[11px] shadow-2xl hover:bg-brand-500 transition-all shadow-brand-500/10">Ya transferí, subir comprobante</button>
+                       <button onClick={() => setCurrentStep('payment')} className="flex-[2.5] py-8 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase tracking-[0.3em] text-[11px] shadow-2xl hover:bg-brand-500 transition-all shadow-brand-500/10">Ya transferí, subir comprobante</button>
                     </div>
                  </div>
               )}
