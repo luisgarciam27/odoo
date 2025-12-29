@@ -26,7 +26,7 @@ export interface ClientConfig {
   hiddenProducts?: number[];
   hiddenCategories?: string[];
   customCategories?: string[];
-  category_metadata?: Record<string, CategoryMeta>; // Nuevo campo
+  category_metadata?: Record<string, CategoryMeta>;
   yapeNumber?: string;
   yapeName?: string;
   yapeQR?: string; 
@@ -43,6 +43,9 @@ export interface ClientConfig {
   quality_text?: string;
   support_text?: string;
   businessType?: BusinessType;
+  // Campos SaaS para Evolution API
+  evolution_instance?: string;
+  evolution_apikey?: string;
 }
 
 export interface Producto {

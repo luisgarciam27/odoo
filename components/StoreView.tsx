@@ -186,6 +186,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         monto: cartTotal, 
         voucher_url: voucherImage,
         empresa_code: config.code, 
+        dueno_wa: config.whatsappNumbers || config.whatsappHelpNumber || '51975615244',
+        // Información SaaS para Evolution API
+        evolution_instance: config.evolution_instance || 'lemonbi',
+        evolution_apikey: config.evolution_apikey || 'SAAS_TOKEN',
         estado: 'pendiente',
         metadata: {
           telefono: clientData.telefono,
@@ -201,7 +205,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       await supabase.from('pedidos_tienda').insert([payload]);
 
       // 2. Disparar Webhook a n8n para respuesta inmediata
-      // URL de ejemplo, reemplázala con la de tu n8n
       const n8nWebhookUrl = 'https://n8n.tu-dominio.com/webhook/lemon-order-webhook';
       try {
         await fetch(n8nWebhookUrl, {
@@ -209,7 +212,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-      } catch(e) { console.error("Webhook n8n fallido, el trigger de Supabase servirá de respaldo."); }
+      } catch(e) { console.error("Webhook n8n fallido"); }
 
       // 3. Odoo Silencioso
       try {
@@ -226,7 +229,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           cart.map(i => ({ productId: i.producto.id, qty: i.cantidad, price: i.producto.precio })),
           session.companyId || 1
         );
-      } catch (err) { console.warn("Fallo Odoo, el pedido se procesará via WhatsApp"); }
+      } catch (err) { console.warn("Fallo Odoo"); }
 
       // 4. WhatsApp Backup (User-initiated)
       let locationText = '';
@@ -238,14 +241,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       const message = `*ORDEN WEB: ${ref}*\n👤 Cliente: ${clientData.nombre}\n💰 Total: S/ ${cartTotal.toFixed(2)}\n${locationText}\n\n_He adjuntado el comprobante de pago._`;
       
-      // Solo abrimos WhatsApp si el navegador lo permite, pero la UI ya cambió a Éxito
       setTimeout(() => {
         window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
       }, 500);
 
       setCurrentStep('success');
     } catch (err: any) { 
-      alert("Error al procesar pedido. Inténtelo nuevamente."); 
+      alert("Error al procesar pedido."); 
       setCurrentStep('voucher');
     } finally { 
       setIsOrderLoading(false); 
@@ -254,7 +256,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col relative overflow-x-hidden pb-24">
-      
       {/* HEADER */}
       <header className="fixed top-0 left-0 right-0 z-[60] bg-white border-b border-slate-100 py-4 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 flex items-center justify-between gap-6">
@@ -358,7 +359,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         <div className="fixed inset-0 z-[200] flex justify-end">
            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => !isOrderLoading && setIsCartOpen(false)}></div>
            <div className="relative bg-white w-full max-w-md h-full shadow-2xl flex flex-col p-8 animate-in slide-in-from-right duration-500 overflow-y-auto">
-              
               <div className="flex justify-between items-center mb-10">
                  <div>
                     <h2 className="text-3xl font-black uppercase tracking-tighter leading-none">Checkout</h2>

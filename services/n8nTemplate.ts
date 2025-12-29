@@ -18,9 +18,9 @@ export const DAILY_WORKFLOW_JSON = {
   "connections": {}
 };
 
-// WORKFLOW PROFESIONAL: WEBHOOK + EVOLUTION API
+// WORKFLOW PROFESIONAL: WEBHOOK + EVOLUTION API DINÁMICO
 export const ORDER_WEBHOOK_WORKFLOW_JSON = {
-  "name": "LemonBI - Checkout Pro (Webhook)",
+  "name": "LemonBI - Checkout Pro SaaS (Webhook)",
   "nodes": [
     {
       "parameters": {
@@ -35,7 +35,7 @@ export const ORDER_WEBHOOK_WORKFLOW_JSON = {
     },
     {
       "parameters": {
-        "jsCode": "const body = $json.body;\nconst meta = body.metadata || {};\nconst items = Array.isArray(meta.carrito) ? meta.carrito.join('\\n') : 'Detalle no disponible';\n\n// Formatear teléfono\nlet phone = meta.telefono ? meta.telefono.replace(/\\D/g, '') : '';\nif (phone.length === 9) phone = '51' + phone;\n\nreturn {\n  json: {\n    cliente_phone: phone,\n    dueno_phone: '51975615244', // <--- CAMBIAR AL TEL DEL DUEÑO\n    monto: body.monto,\n    nombre: body.cliente_nombre,\n    ref: body.order_name,\n    voucher: body.voucher_url,\n    items: items,\n    entrega: meta.entrega === 'delivery' ? `🚚 *Delivery:* ${meta.direccion}` : `📍 *Recojo:* ${meta.sede}`,\n    metodo: meta.metodo_pago ? meta.metodo_pago.toUpperCase() : 'YAPE/PLIN'\n  }\n};"
+        "jsCode": "const body = $json.body;\nconst meta = body.metadata || {};\nconst items = Array.isArray(meta.carrito) ? meta.carrito.join('\\n') : 'Detalle no disponible';\n\n// Formatear teléfono cliente\nlet phone = meta.telefono ? meta.telefono.replace(/\\D/g, '') : '';\nif (phone.length === 9) phone = '51' + phone;\n\n// Formatear teléfono dueño\nlet ownerPhone = body.dueno_wa ? body.dueno_wa.replace(/\\D/g, '') : '51975615244';\nif (ownerPhone.length === 9) ownerPhone = '51' + ownerPhone;\n\nreturn {\n  json: {\n    instancia: body.evolution_instance || 'lemonbi',\n    evolution_apikey: body.evolution_apikey || 'TOKEN_GENERAL',\n    cliente_phone: phone,\n    dueno_phone: ownerPhone,\n    monto: body.monto,\n    nombre: body.cliente_nombre,\n    ref: body.order_name,\n    voucher: body.voucher_url,\n    items: items,\n    entrega: meta.entrega === 'delivery' ? `🚚 *Delivery:* ${meta.direccion}` : `📍 *Recojo:* ${meta.sede}`,\n    metodo: meta.metodo_pago ? meta.metodo_pago.toUpperCase() : 'YAPE/PLIN'\n  }\n};"
       },
       "name": "Format Data",
       "type": "n8n-nodes-base.code",
@@ -45,10 +45,10 @@ export const ORDER_WEBHOOK_WORKFLOW_JSON = {
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.red51.site/message/sendText/farmacia",
+        "url": "=https://api.red51.site/message/sendText/{{$json.instancia}}",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "apikey", "value": "TU_API_KEY" }]
+          "parameters": [{ "name": "apikey", "value": "={{$json.evolution_apikey}}" }]
         },
         "sendBody": true,
         "specifyBody": "json",
@@ -62,10 +62,10 @@ export const ORDER_WEBHOOK_WORKFLOW_JSON = {
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.red51.site/message/sendMedia/farmacia",
+        "url": "=https://api.red51.site/message/sendMedia/{{$json.instancia}}",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "apikey", "value": "TU_API_KEY" }]
+          "parameters": [{ "name": "apikey", "value": "={{$json.evolution_apikey}}" }]
         },
         "sendBody": true,
         "specifyBody": "json",

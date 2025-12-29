@@ -51,7 +51,9 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     slide_images: Array.isArray(row.slide_images) ? row.slide_images : [], 
     quality_text: row.quality_text || '',
     support_text: row.support_text || '',
-    businessType: row.business_type || 'pharmacy'
+    businessType: row.business_type || 'pharmacy',
+    evolution_instance: row.evolution_instance || 'lemonbi',
+    evolution_apikey: row.evolution_apikey || 'TOKEN_SAAS_GENERAL'
 });
 
 export const getClients = async (): Promise<ClientConfig[]> => {
@@ -87,7 +89,6 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         estado: client.isActive,
         nombre_comercial: client.nombreComercial,
         logo_url: client.logoUrl,
-        // Fix: Use correct property name from ClientConfig type
         footer_logo_url: client.footerLogoUrl, 
         color_primario: client.colorPrimario, 
         color_secundario: client.colorSecundario,
@@ -96,7 +97,6 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         tienda_categoria_nombre: client.tiendaCategoriaNombre,
         productos_ocultos: client.hiddenProducts || [],
         categorias_ocultas: client.hiddenCategories || [],
-        // Fix: Use correct property name from ClientConfig type
         custom_categories: client.customCategories || [],
         category_metadata: client.category_metadata || {},
         yape_numero: client.yapeNumber,
@@ -114,8 +114,9 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         slide_images: client.slide_images || [], 
         quality_text: client.quality_text,
         support_text: client.support_text,
-        // Fix: Use correct property name from ClientConfig type
-        business_type: client.businessType
+        business_type: client.businessType,
+        evolution_instance: client.evolution_instance,
+        evolution_apikey: client.evolution_apikey
     };
 
     try {
