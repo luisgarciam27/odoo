@@ -14,8 +14,8 @@ export const changeAdminPassword = (newPassword: string) => {
     localStorage.setItem(ADMIN_PWD_KEY, newPassword);
 };
 
-// Columnas que podrían faltar en bases de datos antiguas
-const EXTENDED_COLUMNS = [
+// Columnas nuevas que podrían no existir en instalaciones antiguas
+const NEW_FIELDS = [
   'business_type', 'facebook_url', 'instagram_url', 'tiktok_url', 
   'footer_description', 'slide_images', 'quality_text', 'support_text', 
   'categorias_ocultas', 'whatsapp_help_number', 'productos_ocultos',
@@ -113,31 +113,39 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         business_type: client.businessType
     };
 
-    const runSave = async (data: any) => {
+    const performSave = async (data: any) => {
         if (isNew) return await supabase.from('empresas').insert([data]);
         return await supabase.from('empresas').update(data).eq('codigo_acceso', client.code);
     };
 
     try {
-        let response = await runSave(payload);
+        let response = await performSave(payload);
         
-        // Si falla por columna inexistente (42703), limpiamos y reintentamos solo con lo básico
-        if (response.error && (response.error.code === '42703' || response.error.message.includes('column'))) {
-            console.warn("Detectadas columnas faltantes. Reintentando con payload básico...");
-            const safePayload = { ...payload };
-            EXTENDED_COLUMNS.forEach(col => delete safePayload[col]);
-            
-            response = await runSave(safePayload);
-            if (!response.error) {
-                return { 
-                    success: true, 
-                    message: "Guardado exitoso (Modo Básico). Para usar funciones de tienda avanzadas, ejecute el script SQL en Supabase." 
-                };
+        // Loop de limpieza si fallan columnas (Código 42703 o error de columna)
+        let safePayload = { ...payload };
+        let retryCount = 0;
+        
+        while (response.error && (response.error.code === '42703' || response.error.message.includes('column')) && retryCount < 15) {
+            retryCount++;
+            const errorMsg = response.error.message;
+            const match = errorMsg.match(/column "?([^" ]+)"? does not exist/i);
+            const missingColFull = match ? match[1] : null;
+            const missingCol = missingColFull?.includes('.') ? missingColFull.split('.').pop() : missingColFull;
+
+            if (missingCol && safePayload.hasOwnProperty(missingCol)) {
+                delete safePayload[missingCol];
+            } else {
+                // Si no se detecta el nombre, quitar todos los nuevos por seguridad
+                NEW_FIELDS.forEach(f => delete safePayload[f]);
             }
+            response = await performSave(safePayload);
         }
 
         if (response.error) throw response.error;
-        return { success: true };
+        return { 
+            success: true, 
+            message: retryCount > 0 ? "Guardado en modo compatibilidad. Algunas funciones de marca requieren actualizar el esquema SQL." : undefined 
+        };
     } catch (err: any) {
         return { success: false, message: err.message };
     }

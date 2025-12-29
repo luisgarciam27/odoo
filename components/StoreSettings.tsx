@@ -5,7 +5,6 @@ import {
   Sparkles, Pill, Briefcase, PawPrint, Footprints, Wallet, QrCode, Phone, 
   User, X, Globe, Share2, Info, ShieldCheck, Music2, Layers, EyeOff, Eye,
   RefreshCw, ChevronRight, Tag, AlertTriangle, Copy, Terminal, ShieldAlert, DatabaseZap,
-  // Fix: Adding missing ExternalLink icon import
   ExternalLink
 } from 'lucide-react';
 import { ClientConfig, SedeStore, BusinessType, OdooSession } from '../types';
@@ -131,12 +130,12 @@ NOTIFY pgrst, 'reload schema';`;
     <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-6 pb-32">
       
       {errorMessage && (
-        <div className={`p-8 rounded-[3rem] border-4 flex flex-col md:flex-row items-center gap-8 shadow-2xl animate-in zoom-in-95 ${errorMessage.includes('Compatibilidad') ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-red-50 border-red-200 text-red-900'}`}>
-           <div className={`p-4 rounded-3xl ${errorMessage.includes('Compatibilidad') ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'}`}>
-             {errorMessage.includes('Compatibilidad') ? <DatabaseZap className="w-12 h-12 shrink-0 animate-pulse" /> : <ShieldAlert className="w-12 h-12 shrink-0" />}
+        <div className={`p-8 rounded-[3rem] border-4 flex flex-col md:flex-row items-center gap-8 shadow-2xl animate-in zoom-in-95 ${errorMessage.includes('compatibilidad') || errorMessage.includes('Modo Básico') ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-red-50 border-red-200 text-red-900'}`}>
+           <div className={`p-4 rounded-3xl ${errorMessage.includes('compatibilidad') ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'}`}>
+             {errorMessage.includes('compatibilidad') ? <DatabaseZap className="w-12 h-12 shrink-0 animate-pulse" /> : <ShieldAlert className="w-12 h-12 shrink-0" />}
            </div>
            <div className="flex-1 text-center md:text-left space-y-2">
-             <h4 className="font-black uppercase text-lg tracking-tight">Acción Requerida en Base de Datos</h4>
+             <h4 className="font-black uppercase text-lg tracking-tight">Aviso de Configuración</h4>
              <p className="text-sm font-bold leading-relaxed opacity-80">{errorMessage}</p>
              <div className="flex flex-wrap gap-4 pt-4">
                 <button onClick={copyFixSQL} className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase flex items-center gap-3 hover:bg-black transition-all shadow-lg">

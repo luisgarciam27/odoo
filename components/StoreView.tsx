@@ -109,15 +109,28 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     try {
       const extras = await getProductExtras(config.code);
       
-      // DOMINIO RESILIENTE: Sale_ok + Active (Universal Odoo 14-17)
-      // Intentamos primero con filtro de compañía, si falla o da vacío, buscamos todo lo vendible.
+      // ESTRATEGIA MULTI-INTENTO PARA ODOO 14/17
+      // 1. Intentar con filtro de empresa y activo (Estándar)
       let domain: any[] = [['sale_ok', '=', true], ['active', '=', true]];
+      if (session.companyId) {
+          domain.push('|');
+          domain.push(['company_id', '=', session.companyId]);
+          domain.push(['company_id', '=', false]);
+      }
+
+      const fields = ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'];
+      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, { limit: 1000, order: 'display_name asc' });
       
-      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'], { limit: 1000, order: 'display_name asc' });
-      
+      // 2. Si falló, intentar búsqueda global (Sin filtro de empresa)
       if (!data || data.length === 0) {
-          console.warn("Búsqueda inicial vacía. Intentando búsqueda global sin restricciones...");
-          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'], { limit: 500 });
+          console.warn("[LemonBI] Intento 1 sin resultados. Probando búsqueda global...");
+          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 500 });
+      }
+      
+      // 3. Si falló el global, intentar con Odoo 14 legacy fields si es necesario (qty_available a veces no está en search_read simple)
+      if (!data || data.length === 0) {
+          console.warn("[LemonBI] Intento 2 sin resultados. Probando búsqueda mínima...");
+          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], ['display_name', 'list_price', 'categ_id', 'image_128'], { limit: 300 });
       }
 
       setProductos((data || []).map((p: any) => {
@@ -141,7 +154,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         };
       }));
     } catch (e) { 
-      console.error("Error crítico Odoo:", e); 
+      console.error("Error sincronización Odoo:", e); 
     } finally { 
       setLoading(false); 
     }
