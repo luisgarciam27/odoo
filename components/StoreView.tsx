@@ -40,27 +40,22 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [clientData, setClientData] = useState({ nombre: '', telefono: '', direccion: '', sede: '' });
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
 
-  const colorP = config?.colorPrimario || '#84cc16'; 
+  const brandColor = config?.colorPrimario || '#84cc16'; 
   const colorA = config?.colorAcento || '#0ea5e9';
   const bizType = config?.businessType || 'pharmacy';
-  // Fix: Define brandColor as an alias of colorP to resolve reference errors
-  const brandColor = colorP;
 
   const parseOdooDescription = (rawText: string = "") => {
     const lines = rawText.split('\n');
-    let marca = ""; let especie = ""; let peso = ""; let registro = "";
+    let marca = ""; let especie = ""; let registro = "";
     let descripcionLimpiaLines: string[] = [];
-
     lines.forEach(line => {
       const upperLine = line.toUpperCase();
       if (upperLine.includes("MARCA:")) marca = line.split(":")[1]?.trim();
       else if (upperLine.includes("ESPECIE:")) especie = line.trim();
-      else if (upperLine.includes("PESO:")) peso = line.trim();
       else if (upperLine.includes("R.S.") || upperLine.includes("REGISTRO")) registro = line.split(":")[1]?.trim() || line.trim();
       else if (line.trim().length > 0 && !upperLine.includes("IMÁGENES REFERENCIALES")) descripcionLimpiaLines.push(line.trim());
     });
-
-    return { marca: marca || "Genérico", especie: especie || "General", peso: peso, registro: registro, cleanDesc: descripcionLimpiaLines.join(' ') };
+    return { marca: marca || "Genérico", especie: especie || "General", registro: registro, cleanDesc: descripcionLimpiaLines.join(' ') };
   };
 
   const slides = useMemo(() => {
@@ -68,10 +63,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       return config.slide_images.filter(img => img).map((url) => ({ image: url }));
     }
     return [
-      { title: "Calidad y Bienestar", desc: "Sincronizado con inventarios reales.", icon: ShieldCheck, badge: "Garantía Oficial", bg: `linear-gradient(135deg, ${colorP}, ${colorA})` },
-      { title: "Atención Especializada", desc: "Expertos cuidando de lo que más quieres.", icon: HeartHandshake, badge: "Confianza", bg: `linear-gradient(135deg, ${colorA}, ${colorP})` }
+      { title: "Salud y Bienestar", desc: "Sincronizado con inventarios reales en tiempo real.", icon: ShieldCheck, badge: "Garantía Oficial", bg: `linear-gradient(135deg, ${brandColor}, ${colorA})` },
+      { title: "Atención Especializada", desc: "Expertos cuidando de lo que más quieres.", icon: HeartHandshake, badge: "Confianza", bg: `linear-gradient(135deg, ${colorA}, ${brandColor})` }
     ];
-  }, [config.slide_images, colorP, colorA]);
+  }, [config.slide_images, brandColor, colorA]);
 
   useEffect(() => {
     if (slides.length > 1) {
@@ -88,32 +83,49 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const extras = await getProductExtras(config.code);
       const fields = ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'];
       
+      // Intento 1: Filtros estrictos (Sale OK + Activo)
       let domain: any[] = [['sale_ok', '=', true], ['active', '=', true]];
-      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, { limit: 1000 });
+      const context = { allowed_company_ids: [session.companyId], company_id: session.companyId };
+      
+      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, { limit: 1000, context });
 
+      // Intento 2: Si falla el 1, probar sin filtro 'active' (algunos usuarios técnicos no pueden filtrar por este campo)
       if (!data || data.length === 0) {
-        data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 500 });
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 1000, context });
       }
 
-      setProductos((data || []).map((p: any) => {
-        const extra = extras[p.id];
-        const parsed = parseOdooDescription(p.description_sale);
-        return {
-          id: p.id,
-          nombre: p.display_name,
-          precio: p.list_price || 0,
-          categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
-          stock: p.qty_available || 0,
-          imagen: p.image_128,
-          descripcion_venta: extra?.descripcion_lemon || parsed.cleanDesc || p.description_sale || '',
-          uso_sugerido: extra?.instrucciones_lemon || '',
-          marca: parsed.marca,
-          especie: parsed.especie,
-          registro_sanitario: parsed.registro || 'S/N'
-        };
-      }));
-    } catch (e) { console.error("Odoo Sync Error:", e); }
-    finally { setLoading(false); }
+      // Intento 3: Si sigue fallando, intentar con el modelo product.template (algunas instalaciones no tienen variantes)
+      if (!data || data.length === 0) {
+        data = await client.searchRead(session.uid, session.apiKey, 'product.template', [['sale_ok', '=', true]], fields, { limit: 500, context });
+      }
+
+      if (data && data.length > 0) {
+        setProductos(data.map((p: any) => {
+          const extra = extras[p.id];
+          const parsed = parseOdooDescription(p.description_sale);
+          return {
+            id: p.id,
+            nombre: p.display_name,
+            precio: p.list_price || 0,
+            categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
+            stock: p.qty_available || 0,
+            imagen: p.image_128,
+            descripcion_venta: extra?.descripcion_lemon || parsed.cleanDesc || p.description_sale || '',
+            uso_sugerido: extra?.instrucciones_lemon || '',
+            marca: parsed.marca,
+            especie: parsed.especie,
+            registro_sanitario: parsed.registro || 'S/N'
+          };
+        }));
+      } else {
+        setProductos([]);
+      }
+    } catch (e) { 
+      console.error("Odoo Sync Error:", e); 
+      setProductos([]);
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   useEffect(() => { fetchProducts(); }, [session, config.code]);
@@ -146,8 +158,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     setCurrentStep('cart');
   };
 
-  const cartTotal = cart.reduce((sum, item) => sum + (item.producto.precio * item.cantidad), 0);
-
   const bizIcons = {
     pharmacy: { main: Pill, label: 'Farmacia', catIcon: Beaker },
     veterinary: { main: PawPrint, label: 'Veterinaria', catIcon: PawPrint },
@@ -162,7 +172,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             {onBack && <button onClick={onBack} className="p-2 text-slate-400 hover:text-slate-900"><ArrowLeft className="w-5 h-5"/></button>}
-            {config.logoUrl ? <img src={config.logoUrl} className="h-10 md:h-12 object-contain" /> : <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg" style={{backgroundColor: colorP}}><bizIcons.main className="w-6 h-6" /></div>}
+            {config.logoUrl ? <img src={config.logoUrl} className="h-10 md:h-12 object-contain" /> : <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg" style={{backgroundColor: brandColor}}><bizIcons.main className="w-6 h-6" /></div>}
             <div className="hidden md:block">
                <h1 className="font-black text-slate-900 uppercase text-[14px] leading-none tracking-tighter">{config.nombreComercial || config.code}</h1>
                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1.5 flex items-center gap-1"><BadgeCheck className="w-3.5 h-3.5 text-brand-500" /> {bizIcons.label} Certificada</p>
@@ -171,7 +181,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           <div className="flex-1 max-w-lg">
             <div className="relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-              <input type="text" placeholder="Buscar por nombre..." className="w-full pl-12 pr-6 py-3.5 bg-slate-50 border border-slate-100 rounded-[1.5rem] text-sm font-bold outline-none focus:bg-white shadow-inner transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              <input type="text" placeholder="Buscar productos..." className="w-full pl-12 pr-6 py-3.5 bg-slate-50 border border-slate-100 rounded-[1.5rem] text-sm font-bold outline-none focus:bg-white shadow-inner transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             </div>
           </div>
           <button onClick={() => { setIsCartOpen(true); setCurrentStep('cart'); }} className="relative p-4 bg-slate-900 text-white rounded-[1.5rem] shadow-xl hover:scale-105 active:scale-95 transition-all">
@@ -182,7 +192,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       </header>
 
       <div className="px-6 pt-6">
-        <div className="max-w-7xl mx-auto overflow-hidden rounded-[3rem] shadow-2xl relative h-[200px] md:h-[400px]">
+        <div className="max-w-7xl mx-auto overflow-hidden rounded-[3rem] shadow-2xl relative h-[250px] md:h-[450px]">
           {slides.map((slide: any, idx) => (
             <div key={idx} className={`absolute inset-0 transition-all duration-1000 ${activeSlide === idx ? 'opacity-100 scale-100' : 'opacity-0 scale-110 pointer-events-none'}`}>
               {slide.image ? <img src={slide.image} className="w-full h-full object-cover" /> : (
@@ -211,14 +221,18 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       <main className="flex-1 max-w-7xl mx-auto w-full p-8 md:p-12">
         {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8">
-            {[1,2,3,4,5,6,7,8,9,10].map(i => <div key={i} className="bg-white rounded-[2.5rem] aspect-[3/4] animate-pulse border border-slate-100"></div>)}
+          <div className="flex flex-col items-center justify-center py-20 gap-6">
+             <Loader2 className="w-12 h-12 animate-spin text-brand-500" />
+             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400 animate-pulse">Sincronizando Catálogo de Odoo...</p>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="py-32 text-center flex flex-col items-center gap-8 opacity-40">
              <SearchX className="w-20 h-20 text-slate-200" />
-             <h3 className="text-2xl font-black uppercase tracking-widest text-slate-400">Sin productos disponibles</h3>
-             <button onClick={fetchProducts} className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-xl"><RefreshCw className="w-4 h-4" /> Recargar Catálogo</button>
+             <div className="space-y-2">
+                <h3 className="text-2xl font-black uppercase tracking-widest text-slate-400">Catálogo Vacío</h3>
+                <p className="text-[10px] font-bold uppercase">Verifica el filtro de activo y ventas en Odoo v17.</p>
+             </div>
+             <button onClick={fetchProducts} className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-xl"><RefreshCw className="w-4 h-4" /> Reintentar Búsqueda Global</button>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 md:gap-12">
@@ -241,33 +255,32 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* FOOTER CON IDENTIDAD DE MARCA */}
       <footer className="mt-auto py-24 relative overflow-hidden" style={{backgroundColor: brandColor}}>
-        <div className="absolute inset-0 bg-black/10"></div>
+        <div className="absolute inset-0 bg-black/15"></div>
         <div className="max-w-7xl mx-auto px-10 flex flex-col md:flex-row justify-between items-center gap-16 relative z-10 text-white">
            <div className="space-y-8 max-w-md text-center md:text-left">
               <div className="flex items-center gap-6 justify-center md:justify-start">
                  {config.footerLogoUrl ? (
-                   <img src={config.footerLogoUrl} className="h-16 object-contain drop-shadow-xl" />
+                   <img src={config.footerLogoUrl} className="h-20 object-contain drop-shadow-2xl" />
                  ) : (
-                   <div className="flex items-center gap-4">
-                     <div className="p-5 rounded-3xl bg-white shadow-2xl transform -rotate-3"><bizIcons.main className="w-8 h-8" style={{color: brandColor}} /></div>
-                     <span className="font-black text-3xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
+                   <div className="flex items-center gap-4 bg-white/10 p-4 rounded-3xl">
+                     <bizIcons.main className="w-10 h-10" />
+                     <span className="font-black text-4xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
                    </div>
                  )}
               </div>
-              <p className="text-sm font-bold leading-relaxed italic border-l-4 border-white/30 pl-8 uppercase tracking-widest opacity-90">"{config.footer_description || 'Cuidado experto y garantía total en cada entrega.'}"</p>
+              <p className="text-sm font-bold leading-relaxed italic border-l-4 border-white/40 pl-8 uppercase tracking-widest opacity-90">"{config.footer_description || 'Excelencia y garantía en cada servicio de salud.'}"</p>
            </div>
-           <div className="text-right flex flex-col items-center md:items-end gap-6">
+           <div className="text-right flex flex-col items-center md:items-end gap-10">
               <div className="flex gap-4">
-                  {config.facebook_url && <a href={config.facebook_url} target="_blank" rel="noreferrer" className="p-5 bg-white/10 rounded-[2rem] hover:bg-white hover:text-slate-900 transition-all shadow-xl"><Facebook className="w-7 h-7"/></a>}
-                  {config.instagram_url && <a href={config.instagram_url} target="_blank" rel="noreferrer" className="p-5 bg-white/10 rounded-[2rem] hover:bg-white hover:text-slate-900 transition-all shadow-xl"><Instagram className="w-7 h-7"/></a>}
-                  {config.tiktok_url && <a href={config.tiktok_url} target="_blank" rel="noreferrer" className="p-5 bg-white/10 rounded-[2rem] hover:bg-white hover:text-slate-900 transition-all shadow-xl"><Music2 className="w-7 h-7"/></a>}
-                  {config.whatsappHelpNumber && <a href={`https://wa.me/${config.whatsappHelpNumber}`} target="_blank" rel="noreferrer" className="p-5 bg-white/10 rounded-[2rem] hover:bg-white hover:text-slate-900 transition-all shadow-xl"><MessageCircle className="w-7 h-7"/></a>}
+                  {config.facebook_url && <a href={config.facebook_url} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl"><Facebook className="w-8 h-8"/></a>}
+                  {config.instagram_url && <a href={config.instagram_url} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl"><Instagram className="w-8 h-8"/></a>}
+                  {config.tiktok_url && <a href={config.tiktok_url} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl"><Music2 className="w-8 h-8"/></a>}
+                  {config.whatsappHelpNumber && <a href={`https://wa.me/${config.whatsappHelpNumber}`} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl"><MessageCircle className="w-8 h-8"/></a>}
               </div>
-              <div className="space-y-2 opacity-50 text-center md:text-right">
-                <p className="text-[10px] font-black uppercase tracking-[0.5em]">LEMON BI ANALYTICS • GAORSYSTEM 2025</p>
-                <p className="text-[8px] font-black uppercase tracking-widest">Tecnología Inteligente para el Sector Salud</p>
+              <div className="space-y-3 opacity-60 text-center md:text-right">
+                <p className="text-[11px] font-black uppercase tracking-[0.5em]">LEMON BI CLOUD • GAORSYSTEM 2025</p>
+                <p className="text-[9px] font-black uppercase tracking-widest">Tecnología Inteligente • Impulsando Decisiones</p>
               </div>
            </div>
         </div>

@@ -13,7 +13,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const [clients, setClients] = useState<ClientConfig[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-    const [testingClient, setTestingClient] = useState<string | null>(null);
 
     const [currentClient, setCurrentClient] = useState<ClientConfig>({
         code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', isActive: true,
@@ -84,11 +83,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             <div className="max-w-7xl mx-auto p-6">
                 <div className="flex justify-between items-end mb-8">
                     <div>
-                        <h2 className="text-3xl font-black text-slate-900 uppercase">Configuración Odoo</h2>
-                        <p className="text-slate-500 text-sm mt-1 font-bold uppercase tracking-widest">Gestión técnica de instancias</p>
+                        <h2 className="text-3xl font-black text-slate-900 uppercase">Configuración de Marca</h2>
+                        <p className="text-slate-500 text-sm mt-1 font-bold uppercase tracking-widest">Parámetros técnicos Odoo v17</p>
                     </div>
                     <button onClick={() => { resetForm(); setIsEditing(true); }} className="bg-brand-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center gap-2 hover:bg-brand-700">
-                      <Plus className="w-5 h-5" /> Nueva Conexión
+                      <Plus className="w-5 h-5" /> Nueva Empresa
                     </button>
                 </div>
                 
@@ -96,8 +95,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 text-[10px] text-slate-400 uppercase font-black border-b tracking-widest">
                             <tr>
-                                <th className="px-8 py-5">Código</th>
+                                <th className="px-8 py-5">Identificador</th>
                                 <th className="px-8 py-5">Servidor Odoo</th>
+                                <th className="px-8 py-5">Giro</th>
                                 <th className="px-8 py-5 text-right">Acciones</th>
                             </tr>
                         </thead>
@@ -106,6 +106,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                 <tr key={c.code} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-8 py-5 uppercase">{c.code}</td>
                                     <td className="px-8 py-5 text-slate-400">{c.url}</td>
+                                    <td className="px-8 py-5">
+                                        <span className="text-[9px] font-black uppercase bg-slate-100 px-3 py-1 rounded-full">{c.businessType}</span>
+                                    </td>
                                     <td className="px-8 py-5 flex justify-end gap-2">
                                         <button onClick={() => handleEdit(c)} className="p-3 bg-slate-100 rounded-xl hover:bg-brand-500 hover:text-white transition-all"><Edit className="w-4 h-4"/></button>
                                         <button onClick={() => deleteClient(c.code).then(loadClients)} className="p-3 bg-slate-100 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 className="w-4 h-4"/></button>
@@ -122,15 +125,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     <div className="bg-white rounded-[2.5rem] w-full max-w-xl p-10 shadow-2xl relative">
                         <div className="flex justify-between items-start mb-8 border-b pb-6">
                             <div>
-                                <h3 className="font-black text-2xl uppercase tracking-tighter">Parámetros de Odoo</h3>
-                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">Sincronización Técnica Cloud</p>
+                                <h3 className="font-black text-2xl uppercase tracking-tighter">Conexión Odoo</h3>
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">Sincronización Cloud</p>
                             </div>
                             <button onClick={() => setIsEditing(false)} className="p-2 hover:bg-slate-100 rounded-full"><X/></button>
                         </div>
                         
                         <form onSubmit={handleSaveClient} className="space-y-6">
                             <div className="space-y-4">
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Giro del Cliente</label>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo de Negocio</label>
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                                     <BusinessOption type="pharmacy" label="Farmacia" icon={Pill} />
                                     <BusinessOption type="veterinary" label="Veterinaria" icon={PawPrint} />
@@ -141,23 +144,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Código Identificador</label>
-                                    <input type="text" placeholder="REQUESALUD" className="w-full p-4 border rounded-2xl font-black uppercase text-sm" value={currentClient.code} onChange={e => setCurrentClient({...currentClient, code: e.target.value.toUpperCase()})} required disabled={!!originalCode}/>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Código Acceso</label>
+                                    <input type="text" placeholder="PHARMASCOOT" className="w-full p-4 border rounded-2xl font-black uppercase text-sm" value={currentClient.code} onChange={e => setCurrentClient({...currentClient, code: e.target.value.toUpperCase()})} required disabled={!!originalCode}/>
                                 </div>
                                 <div className="col-span-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">URL de Instancia</label>
-                                    <input type="url" placeholder="https://miempresa.odoo.com" className="w-full p-4 border rounded-2xl text-sm font-bold" value={currentClient.url} onChange={e => setCurrentClient({...currentClient, url: e.target.value})} required/>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">URL Odoo</label>
+                                    <input type="url" placeholder="https://mi-odoo.com" className="w-full p-4 border rounded-2xl text-sm font-bold" value={currentClient.url} onChange={e => setCurrentClient({...currentClient, url: e.target.value})} required/>
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Base de Datos</label>
                                     <input type="text" placeholder="odoo_db" className="w-full p-4 border rounded-2xl text-sm font-bold" value={currentClient.db} onChange={e => setCurrentClient({...currentClient, db: e.target.value})} required/>
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Usuario Técnico</label>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Usuario</label>
                                     <input type="text" placeholder="admin@email.com" className="w-full p-4 border rounded-2xl text-sm font-bold" value={currentClient.username} onChange={e => setCurrentClient({...currentClient, username: e.target.value})} required/>
                                 </div>
                                 <div className="col-span-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">API Key (Contraseña)</label>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">API Key</label>
                                     <input type="password" placeholder="••••••••" className="w-full p-4 border rounded-2xl font-mono text-sm" value={currentClient.apiKey} onChange={e => setCurrentClient({...currentClient, apiKey: e.target.value})} required/>
                                 </div>
                             </div>
@@ -165,7 +168,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                             <div className="pt-6 border-t flex gap-4">
                                 <button type="button" onClick={() => setIsEditing(false)} className="flex-1 p-5 bg-slate-100 rounded-2xl font-black uppercase text-xs">Cerrar</button>
                                 <button type="submit" disabled={isLoading} className="flex-[2] p-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">
-                                    {isLoading ? 'Conectando...' : 'Guardar Conexión'}
+                                    {isLoading ? 'Conectando...' : 'Guardar Configuración'}
                                 </button>
                             </div>
                         </form>
