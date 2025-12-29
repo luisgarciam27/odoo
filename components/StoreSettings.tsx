@@ -5,7 +5,7 @@ import {
   Wallet, X, Facebook, Instagram, MessageCircle,
   RefreshCw, Share2, QrCode, Upload, Smartphone,
   ImageIcon, Paintbrush, Citrus, Layers, User, Link as LinkIcon, 
-  ExternalLink, Globe, ShoppingCart, MonitorPlay
+  ExternalLink, Globe, ShoppingCart, MonitorPlay, Tag
 } from 'lucide-react';
 import { ClientConfig, SedeStore } from '../types';
 import { saveClient } from '../services/clientManager';
@@ -20,12 +20,13 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
   const [currentConfig, setCurrentConfig] = useState<ClientConfig>(config);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [newCat, setNewCat] = useState('');
 
   const handleFileUpload = (field: 'yapeQR' | 'plinQR' | 'logoUrl' | 'footerLogoUrl' | 'slide') => (e: React.ChangeEvent<HTMLInputElement>, index?: number) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-          alert("La imagen es muy pesada (máx 2MB). Redúcela antes de subirla.");
+          alert("La imagen es muy pesada (máx 2MB).");
           return;
       }
       const reader = new FileReader();
@@ -43,16 +44,6 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
     }
   };
 
-  const addSlide = () => {
-    const slides = [...(currentConfig.slide_images || []), ''];
-    setCurrentConfig({ ...currentConfig, slide_images: slides });
-  };
-
-  const removeSlide = (index: number) => {
-    const slides = (currentConfig.slide_images || []).filter((_, i) => i !== index);
-    setCurrentConfig({ ...currentConfig, slide_images: slides });
-  };
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -67,6 +58,14 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
     setIsSaving(false);
   };
 
+  const addSlide = () => {
+    setCurrentConfig({...currentConfig, slide_images: [...(currentConfig.slide_images || []), '']});
+  };
+
+  const removeSlide = (idx: number) => {
+    setCurrentConfig({...currentConfig, slide_images: (currentConfig.slide_images || []).filter((_, i) => i !== idx)});
+  };
+
   const addSede = () => {
     const newSede: SedeStore = { id: Date.now().toString(), nombre: '', direccion: '', googleMapsUrl: '' };
     setCurrentConfig({ ...currentConfig, sedes_recojo: [...(currentConfig.sedes_recojo || []), newSede] });
@@ -74,6 +73,16 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
 
   const removeSede = (id: string) => {
     setCurrentConfig({ ...currentConfig, sedes_recojo: (currentConfig.sedes_recojo || []).filter(s => s.id !== id) });
+  };
+
+  const addCustomCat = () => {
+    if(!newCat) return;
+    setCurrentConfig({...currentConfig, customCategories: [...(currentConfig.customCategories || []), newCat.toUpperCase()]});
+    setNewCat('');
+  };
+
+  const removeCustomCat = (cat: string) => {
+    setCurrentConfig({...currentConfig, customCategories: (currentConfig.customCategories || []).filter(c => c !== cat)});
   };
 
   const brandColor = currentConfig.colorPrimario || '#84cc16';
@@ -102,44 +111,56 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
         </button>
       </div>
 
-      {/* GESTOR DE DIAPOSITIVAS (SLIDER) */}
+      {/* DIAPOSITIVAS (SLIDES) */}
       <section className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-100">
-        <div className="flex justify-between items-center mb-10">
-           <h3 className="text-2xl font-black text-slate-800 flex items-center gap-5 uppercase tracking-tighter">
-             <MonitorPlay className="w-8 h-8 text-blue-500"/> Carrusel de Imágenes (Slides)
-           </h3>
-           <button onClick={addSlide} className="px-6 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg">
-             <Plus className="w-4 h-4"/> Añadir Slide
-           </button>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-           {(currentConfig.slide_images || []).map((img, idx) => (
-              <div key={idx} className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 space-y-4 group relative">
-                 <div className="aspect-[16/9] bg-white rounded-2xl overflow-hidden border border-slate-100 flex items-center justify-center relative shadow-inner">
-                    {img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-10 h-10 text-slate-200" />}
-                    <label className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-all">
-                       <Upload className="text-white w-8 h-8"/>
-                       <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload('slide')(e, idx)} />
-                    </label>
-                 </div>
-                 <div className="flex gap-2">
-                    <input type="text" placeholder="URL de imagen" className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-[10px] font-bold outline-none" value={img} onChange={(e) => {
-                       const slides = [...(currentConfig.slide_images || [])];
-                       slides[idx] = e.target.value;
-                       setCurrentConfig({...currentConfig, slide_images: slides});
-                    }} />
-                    <button onClick={() => removeSlide(idx)} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 className="w-4 h-4"/></button>
-                 </div>
-              </div>
-           ))}
-           {(currentConfig.slide_images || []).length === 0 && (
-              <div className="col-span-full py-16 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[3rem] text-center flex flex-col items-center gap-4">
-                 <MonitorPlay className="w-12 h-12 text-slate-200" />
-                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No hay imágenes en el carrusel</p>
-              </div>
-           )}
-        </div>
+         <div className="flex justify-between items-center mb-10">
+            <h3 className="text-2xl font-black text-slate-800 flex items-center gap-5 uppercase tracking-tighter">
+              <MonitorPlay className="w-8 h-8 text-blue-500"/> Banner Principal (Slides)
+            </h3>
+            <button onClick={addSlide} className="px-6 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-700 transition-all">
+              <Plus className="w-4 h-4"/> Añadir Slide
+            </button>
+         </div>
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {(currentConfig.slide_images || []).map((img, idx) => (
+               <div key={idx} className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-200 group relative">
+                  <div className="aspect-[16/9] bg-white rounded-2xl overflow-hidden border border-slate-100 flex items-center justify-center relative shadow-inner">
+                     {img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-10 h-10 text-slate-200" />}
+                     <label className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-all">
+                        <Upload className="text-white w-8 h-8"/>
+                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload('slide')(e, idx)} />
+                     </label>
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                     <input type="text" placeholder="URL imagen" className="flex-1 p-3 bg-white border rounded-xl text-[10px] font-bold" value={img} onChange={(e) => {
+                        const slides = [...(currentConfig.slide_images || [])];
+                        slides[idx] = e.target.value;
+                        setCurrentConfig({...currentConfig, slide_images: slides});
+                     }} />
+                     <button onClick={() => removeSlide(idx)} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 className="w-4 h-4"/></button>
+                  </div>
+               </div>
+            ))}
+         </div>
+      </section>
+
+      {/* CATEGORÍAS PERSONALIZADAS */}
+      <section className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-100">
+         <h3 className="text-2xl font-black text-slate-800 flex items-center gap-5 uppercase tracking-tighter mb-10">
+           <Tag className="w-8 h-8 text-orange-500"/> Pestañas de la Tienda (Tabs)
+         </h3>
+         <div className="flex gap-3 mb-8">
+            <input type="text" placeholder="EJ: OFERTAS, PERROS, GATOS..." className="flex-1 p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-orange-500/10" value={newCat} onChange={e => setNewCat(e.target.value)} />
+            <button onClick={addCustomCat} className="px-8 py-5 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 transition-all">Añadir Pestaña</button>
+         </div>
+         <div className="flex flex-wrap gap-3">
+            {(currentConfig.customCategories || []).map(cat => (
+               <div key={cat} className="bg-slate-100 pl-6 pr-2 py-2 rounded-full flex items-center gap-4 border border-slate-200 group">
+                  <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest">{cat}</span>
+                  <button onClick={() => removeCustomCat(cat)} className="p-2 bg-white text-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all shadow-sm"><X className="w-3 h-3"/></button>
+               </div>
+            ))}
+         </div>
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
@@ -155,7 +176,6 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                    <Plus className="w-4 h-4"/> Nueva Sede
                 </button>
              </div>
-             
              <div className="space-y-6">
                 {(currentConfig.sedes_recojo || []).map((sede, idx) => (
                    <div key={sede.id} className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 group">
@@ -221,17 +241,6 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                   </div>
                </div>
             </div>
-            
-            <div className="mt-12 pt-10 border-t grid grid-cols-1 md:grid-cols-2 gap-8">
-               <div className="p-6 bg-slate-50 rounded-3xl flex items-center justify-between">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Color Primario</span>
-                  <input type="color" className="w-14 h-14 rounded-2xl cursor-pointer border-4 border-white shadow-lg" value={currentConfig.colorPrimario || '#84cc16'} onChange={e => setCurrentConfig({...currentConfig, colorPrimario: e.target.value})} />
-               </div>
-               <div className="p-6 bg-slate-50 rounded-3xl flex items-center justify-between">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Color del Footer</span>
-                  <input type="color" className="w-14 h-14 rounded-2xl cursor-pointer border-4 border-white shadow-lg" value={currentConfig.colorSecundario || '#1e293b'} onChange={e => setCurrentConfig({...currentConfig, colorSecundario: e.target.value})} />
-               </div>
-            </div>
           </section>
         </div>
 
@@ -252,18 +261,12 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                 
                 <div className="pt-8 border-t border-slate-100 space-y-6">
                    <div>
-                      <label className="block text-[10px] font-black text-brand-600 uppercase tracking-widest mb-2 ml-4">WhatsApp Ventas (Recibe Pedidos)</label>
-                      <div className="relative">
-                         <ShoppingCart className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-500"/>
-                         <input type="text" placeholder="CELULAR PARA VENTAS" className="w-full pl-14 pr-5 py-5 bg-brand-50 border border-brand-100 rounded-[1.5rem] text-[11px] font-bold outline-none" value={currentConfig.whatsappNumbers || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappNumbers: e.target.value})} />
-                      </div>
+                      <label className="block text-[10px] font-black text-brand-600 uppercase tracking-widest mb-2 ml-4">WhatsApp Ventas</label>
+                      <input type="text" placeholder="975615XXX" className="w-full p-5 bg-brand-50 border border-brand-100 rounded-[1.5rem] text-[11px] font-bold outline-none" value={currentConfig.whatsappNumbers || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappNumbers: e.target.value})} />
                    </div>
                    <div>
-                      <label className="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 ml-4">WhatsApp Ayuda (Botón Footer)</label>
-                      <div className="relative">
-                         <MessageCircle className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500"/>
-                         <input type="text" placeholder="CELULAR DE SOPORTE" className="w-full pl-14 pr-5 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] text-[11px] font-bold outline-none" value={currentConfig.whatsappHelpNumber || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappHelpNumber: e.target.value})} />
-                      </div>
+                      <label className="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 ml-4">WhatsApp Ayuda (Footer)</label>
+                      <input type="text" placeholder="975615XXX" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] text-[11px] font-bold outline-none" value={currentConfig.whatsappHelpNumber || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappHelpNumber: e.target.value})} />
                    </div>
                 </div>
 
@@ -282,7 +285,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
       </div>
 
       {showSuccess && (
-         <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[300] bg-slate-900 text-white px-12 py-6 rounded-full shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-12">
+         <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[300] bg-slate-900 text-white px-12 py-6 rounded-full shadow-2xl flex items-center gap-4 animate-in border border-white/10">
             <CheckCircle2 className="w-6 h-6 text-brand-400"/>
             <span className="text-[10px] font-black uppercase tracking-widest">¡Tienda Actualizada!</span>
          </div>
