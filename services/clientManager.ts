@@ -35,6 +35,7 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     hiddenProducts: Array.isArray(row.productos_ocultos) ? row.productos_ocultos.map(Number) : [],
     hiddenCategories: Array.isArray(row.categorias_ocultas) ? row.categorias_ocultas : [],
     customCategories: Array.isArray(row.custom_categories) ? row.custom_categories : [],
+    category_metadata: row.category_metadata || {},
     yapeNumber: row.yape_numero || '',
     yapeName: row.yape_nombre || '',
     yapeQR: row.yape_qr || '',
@@ -86,6 +87,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         estado: client.isActive,
         nombre_comercial: client.nombreComercial,
         logo_url: client.logoUrl,
+        // Fix: Use correct property name from ClientConfig type
         footer_logo_url: client.footerLogoUrl, 
         color_primario: client.colorPrimario, 
         color_secundario: client.colorSecundario,
@@ -94,7 +96,9 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         tienda_categoria_nombre: client.tiendaCategoriaNombre,
         productos_ocultos: client.hiddenProducts || [],
         categorias_ocultas: client.hiddenCategories || [],
+        // Fix: Use correct property name from ClientConfig type
         custom_categories: client.customCategories || [],
+        category_metadata: client.category_metadata || {},
         yape_numero: client.yapeNumber,
         yape_nombre: client.yapeName,
         yape_qr: client.yapeQR,
@@ -110,6 +114,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         slide_images: client.slide_images || [], 
         quality_text: client.quality_text,
         support_text: client.support_text,
+        // Fix: Use correct property name from ClientConfig type
         business_type: client.businessType
     };
 

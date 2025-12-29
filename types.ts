@@ -1,4 +1,50 @@
 
+export interface CategoryMeta {
+  imageUrl?: string;
+  color?: string;
+}
+
+export interface ClientConfig {
+  code: string;
+  url: string;
+  db: string;
+  username: string;
+  apiKey: string;
+  companyFilter: string;
+  whatsappNumbers?: string;
+  whatsappHelpNumber?: string; 
+  isActive: boolean;
+  nombreComercial?: string;
+  logoUrl?: string;
+  footerLogoUrl?: string;
+  colorPrimario?: string;
+  colorSecundario?: string;
+  colorAcento?: string;
+  showStore?: boolean;
+  storeCategories?: string;
+  tiendaCategoriaNombre?: string;
+  hiddenProducts?: number[];
+  hiddenCategories?: string[];
+  customCategories?: string[];
+  category_metadata?: Record<string, CategoryMeta>; // Nuevo campo
+  yapeNumber?: string;
+  yapeName?: string;
+  yapeQR?: string; 
+  plinNumber?: string;
+  plinName?: string;
+  plinQR?: string;
+  sedes_recojo?: SedeStore[];
+  campos_medicos_visibles?: string[];
+  footer_description?: string;
+  facebook_url?: string;
+  instagram_url?: string;
+  tiktok_url?: string;
+  slide_images?: string[]; 
+  quality_text?: string;
+  support_text?: string;
+  businessType?: BusinessType;
+}
+
 export interface Producto {
   id: number;
   nombre: string;
@@ -50,46 +96,6 @@ export interface SedeStore {
   nombre: string;
   direccion: string;
   googleMapsUrl?: string;
-}
-
-export interface ClientConfig {
-  code: string;
-  url: string;
-  db: string;
-  username: string;
-  apiKey: string;
-  companyFilter: string;
-  whatsappNumbers?: string;
-  whatsappHelpNumber?: string; 
-  isActive: boolean;
-  nombreComercial?: string;
-  logoUrl?: string;
-  footerLogoUrl?: string;
-  colorPrimario?: string;
-  colorSecundario?: string;
-  colorAcento?: string;
-  showStore?: boolean;
-  storeCategories?: string;
-  tiendaCategoriaNombre?: string;
-  hiddenProducts?: number[];
-  hiddenCategories?: string[];
-  customCategories?: string[];
-  yapeNumber?: string;
-  yapeName?: string;
-  yapeQR?: string; 
-  plinNumber?: string;
-  plinName?: string;
-  plinQR?: string;
-  sedes_recojo?: SedeStore[];
-  campos_medicos_visibles?: string[];
-  footer_description?: string;
-  facebook_url?: string;
-  instagram_url?: string;
-  tiktok_url?: string;
-  slide_images?: string[]; 
-  quality_text?: string;
-  support_text?: string;
-  businessType?: BusinessType;
 }
 
 export interface OdooSession {

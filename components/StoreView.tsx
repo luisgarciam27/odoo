@@ -197,7 +197,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col relative overflow-x-hidden pb-20">
       
       {/* HEADER */}
       <header className="fixed top-0 left-0 right-0 z-[60] bg-white border-b border-slate-100 py-4 shadow-sm">
@@ -223,6 +223,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       <div className="h-[72px]"></div>
 
+      {/* SLIDER DINÁMICO */}
       {!loading && slideImages.length > 0 && !searchTerm && (
         <section className="w-full px-4 py-8">
            <div className="max-w-7xl mx-auto relative rounded-[3rem] overflow-hidden shadow-2xl aspect-[21/9] bg-slate-100">
@@ -240,16 +241,41 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </section>
       )}
 
+      {/* CARRUSEL VISUAL DE CATEGORÍAS (Botonera amigable) */}
       {!loading && (
-         <div className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-[72px] z-50 py-3">
-            <div className="max-w-7xl mx-auto px-4 overflow-x-auto flex gap-3 no-scrollbar">
-               {availableCategories.map(cat => (
-                  <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${selectedCategory === cat ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}>{cat}</button>
-               ))}
+         <div className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-[72px] z-50 py-6">
+            <div className="max-w-7xl mx-auto px-4 overflow-x-auto flex gap-6 no-scrollbar items-start">
+               {availableCategories.map(cat => {
+                  const meta = config.category_metadata?.[cat];
+                  const isActive = selectedCategory === cat;
+                  return (
+                     <button 
+                        key={cat} 
+                        onClick={() => setSelectedCategory(cat)} 
+                        className="flex flex-col items-center gap-3 shrink-0 group transition-all"
+                     >
+                        <div className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center overflow-hidden border-4 transition-all duration-300 ${isActive ? 'scale-110 shadow-xl' : 'scale-100 grayscale-[0.5] opacity-60'}`} 
+                             style={{ borderColor: isActive ? brandColor : 'transparent' }}>
+                           {meta?.imageUrl ? (
+                              <img src={meta.imageUrl} className="w-full h-full object-cover" />
+                           ) : (
+                              <div className="w-full h-full bg-slate-100 flex items-center justify-center">
+                                 <Citrus className="w-6 h-6 text-slate-300" />
+                              </div>
+                           )}
+                        </div>
+                        <span className={`text-[9px] font-black uppercase tracking-widest text-center max-w-[80px] leading-tight transition-colors ${isActive ? 'text-slate-900' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                           {cat}
+                        </span>
+                        {isActive && <div className="h-1 w-4 rounded-full" style={{ backgroundColor: brandColor }}></div>}
+                     </button>
+                  );
+               })}
             </div>
          </div>
       )}
 
+      {/* PRODUCTOS */}
       <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-40 gap-4 opacity-40">
@@ -274,6 +300,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
+      {/* FOOTER */}
       {!loading && (
         <footer className="text-white py-16 px-6" style={{ backgroundColor: secondaryColor }}>
            <div className="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-center gap-12">
@@ -314,7 +341,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </footer>
       )}
 
-      {/* DRAWER CARRITO (No necesita cambios en el botón de cierre) */}
+      {/* DRAWER CARRITO */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[200] flex justify-end">
            <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md animate-in fade-in" onClick={() => setIsCartOpen(false)}></div>
@@ -323,7 +350,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                  <h2 className="text-3xl font-black uppercase tracking-tighter">Bolsa de Compra</h2>
                  <button onClick={() => setIsCartOpen(false)} className="p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 text-slate-400"><X className="w-6 h-6"/></button>
               </div>
-              {/* Contenido del carrito omitido por brevedad para centrarse en el fix */}
+
               {currentStep === 'cart' && (
                  <div className="flex-1 flex flex-col overflow-hidden">
                     <div className="flex-1 overflow-y-auto space-y-4 pr-2">
@@ -355,25 +382,19 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     </div>
                  </div>
               )}
-              {/* El resto de los pasos (details, payment, etc.) se mantienen igual */}
+              {/* Otros pasos del checkout igual... */}
            </div>
         </div>
       )}
 
-      {/* MODAL DETALLE PRODUCTO - CORREGIDO CON BOTÓN DE CIERRE */}
+      {/* MODAL DETALLE PRODUCTO */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
            <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md animate-in fade-in" onClick={() => setSelectedProduct(null)}></div>
            <div className="relative bg-white w-full max-w-3xl rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in duration-300">
-              
-              {/* BOTÓN DE CIERRE (X) ADICIONAL */}
-              <button 
-                onClick={() => setSelectedProduct(null)} 
-                className="absolute top-6 right-6 z-10 p-4 bg-slate-100/50 backdrop-blur-md text-slate-600 rounded-full hover:bg-slate-900 hover:text-white transition-all shadow-sm"
-              >
+              <button onClick={() => setSelectedProduct(null)} className="absolute top-6 right-6 z-10 p-4 bg-slate-100/50 backdrop-blur-md text-slate-600 rounded-full hover:bg-slate-900 hover:text-white transition-all">
                 <X className="w-6 h-6"/>
               </button>
-
               <div className="w-full md:w-1/2 bg-slate-50 flex items-center justify-center p-12">
                  {selectedProduct.imagen ? <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="max-h-full h-auto object-contain mix-blend-multiply drop-shadow-lg" /> : <Package className="w-24 h-24 text-slate-200" />}
               </div>

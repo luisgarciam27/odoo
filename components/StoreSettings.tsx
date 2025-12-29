@@ -1,14 +1,15 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Palette, Save, CheckCircle2, MapPin, Plus, Trash2, 
   Wallet, X, Facebook, Instagram, MessageCircle,
   RefreshCw, Share2, QrCode, Upload, Smartphone,
   ImageIcon, Paintbrush, Citrus, Layers, User, Link as LinkIcon, 
-  ExternalLink, Globe, ShoppingCart, MonitorPlay, Tag
+  ExternalLink, Globe, ShoppingCart, MonitorPlay, Tag, Image as LucideImage
 } from 'lucide-react';
 import { ClientConfig, SedeStore } from '../types';
 import { saveClient } from '../services/clientManager';
+import { OdooClient } from '../services/odoo';
 
 interface StoreSettingsProps {
   config: ClientConfig;
@@ -16,13 +17,30 @@ interface StoreSettingsProps {
   session?: any;
 }
 
-const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
+const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session }) => {
   const [currentConfig, setCurrentConfig] = useState<ClientConfig>(config);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [newCat, setNewCat] = useState('');
+  const [allCategories, setAllCategories] = useState<string[]>(['Todas']);
 
-  const handleFileUpload = (field: 'yapeQR' | 'plinQR' | 'logoUrl' | 'footerLogoUrl' | 'slide') => (e: React.ChangeEvent<HTMLInputElement>, index?: number) => {
+  useEffect(() => {
+    const loadAllCategories = async () => {
+      if (!session) return;
+      const client = new OdooClient(session.url, session.db, session.useProxy);
+      try {
+        const odooCats = await client.searchRead(session.uid, session.apiKey, 'product.category', [], ['name']);
+        const names = odooCats.map((c: any) => c.name);
+        const combined = Array.from(new Set(['Todas', ...names, ...(currentConfig.customCategories || [])]));
+        setAllCategories(combined);
+      } catch (e) {
+        setAllCategories(['Todas', ...(currentConfig.customCategories || [])]);
+      }
+    };
+    loadAllCategories();
+  }, [session, currentConfig.customCategories]);
+
+  const handleFileUpload = (field: string, subKey?: string) => (e: React.ChangeEvent<HTMLInputElement>, index?: number) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
@@ -36,7 +54,11 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
            const slides = [...(currentConfig.slide_images || [])];
            slides[index] = result;
            setCurrentConfig(prev => ({ ...prev, slide_images: slides }));
-        } else if (field !== 'slide') {
+        } else if (field === 'category_metadata' && subKey) {
+           const metadata = { ...(currentConfig.category_metadata || {}) };
+           metadata[subKey] = { ...metadata[subKey], imageUrl: result };
+           setCurrentConfig(prev => ({ ...prev, category_metadata: metadata }));
+        } else {
            setCurrentConfig(prev => ({ ...prev, [field]: result }));
         }
       };
@@ -111,6 +133,45 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
         </button>
       </div>
 
+      {/* BRANDING DE CATEGORÍAS */}
+      <section className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-100">
+         <h3 className="text-2xl font-black text-slate-800 flex items-center gap-5 uppercase tracking-tighter mb-10">
+           <LucideImage className="w-8 h-8 text-emerald-500"/> Fotos de Categorías (Botones)
+         </h3>
+         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-10">Sube una imagen para cada pestaña de tu tienda para que se vea más profesional.</p>
+         
+         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+            {allCategories.map(cat => (
+               <div key={cat} className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 text-center flex flex-col items-center">
+                  <div className="w-24 h-24 rounded-full bg-white mb-4 border border-slate-200 overflow-hidden flex items-center justify-center relative group">
+                     {currentConfig.category_metadata?.[cat]?.imageUrl ? (
+                        <img src={currentConfig.category_metadata[cat].imageUrl} className="w-full h-full object-cover" />
+                     ) : (
+                        <Citrus className="w-8 h-8 text-slate-100" />
+                     )}
+                     <label className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-all">
+                        <Upload className="text-white w-6 h-6"/>
+                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload('category_metadata', cat)(e)} />
+                     </label>
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-tighter text-slate-900 truncate w-full">{cat}</span>
+                  {currentConfig.category_metadata?.[cat]?.imageUrl && (
+                     <button 
+                       onClick={() => {
+                          const metadata = { ...currentConfig.category_metadata };
+                          delete metadata[cat];
+                          setCurrentConfig({...currentConfig, category_metadata: metadata});
+                       }}
+                       className="mt-2 text-[8px] font-black uppercase text-red-400 hover:text-red-600"
+                     >
+                       Eliminar
+                     </button>
+                  )}
+               </div>
+            ))}
+         </div>
+      </section>
+
       {/* DIAPOSITIVAS (SLIDES) */}
       <section className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-100">
          <div className="flex justify-between items-center mb-10">
@@ -128,6 +189,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                      {img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-10 h-10 text-slate-200" />}
                      <label className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-all">
                         <Upload className="text-white w-8 h-8"/>
+                        {/* Fix: use 'idx' from map function instead of undefined 'index' */}
                         <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload('slide')(e, idx)} />
                      </label>
                   </div>
