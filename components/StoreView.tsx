@@ -311,35 +311,38 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       <div className="h-[76px] md:h-[110px]"></div>
 
-      {/* SECCIÓN DEL SLIDER PRINCIPAL */}
+      {/* SECCIÓN DEL SLIDER PRINCIPAL - MEJORADO */}
       {!loading && slideImages.length > 0 && !searchTerm && (
-        <section className="w-full h-[280px] md:h-[500px] relative overflow-hidden bg-slate-200 z-10">
+        <section className="w-full aspect-[21/9] md:aspect-[3/1] max-h-[600px] relative overflow-hidden bg-slate-100 z-10">
            {slideImages.map((img, idx) => (
              <div 
                key={idx} 
                className={`absolute inset-0 transition-all duration-1000 cubic-bezier(0.4, 0, 0.2, 1) transform ${idx === currentSlide ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'}`}
              >
                 <img src={img} className="w-full h-full object-cover" alt={`Slide ${idx}`} />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
-                <div className={`absolute bottom-20 left-12 md:left-24 transition-all duration-1000 delay-300 transform ${idx === currentSlide ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-                   <span className="bg-brand-500 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.3em] shadow-lg mb-4 inline-block">Novedad Exclusiva</span>
-                   <h2 className="text-white text-4xl md:text-6xl font-black uppercase tracking-tighter drop-shadow-2xl max-w-xl leading-none">Tu bienestar es nuestra prioridad</h2>
-                </div>
+                {/* Overlay muy sutil para mejorar contraste de flechas sin ensuciar la imagen */}
+                <div className="absolute inset-0 bg-black/5"></div>
              </div>
            ))}
            
            {slideImages.length > 1 && (
              <>
-                <button onClick={() => setCurrentSlide(prev => (prev - 1 + slideImages.length) % slideImages.length)} className="absolute left-6 top-1/2 -translate-y-1/2 p-4 bg-white/10 backdrop-blur-xl text-white rounded-[1.5rem] border border-white/20 hover:bg-white/40 transition-all z-20 group">
-                   <ChevronLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform"/>
+                <button 
+                  onClick={() => setCurrentSlide(prev => (prev - 1 + slideImages.length) % slideImages.length)} 
+                  className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 p-3 md:p-5 bg-white/20 backdrop-blur-md text-white rounded-full border border-white/30 hover:bg-white/40 transition-all z-20 group shadow-2xl"
+                >
+                   <ChevronLeft className="w-5 h-5 md:w-8 md:h-8 group-hover:-translate-x-1 transition-transform"/>
                 </button>
-                <button onClick={() => setCurrentSlide(prev => (prev + 1) % slideImages.length)} className="absolute right-6 top-1/2 -translate-y-1/2 p-4 bg-white/10 backdrop-blur-xl text-white rounded-[1.5rem] border border-white/20 hover:bg-white/40 transition-all z-20 group">
-                   <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform"/>
+                <button 
+                  onClick={() => setCurrentSlide(prev => (prev + 1) % slideImages.length)} 
+                  className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 p-3 md:p-5 bg-white/20 backdrop-blur-md text-white rounded-full border border-white/30 hover:bg-white/40 transition-all z-20 group shadow-2xl"
+                >
+                   <ChevronRight className="w-5 h-5 md:w-8 md:h-8 group-hover:translate-x-1 transition-transform"/>
                 </button>
                 
-                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-3 z-20">
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20">
                     {slideImages.map((_, i) => (
-                        <button key={i} onClick={() => setCurrentSlide(i)} className={`h-1.5 rounded-full transition-all duration-500 ${i === currentSlide ? 'w-12 bg-brand-500' : 'w-2 bg-white/30'}`}></button>
+                        <button key={i} onClick={() => setCurrentSlide(i)} className={`h-1 rounded-full transition-all duration-500 ${i === currentSlide ? 'w-10 bg-brand-500' : 'w-3 bg-white/50'}`}></button>
                     ))}
                 </div>
              </>
@@ -400,7 +403,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                 </div>
               ) : filteredProducts.map(p => (
                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="bg-white p-4 md:p-6 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col group hover:shadow-[0_40px_80px_-24px_rgba(0,0,0,0.12)] transition-all duration-700 cursor-pointer relative overflow-hidden hover:-translate-y-3">
-                  <div className="aspect-square bg-slate-50 rounded-[2.5rem] mb-6 flex items-center justify-center overflow-hidden border border-slate-50 relative group-hover:bg-white transition-colors duration-500">
+                  <div className="aspect-square bg-slate-50 rounded-[2.5rem] mb-6 flex items-center justify-center overflow-hidden border border-slate-100 relative group-hover:bg-white transition-colors duration-500">
                     {p.imagen ? (
                       <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-700 p-2" alt={p.nombre} />
                     ) : (
@@ -435,7 +438,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
            <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md animate-in fade-in" onClick={() => setSelectedProduct(null)}></div>
            <div className="relative bg-white w-full max-w-5xl rounded-[4rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col md:flex-row animate-in zoom-in duration-300 max-h-[90vh]">
-              <div className="w-full md:w-1/2 bg-slate-50 flex items-center justify-center p-12 md:p-20 relative group">
+              <div className="w-full md:w-1/2 bg-slate-50 flex items-center justify-center p-12 md:p-20 relative group border-r border-slate-100">
                  {selectedProduct.imagen ? (
                    <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="max-w-full max-h-full object-contain mix-blend-multiply drop-shadow-[0_20px_50px_rgba(0,0,0,0.1)] group-hover:scale-105 transition-transform duration-700" alt={selectedProduct.nombre} />
                  ) : (
@@ -480,7 +483,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         <footer className="text-white py-12 px-6 md:px-12 border-t border-white/5" style={{ backgroundColor: secondaryColor }}>
            <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-10">
               
-              {/* BLOQUE IZQUIERDO: LOGO Y LEMA */}
               <div className="flex items-center gap-6 flex-1">
                  {config.footerLogoUrl ? (
                    <img src={config.footerLogoUrl} className="h-10 object-contain" alt="Footer Logo" />
@@ -496,7 +498,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                  </p>
               </div>
 
-              {/* BLOQUE CENTRAL: ATENCIÓN WHATSAPP */}
               <div className="flex-1 flex justify-center">
                  <a 
                     href={`https://wa.me/${(config.whatsappHelpNumber || '51975615244').replace(/\D/g, '')}`} 
@@ -513,7 +514,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                  </a>
               </div>
 
-              {/* BLOQUE DERECHO: REDES Y CRÉDITOS */}
               <div className="flex-1 flex flex-col items-center md:items-end gap-6">
                  <div className="flex gap-4">
                     {config.facebook_url && <a href={config.facebook_url} target="_blank" className="p-3 bg-white/5 rounded-xl hover:bg-blue-600 transition-all border border-white/5"><Facebook className="w-4 h-4"/></a>}
