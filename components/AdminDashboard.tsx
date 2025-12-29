@@ -2,9 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient } from '../services/clientManager';
 import { ClientConfig, BusinessType } from '../types';
-import { Trash2, Edit, Plus, X, LogOut, Shield, Activity, RefreshCw, Copy, ShoppingBag, ExternalLink, Facebook, Instagram, MessageCircle, Sparkles, Wand2, Pill, PawPrint, Footprints, Briefcase, Music2, Phone } from 'lucide-react';
+import { Trash2, Edit, Plus, X, Shield, Activity, RefreshCw, Pill, PawPrint, Footprints, Briefcase } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
-import { GoogleGenAI, Type } from "@google/genai";
 
 interface AdminDashboardProps {
     onLogout: () => void;
@@ -14,7 +13,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const [clients, setClients] = useState<ClientConfig[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-    const [isGeneratingPalette, setIsGeneratingPalette] = useState(false);
     const [testingClient, setTestingClient] = useState<string | null>(null);
 
     const [currentClient, setCurrentClient] = useState<ClientConfig>({
@@ -41,49 +39,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     useEffect(() => {
         loadClients();
     }, []);
-
-    const handleSuggestPalette = async () => {
-        if (!currentClient.logoUrl) {
-            alert("Primero ingresa la URL de un logo para analizar.");
-            return;
-        }
-
-        setIsGeneratingPalette(true);
-        try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: `Analiza la marca '${currentClient.nombreComercial || currentClient.code}' del logo (${currentClient.logoUrl}). Sugiere 3 colores hex que armonicen y una descripción de footer. Responde estrictamente en JSON.`,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            primary: { type: Type.STRING },
-                            secondary: { type: Type.STRING },
-                            accent: { type: Type.STRING },
-                            footerDescription: { type: Type.STRING }
-                        },
-                        required: ["primary", "secondary", "accent", "footerDescription"]
-                    }
-                }
-            });
-
-            const data = JSON.parse(response.text);
-            setCurrentClient(prev => ({
-                ...prev,
-                colorPrimario: data.primary || prev.colorPrimario,
-                colorSecundario: data.secondary || prev.colorSecundario,
-                colorAcento: data.accent || prev.colorAcento,
-                footer_description: data.footerDescription || prev.footer_description
-            }));
-        } catch (error: any) {
-            console.error("AI Error:", error);
-            alert("Error de IA: " + error.message);
-        } finally {
-            setIsGeneratingPalette(false);
-        }
-    };
 
     const handleSaveClient = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -188,7 +143,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                             <tr>
                                 <th className="px-8 py-5">Empresa / Rubro</th>
                                 <th className="px-8 py-5">Tienda</th>
-                                <th className="px-8 py-5">Colores</th>
                                 <th className="px-8 py-5 text-right">Acciones</th>
                             </tr>
                         </thead>
@@ -210,12 +164,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                             <button onClick={() => copyStoreLink(c.code)} className="text-[9px] font-black bg-brand-100 text-brand-700 px-3 py-1 rounded-full">COPIAR LINK</button>
                                         ) : <span className="text-slate-300 text-[9px] font-bold">OFF</span>}
                                     </td>
-                                    <td className="px-8 py-5">
-                                        <div className="flex gap-1">
-                                            <div className="w-4 h-4 rounded-full border border-slate-200" style={{backgroundColor: c.colorPrimario}}></div>
-                                            <div className="w-4 h-4 rounded-full border border-slate-200" style={{backgroundColor: c.colorAcento}}></div>
-                                        </div>
-                                    </td>
                                     <td className="px-8 py-5 flex justify-end gap-2">
                                         <button onClick={() => handleTestConnection(c)} className="p-2 bg-slate-100 rounded-lg hover:bg-blue-100"><Activity className="w-4 h-4"/></button>
                                         <button onClick={() => handleEdit(c)} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200"><Edit className="w-4 h-4"/></button>
@@ -230,20 +178,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
             {isEditing && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm overflow-y-auto">
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-5xl p-10 shadow-2xl relative my-8">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl relative my-8">
                         <div className="flex justify-between items-start mb-8">
                             <div>
-                                <h3 className="font-black text-2xl uppercase tracking-tighter">Configurar Marca Odoo</h3>
+                                <h3 className="font-black text-2xl uppercase tracking-tighter">Conexión Odoo Técnico</h3>
                                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Sincronización Lemon BI v2.5</p>
                             </div>
                             <button onClick={() => setIsEditing(false)} className="p-2 hover:bg-slate-100 rounded-full"><X/></button>
                         </div>
                         
                         <form onSubmit={handleSaveClient} className="space-y-8">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <div className="grid grid-cols-1 gap-8">
                                 <div className="space-y-4">
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Giro de Negocio (Controla la Ficha)</label>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Giro de Negocio</label>
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                                         <BusinessOption type="pharmacy" label="Farmacia" icon={Pill} />
                                         <BusinessOption type="veterinary" label="Veterinaria" icon={PawPrint} />
                                         <BusinessOption type="podiatry" label="Podología" icon={Footprints} />
@@ -251,79 +199,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                     </div>
 
                                     <div className="pt-4 space-y-4">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Conexión Odoo</label>
-                                        <input type="text" placeholder="CÓDIGO EMPRESA" className="w-full p-3 border rounded-xl font-bold uppercase" value={currentClient.code} onChange={e => setCurrentClient({...currentClient, code: e.target.value.toUpperCase()})} required disabled={!!originalCode}/>
-                                        <input type="url" placeholder="URL ODOO" className="w-full p-3 border rounded-xl text-xs" value={currentClient.url} onChange={e => setCurrentClient({...currentClient, url: e.target.value})} required/>
-                                        <input type="text" placeholder="BASE DE DATOS" className="w-full p-3 border rounded-xl text-xs" value={currentClient.db} onChange={e => setCurrentClient({...currentClient, db: e.target.value})} required/>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Parámetros de Servidor</label>
+                                        <input type="text" placeholder="CÓDIGO EMPRESA (ID)" className="w-full p-4 border rounded-2xl font-black uppercase" value={currentClient.code} onChange={e => setCurrentClient({...currentClient, code: e.target.value.toUpperCase()})} required disabled={!!originalCode}/>
+                                        <input type="url" placeholder="URL ODOO (Ej: https://mi-odoo.com)" className="w-full p-4 border rounded-2xl text-sm" value={currentClient.url} onChange={e => setCurrentClient({...currentClient, url: e.target.value})} required/>
+                                        <input type="text" placeholder="BASE DE DATOS" className="w-full p-4 border rounded-2xl text-sm" value={currentClient.db} onChange={e => setCurrentClient({...currentClient, db: e.target.value})} required/>
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Integración Técnica</label>
-                                    <input type="text" placeholder="USUARIO" className="w-full p-3 border rounded-xl text-xs" value={currentClient.username} onChange={e => setCurrentClient({...currentClient, username: e.target.value})} required/>
-                                    <input type="password" placeholder="API KEY" className="w-full p-3 border rounded-xl font-mono text-xs" value={currentClient.apiKey} onChange={e => setCurrentClient({...currentClient, apiKey: e.target.value})} required/>
-                                    <input type="text" placeholder="FILTRO COMPAÑÍA (Opcional)" className="w-full p-3 border rounded-xl text-xs uppercase" value={currentClient.companyFilter} onChange={e => setCurrentClient({...currentClient, companyFilter: e.target.value})}/>
-                                    
-                                    <div className="pt-4 space-y-4">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Identidad Visual (Logo Principal)</label>
-                                        <input type="text" placeholder="NOMBRE COMERCIAL" className="w-full p-3 border rounded-xl uppercase font-bold text-sm" value={currentClient.nombreComercial} onChange={e => setCurrentClient({...currentClient, nombreComercial: e.target.value})}/>
-                                        <div className="flex gap-2">
-                                          <input type="url" placeholder="URL LOGO HEADER" className="flex-1 p-3 border rounded-xl text-xs" value={currentClient.logoUrl} onChange={e => setCurrentClient({...currentClient, logoUrl: e.target.value})}/>
-                                          <button type="button" onClick={handleSuggestPalette} disabled={isGeneratingPalette} className="p-3 bg-brand-500 text-white rounded-xl hover:bg-brand-600 transition-all active:scale-90">
-                                            {isGeneratingPalette ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Sparkles className="w-5 h-5"/>}
-                                          </button>
-                                        </div>
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Logo de Footer (Pie de Página)</label>
-                                            <input type="url" placeholder="URL LOGO FOOTER (Opcional)" className="w-full p-3 border rounded-xl text-xs" value={currentClient.footerLogoUrl || ''} onChange={e => setCurrentClient({...currentClient, footerLogoUrl: e.target.value})}/>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Presencia Digital & Redes</label>
-                                    <div className="grid grid-cols-1 gap-3">
-                                        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border">
-                                            <Facebook className="w-5 h-5 text-blue-600"/>
-                                            <input type="text" placeholder="URL FACEBOOK" className="w-full bg-transparent border-none outline-none text-xs font-bold" value={currentClient.facebook_url || ''} onChange={e => setCurrentClient({...currentClient, facebook_url: e.target.value})}/>
-                                        </div>
-                                        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border">
-                                            <Instagram className="w-5 h-5 text-pink-500"/>
-                                            <input type="text" placeholder="URL INSTAGRAM" className="w-full bg-transparent border-none outline-none text-xs font-bold" value={currentClient.instagram_url || ''} onChange={e => setCurrentClient({...currentClient, instagram_url: e.target.value})}/>
-                                        </div>
-                                        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border">
-                                            <Music2 className="w-5 h-5 text-slate-800"/>
-                                            <input type="text" placeholder="URL TIKTOK" className="w-full bg-transparent border-none outline-none text-xs font-bold" value={currentClient.tiktok_url || ''} onChange={e => setCurrentClient({...currentClient, tiktok_url: e.target.value})}/>
-                                        </div>
-                                        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border">
-                                            <Phone className="w-5 h-5 text-emerald-500"/>
-                                            <input type="text" placeholder="WHATSAPP DE SOPORTE" className="w-full bg-transparent border-none outline-none text-xs font-bold" value={currentClient.whatsappHelpNumber || ''} onChange={e => setCurrentClient({...currentClient, whatsappHelpNumber: e.target.value})}/>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="pt-4 space-y-4">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp Pedidos & Descripción</label>
-                                        <input type="text" placeholder="NÚMEROS DE PEDIDOS (Comas)" className="w-full p-3 border rounded-xl text-xs font-black" value={currentClient.whatsappNumbers || ''} onChange={e => setCurrentClient({...currentClient, whatsappNumbers: e.target.value})}/>
-                                        <textarea placeholder="SLOGAN / DESCRIPCIÓN FOOTER" className="w-full p-3 border rounded-xl text-xs h-24 uppercase" value={currentClient.footer_description || ''} onChange={e => setCurrentClient({...currentClient, footer_description: e.target.value})}></textarea>
-                                    </div>
-                                    
-                                    <div className="flex gap-2">
-                                        <div className="flex-1 flex flex-col items-center">
-                                            <label className="text-[8px] font-black uppercase mb-1">Primario</label>
-                                            <input type="color" className="w-full h-8 rounded-lg cursor-pointer" value={currentClient.colorPrimario} onChange={e => setCurrentClient({...currentClient, colorPrimario: e.target.value})}/>
-                                        </div>
-                                        <div className="flex-1 flex flex-col items-center">
-                                            <label className="text-[8px] font-black uppercase mb-1">Acento</label>
-                                            <input type="color" className="w-full h-8 rounded-lg cursor-pointer" value={currentClient.colorAcento} onChange={e => setCurrentClient({...currentClient, colorAcento: e.target.value})}/>
-                                        </div>
-                                    </div>
+                                    <input type="text" placeholder="USUARIO / EMAIL" className="w-full p-4 border rounded-2xl text-sm" value={currentClient.username} onChange={e => setCurrentClient({...currentClient, username: e.target.value})} required/>
+                                    <input type="password" placeholder="API KEY (CONTRASEÑA TÉCNICA)" className="w-full p-4 border rounded-2xl font-mono text-sm" value={currentClient.apiKey} onChange={e => setCurrentClient({...currentClient, apiKey: e.target.value})} required/>
+                                    <input type="text" placeholder="FILTRO COMPAÑÍA (Solo si aplica)" className="w-full p-4 border rounded-2xl text-sm uppercase" value={currentClient.companyFilter} onChange={e => setCurrentClient({...currentClient, companyFilter: e.target.value})}/>
                                 </div>
                             </div>
 
                             <div className="pt-6 border-t flex gap-4">
                                 <button type="button" onClick={() => setIsEditing(false)} className="flex-1 p-5 bg-slate-100 rounded-2xl font-black uppercase text-xs tracking-widest">Cancelar</button>
-                                <button type="submit" disabled={isLoading} className="flex-[2] p-5 bg-brand-600 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-brand-200 hover:bg-brand-700 transition-all">
-                                    {isLoading ? 'Sincronizando...' : 'Guardar Configuración en Supabase'}
+                                <button type="submit" disabled={isLoading} className="flex-[2] p-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-black transition-all">
+                                    {isLoading ? 'Guardando...' : 'Establecer Conexión'}
                                 </button>
                             </div>
                         </form>
