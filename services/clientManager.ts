@@ -19,7 +19,8 @@ const NEW_FIELDS = [
   'business_type', 'facebook_url', 'instagram_url', 'tiktok_url', 
   'footer_description', 'slide_images', 'quality_text', 'support_text', 
   'categorias_ocultas', 'whatsapp_help_number', 'productos_ocultos',
-  'tienda_habilitada', 'tienda_categoria_nombre', 'sedes_recojo', 'campos_medicos_visibles'
+  'tienda_habilitada', 'tienda_categoria_nombre', 'sedes_recojo', 'campos_medicos_visibles',
+  'footer_logo_url'
 ];
 
 const mapRowToConfig = (row: any): ClientConfig => ({
@@ -34,6 +35,7 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     isActive: row.estado ?? true,
     nombreComercial: row.nombre_comercial || row.codigo_acceso,
     logoUrl: row.logo_url || '',
+    footerLogoUrl: row.footer_logo_url || '',
     colorPrimario: row.color_primario || '#84cc16',
     colorSecundario: row.color_secundario || '#1e293b',
     colorAcento: row.color_acento || '#0ea5e9',
@@ -90,6 +92,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         estado: client.isActive,
         nombre_comercial: client.nombreComercial,
         logo_url: client.logoUrl,
+        footer_logo_url: client.footerLogoUrl,
         color_primario: client.colorPrimario, 
         color_secundario: client.colorSecundario,
         color_acento: client.colorAcento, 
@@ -125,7 +128,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         let safePayload = { ...payload };
         let retryCount = 0;
         
-        while (response.error && (response.error.code === '42703' || response.error.message.includes('column')) && retryCount < 15) {
+        while (response.error && (response.error.code === '42703' || response.error.message.includes('column')) && retryCount < 20) {
             retryCount++;
             const errorMsg = response.error.message;
             const match = errorMsg.match(/column "?([^" ]+)"? does not exist/i);

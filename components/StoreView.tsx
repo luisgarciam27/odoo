@@ -8,7 +8,7 @@ import {
   Stethoscope, Footprints, PawPrint, Calendar, Wallet, CheckCircle2, Camera, ChevronRight,
   Loader2, BadgeCheck, Send, UserCheck, Sparkles, Zap, Award, HeartHandshake, ShieldAlert,
   RefreshCw, Trash2, CreditCard, Building2, Smartphone, CheckCircle, QrCode, Music2, Upload, Briefcase,
-  Dog, Cat, Syringe, Tag, Layers, SearchX, Wand2, Boxes
+  Dog, Cat, Syringe, Tag, Layers, SearchX, Wand2, Boxes, Phone
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -394,8 +394,14 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-12">
            <div className="space-y-6 max-w-sm text-center md:text-left">
               <div className="flex items-center gap-4 justify-center md:justify-start">
-                 <div className="p-4 rounded-2xl bg-brand-500 shadow-2xl transform -rotate-3"><bizIcons.main className="w-7 h-7 text-white" /></div>
-                 <span className="font-black text-2xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
+                 {config.footerLogoUrl ? (
+                   <img src={config.footerLogoUrl} className="h-12 object-contain" />
+                 ) : (
+                   <div className="flex items-center gap-4">
+                     <div className="p-4 rounded-2xl bg-brand-500 shadow-2xl transform -rotate-3"><bizIcons.main className="w-7 h-7 text-white" /></div>
+                     <span className="font-black text-2xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
+                   </div>
+                 )}
               </div>
               <p className="text-xs text-slate-400 font-medium leading-relaxed italic border-l-2 border-slate-700 pl-6 uppercase tracking-wider opacity-70">"{config.footer_description || 'Excelencia profesional y cuidado integral con tecnología Lemon BI.'}"</p>
            </div>
@@ -404,6 +410,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                   {config.facebook_url && <a href={config.facebook_url} target="_blank" rel="noreferrer" className="p-4 bg-white/5 rounded-[1.5rem] hover:bg-brand-500 transition-all"><Facebook className="w-6 h-6"/></a>}
                   {config.instagram_url && <a href={config.instagram_url} target="_blank" rel="noreferrer" className="p-4 bg-white/5 rounded-[1.5rem] hover:bg-brand-500 transition-all"><Instagram className="w-6 h-6"/></a>}
                   {config.tiktok_url && <a href={config.tiktok_url} target="_blank" rel="noreferrer" className="p-4 bg-white/5 rounded-[1.5rem] hover:bg-brand-500 transition-all"><Music2 className="w-6 h-6"/></a>}
+                  {config.whatsappHelpNumber && <a href={`https://wa.me/${config.whatsappHelpNumber}`} target="_blank" rel="noreferrer" className="p-4 bg-white/5 rounded-[1.5rem] hover:bg-brand-500 transition-all"><MessageCircle className="w-6 h-6"/></a>}
               </div>
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em]">© 2025 LEMON BI ANALYTICS • GAORSYSTEM</p>
            </div>

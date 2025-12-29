@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getClients, saveClient, deleteClient } from '../services/clientManager';
 import { ClientConfig, BusinessType } from '../types';
-import { Trash2, Edit, Plus, X, LogOut, Shield, Activity, RefreshCw, Copy, ShoppingBag, ExternalLink, Facebook, Instagram, MessageCircle, Sparkles, Wand2, Pill, PawPrint, Footprints, Briefcase } from 'lucide-react';
+import { Trash2, Edit, Plus, X, LogOut, Shield, Activity, RefreshCw, Copy, ShoppingBag, ExternalLink, Facebook, Instagram, MessageCircle, Sparkles, Wand2, Pill, PawPrint, Footprints, Briefcase, Music2, Phone } from 'lucide-react';
 import { OdooClient } from '../services/odoo';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -19,9 +19,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
     const [currentClient, setCurrentClient] = useState<ClientConfig>({
         code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: '', isActive: true,
-        nombreComercial: '', logoUrl: '', colorPrimario: '#84cc16', colorSecundario: '#1e293b', colorAcento: '#0ea5e9',
+        nombreComercial: '', logoUrl: '', footerLogoUrl: '', colorPrimario: '#84cc16', colorSecundario: '#1e293b', colorAcento: '#0ea5e9',
         showStore: true, tiendaCategoriaNombre: 'Catalogo', yapeNumber: '', yapeName: '', plinNumber: '', plinName: '', yapeQR: '', plinQR: '',
-        footer_description: '', facebook_url: '', instagram_url: '', tiktok_url: '', quality_text: '', support_text: '',
+        footer_description: '', facebook_url: '', instagram_url: '', tiktok_url: '', whatsappHelpNumber: '', quality_text: '', support_text: '',
         businessType: 'pharmacy'
     });
     const [originalCode, setOriginalCode] = useState<string | null>(null);
@@ -123,9 +123,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const resetForm = () => {
         setCurrentClient({ 
             code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: '', isActive: true, 
-            nombreComercial: '', logoUrl: '', colorPrimario: '#84cc16', colorSecundario: '#1e293b', colorAcento: '#0ea5e9',
+            nombreComercial: '', logoUrl: '', footerLogoUrl: '', colorPrimario: '#84cc16', colorSecundario: '#1e293b', colorAcento: '#0ea5e9',
             showStore: true, tiendaCategoriaNombre: 'Catalogo', yapeNumber: '', yapeName: '', plinNumber: '', plinName: '', yapeQR: '', plinQR: '', 
-            footer_description: '', facebook_url: '', instagram_url: '', tiktok_url: '', quality_text: '', support_text: '',
+            footer_description: '', facebook_url: '', instagram_url: '', tiktok_url: '', whatsappHelpNumber: '', quality_text: '', support_text: '',
             businessType: 'pharmacy'
         });
         setOriginalCode(null);
@@ -265,31 +265,47 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                     <input type="text" placeholder="FILTRO COMPAÑÍA (Opcional)" className="w-full p-3 border rounded-xl text-xs uppercase" value={currentClient.companyFilter} onChange={e => setCurrentClient({...currentClient, companyFilter: e.target.value})}/>
                                     
                                     <div className="pt-4 space-y-4">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Identidad Visual</label>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Identidad Visual (Logo Principal)</label>
                                         <input type="text" placeholder="NOMBRE COMERCIAL" className="w-full p-3 border rounded-xl uppercase font-bold text-sm" value={currentClient.nombreComercial} onChange={e => setCurrentClient({...currentClient, nombreComercial: e.target.value})}/>
                                         <div className="flex gap-2">
-                                          <input type="url" placeholder="URL LOGO" className="flex-1 p-3 border rounded-xl text-xs" value={currentClient.logoUrl} onChange={e => setCurrentClient({...currentClient, logoUrl: e.target.value})}/>
+                                          <input type="url" placeholder="URL LOGO HEADER" className="flex-1 p-3 border rounded-xl text-xs" value={currentClient.logoUrl} onChange={e => setCurrentClient({...currentClient, logoUrl: e.target.value})}/>
                                           <button type="button" onClick={handleSuggestPalette} disabled={isGeneratingPalette} className="p-3 bg-brand-500 text-white rounded-xl hover:bg-brand-600 transition-all active:scale-90">
                                             {isGeneratingPalette ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Sparkles className="w-5 h-5"/>}
                                           </button>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Logo de Footer (Pie de Página)</label>
+                                            <input type="url" placeholder="URL LOGO FOOTER (Opcional)" className="w-full p-3 border rounded-xl text-xs" value={currentClient.footerLogoUrl || ''} onChange={e => setCurrentClient({...currentClient, footerLogoUrl: e.target.value})}/>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Redes y Footer</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border">
-                                            <Facebook className="w-4 h-4 text-blue-600"/>
-                                            <input type="text" placeholder="URL" className="w-full bg-transparent border-none outline-none text-[10px]" value={currentClient.facebook_url} onChange={e => setCurrentClient({...currentClient, facebook_url: e.target.value})}/>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Presencia Digital & Redes</label>
+                                    <div className="grid grid-cols-1 gap-3">
+                                        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border">
+                                            <Facebook className="w-5 h-5 text-blue-600"/>
+                                            <input type="text" placeholder="URL FACEBOOK" className="w-full bg-transparent border-none outline-none text-xs font-bold" value={currentClient.facebook_url || ''} onChange={e => setCurrentClient({...currentClient, facebook_url: e.target.value})}/>
                                         </div>
-                                        <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border">
-                                            <Instagram className="w-4 h-4 text-pink-500"/>
-                                            <input type="text" placeholder="URL" className="w-full bg-transparent border-none outline-none text-[10px]" value={currentClient.instagram_url} onChange={e => setCurrentClient({...currentClient, instagram_url: e.target.value})}/>
+                                        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border">
+                                            <Instagram className="w-5 h-5 text-pink-500"/>
+                                            <input type="text" placeholder="URL INSTAGRAM" className="w-full bg-transparent border-none outline-none text-xs font-bold" value={currentClient.instagram_url || ''} onChange={e => setCurrentClient({...currentClient, instagram_url: e.target.value})}/>
+                                        </div>
+                                        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border">
+                                            <Music2 className="w-5 h-5 text-slate-800"/>
+                                            <input type="text" placeholder="URL TIKTOK" className="w-full bg-transparent border-none outline-none text-xs font-bold" value={currentClient.tiktok_url || ''} onChange={e => setCurrentClient({...currentClient, tiktok_url: e.target.value})}/>
+                                        </div>
+                                        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border">
+                                            <Phone className="w-5 h-5 text-emerald-500"/>
+                                            <input type="text" placeholder="WHATSAPP DE SOPORTE" className="w-full bg-transparent border-none outline-none text-xs font-bold" value={currentClient.whatsappHelpNumber || ''} onChange={e => setCurrentClient({...currentClient, whatsappHelpNumber: e.target.value})}/>
                                         </div>
                                     </div>
-                                    <input type="text" placeholder="WHATSAPP PARA PEDIDOS" className="w-full p-3 border rounded-xl text-xs font-bold" value={currentClient.whatsappNumbers} onChange={e => setCurrentClient({...currentClient, whatsappNumbers: e.target.value})}/>
-                                    <textarea placeholder="SLOGAN / DESCRIPCIÓN FOOTER" className="w-full p-3 border rounded-xl text-xs h-32 uppercase" value={currentClient.footer_description} onChange={e => setCurrentClient({...currentClient, footer_description: e.target.value})}></textarea>
+                                    
+                                    <div className="pt-4 space-y-4">
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp Pedidos & Descripción</label>
+                                        <input type="text" placeholder="NÚMEROS DE PEDIDOS (Comas)" className="w-full p-3 border rounded-xl text-xs font-black" value={currentClient.whatsappNumbers || ''} onChange={e => setCurrentClient({...currentClient, whatsappNumbers: e.target.value})}/>
+                                        <textarea placeholder="SLOGAN / DESCRIPCIÓN FOOTER" className="w-full p-3 border rounded-xl text-xs h-24 uppercase" value={currentClient.footer_description || ''} onChange={e => setCurrentClient({...currentClient, footer_description: e.target.value})}></textarea>
+                                    </div>
                                     
                                     <div className="flex gap-2">
                                         <div className="flex-1 flex flex-col items-center">

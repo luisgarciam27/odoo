@@ -91,6 +91,7 @@ ALTER TABLE empresas ADD COLUMN IF NOT EXISTS tienda_habilitada boolean DEFAULT 
 ALTER TABLE empresas ADD COLUMN IF NOT EXISTS tienda_categoria_nombre text DEFAULT 'Catalogo';
 ALTER TABLE empresas ADD COLUMN IF NOT EXISTS sedes_recojo jsonb DEFAULT '[]'::jsonb;
 ALTER TABLE empresas ADD COLUMN IF NOT EXISTS campos_medicos_visibles jsonb DEFAULT '["registro", "laboratorio", "principio"]'::jsonb;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS footer_logo_url text;
 NOTIFY pgrst, 'reload schema';`;
     navigator.clipboard.writeText(sql);
     alert("Script SQL copiado. Pégalo en el SQL Editor de Supabase y ejecútalo para habilitar todas las funciones.");

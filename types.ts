@@ -60,6 +60,7 @@ export interface ClientConfig {
   isActive: boolean;
   nombreComercial?: string;
   logoUrl?: string;
+  footerLogoUrl?: string;
   colorPrimario?: string;
   colorSecundario?: string;
   colorAcento?: string;
