@@ -14,8 +14,8 @@ export const changeAdminPassword = (newPassword: string) => {
     localStorage.setItem(ADMIN_PWD_KEY, newPassword);
 };
 
-// Columnas introducidas recientemente. Si faltan en el DB, el sistema las omitirá para salvar el registro.
-const VOLATILE_COLUMNS = [
+// Columnas que podrían faltar en bases de datos antiguas
+const EXTENDED_COLUMNS = [
   'business_type', 'facebook_url', 'instagram_url', 'tiktok_url', 
   'footer_description', 'slide_images', 'quality_text', 'support_text', 
   'categorias_ocultas', 'whatsapp_help_number', 'productos_ocultos',
@@ -43,10 +43,8 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     hiddenCategories: Array.isArray(row.categorias_ocultas) ? row.categorias_ocultas : [],
     yapeNumber: row.yape_numero || '',
     yapeName: row.yape_nombre || '',
-    yapeQR: row.yape_qr || '',
     plinNumber: row.plin_numero || '',
     plinName: row.plin_nombre || '',
-    plinQR: row.plin_qr || '',
     sedes_recojo: Array.isArray(row.sedes_recojo) ? row.sedes_recojo : [],
     campos_medicos_visibles: Array.isArray(row.campos_medicos_visibles) ? row.campos_medicos_visibles : ["registro", "laboratorio", "principio"],
     footer_description: row.footer_description || '',
@@ -61,11 +59,7 @@ const mapRowToConfig = (row: any): ClientConfig => ({
 
 export const getClients = async (): Promise<ClientConfig[]> => {
     try {
-        const { data, error } = await supabase
-            .from('empresas')
-            .select('*')
-            .order('created_at', { ascending: false });
-
+        const { data, error } = await supabase.from('empresas').select('*').order('created_at', { ascending: false });
         if (error) return [];
         return (data || []).map(mapRowToConfig);
     } catch (err) {
@@ -75,12 +69,7 @@ export const getClients = async (): Promise<ClientConfig[]> => {
 
 export const getClientByCode = async (code: string): Promise<ClientConfig | null> => {
     try {
-        const { data, error } = await supabase
-            .from('empresas')
-            .select('*')
-            .eq('codigo_acceso', code)
-            .maybeSingle();
-        
+        const { data, error } = await supabase.from('empresas').select('*').eq('codigo_acceso', code).maybeSingle();
         if (error || !data) return null;
         return mapRowToConfig(data);
     } catch (err) {
@@ -88,10 +77,6 @@ export const getClientByCode = async (code: string): Promise<ClientConfig | null
     }
 };
 
-/**
- * Guarda el cliente con una estrategia de "limpieza de payload".
- * Si detecta que faltan columnas en la tabla, las elimina del envío y reintenta.
- */
 export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<{ success: boolean; message?: string }> => {
     let payload: any = {
         codigo_acceso: client.code,
@@ -109,17 +94,15 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         color_secundario: client.colorSecundario,
         color_acento: client.colorAcento, 
         tienda_habilitada: client.showStore,
-        tienda_categoria_nombre: client.tiendaCategoriaNombre || 'Catalogo',
+        tienda_categoria_nombre: client.tiendaCategoriaNombre,
         productos_ocultos: client.hiddenProducts || [],
         categorias_ocultas: client.hiddenCategories || [],
         yape_numero: client.yapeNumber,
         yape_nombre: client.yapeName,
-        yape_qr: client.yapeQR,
         plin_numero: client.plinNumber,
         plin_nombre: client.plinName,
-        plin_qr: client.plinQR,
         sedes_recojo: client.sedes_recojo || [],
-        campos_medicos_visibles: client.campos_medicos_visibles || ["registro", "laboratorio", "principio"],
+        campos_medicos_visibles: client.campos_medicos_visibles || [],
         footer_description: client.footer_description,
         facebook_url: client.facebook_url,
         instagram_url: client.instagram_url,
@@ -130,37 +113,25 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         business_type: client.businessType
     };
 
-    const attemptSave = async (data: any): Promise<any> => {
+    const runSave = async (data: any) => {
         if (isNew) return await supabase.from('empresas').insert([data]);
         return await supabase.from('empresas').update(data).eq('codigo_acceso', client.code);
     };
 
     try {
-        let response = await attemptSave(payload);
+        let response = await runSave(payload);
         
-        // Si hay error de columna inexistente (código 42703)
-        let attempts = 0;
-        while (response.error && (response.error.code === '42703' || response.error.message.includes('column')) && attempts < 10) {
-            attempts++;
-            const errorMsg = response.error.message;
-            // PostgREST suele reportar "column empresas.business_type does not exist" o similar
-            const match = errorMsg.match(/column "?([^" ]+)"? does not exist/i);
-            const missingColFull = match ? match[1] : null;
-            const missingCol = missingColFull?.includes('.') ? missingColFull.split('.').pop() : missingColFull;
-
-            if (missingCol && payload.hasOwnProperty(missingCol)) {
-                console.warn(`[LemonBI] Omitiendo columna inexistente: ${missingCol}`);
-                delete payload[missingCol];
-            } else {
-                // Si no podemos determinar la columna, quitamos todas las opcionales conocidas de una vez
-                VOLATILE_COLUMNS.forEach(col => delete payload[col]);
-            }
+        // Si falla por columna inexistente (42703), limpiamos y reintentamos solo con lo básico
+        if (response.error && (response.error.code === '42703' || response.error.message.includes('column'))) {
+            console.warn("Detectadas columnas faltantes. Reintentando con payload básico...");
+            const safePayload = { ...payload };
+            EXTENDED_COLUMNS.forEach(col => delete safePayload[col]);
             
-            response = await attemptSave(payload);
+            response = await runSave(safePayload);
             if (!response.error) {
                 return { 
                     success: true, 
-                    message: "¡Guardado exitoso! (Modo Compatibilidad activado por falta de columnas en Supabase)." 
+                    message: "Guardado exitoso (Modo Básico). Para usar funciones de tienda avanzadas, ejecute el script SQL en Supabase." 
                 };
             }
         }
@@ -168,8 +139,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         if (response.error) throw response.error;
         return { success: true };
     } catch (err: any) {
-        console.error("Critical failure in saveClient:", err);
-        return { success: false, message: `Error en la base de datos: ${err.message}. Asegúrese de ejecutar el script SQL de reparación en Supabase.` };
+        return { success: false, message: err.message };
     }
 };
 
@@ -184,22 +154,14 @@ export const saveProductExtra = async (extra: ProductoExtra) => {
         instrucciones_lemon: extra.instrucciones_lemon
       }
     ], { onConflict: 'odoo_id,empresa_code' });
-    
   return { success: !error, error };
 };
 
 export const getProductExtras = async (empresaCode: string): Promise<Record<number, ProductoExtra>> => {
-  const { data, error } = await supabase
-    .from('productos_extra')
-    .select('*')
-    .eq('empresa_code', empresaCode);
-    
+  const { data, error } = await supabase.from('productos_extra').select('*').eq('empresa_code', empresaCode);
   if (error) return {};
-  
   const map: Record<number, ProductoExtra> = {};
-  data.forEach((row: any) => {
-    map[row.odoo_id] = row;
-  });
+  data.forEach((row: any) => { map[row.odoo_id] = row; });
   return map;
 };
 
