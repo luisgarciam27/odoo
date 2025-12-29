@@ -4,15 +4,14 @@ import {
   ShoppingCart, Package, Search, X, ArrowLeft, 
   Plus, Minus, Info, MapPin, Truck,
   MessageCircle, Facebook, Instagram, CheckCircle2, 
-  Loader2, RefreshCw, Trash2, Smartphone, 
-  Layers, Tag, SearchX, PawPrint, ChevronRight,
-  Upload, Camera, Image as ImageIcon,
-  QrCode, ShieldCheck, CreditCard, Clock, ChevronLeft,
-  Citrus, Zap, ShieldCheck as Shield, User,
-  ChevronDown, ExternalLink, Sparkles, Globe, Heart,
-  Star
+  Loader2, Trash2, Smartphone, 
+  Layers, Tag, SearchX, ChevronRight,
+  Camera, Image as ImageIcon,
+  QrCode, ChevronLeft,
+  Citrus, ShieldCheck as Shield,
+  ExternalLink, Sparkles, Globe
 } from 'lucide-react';
-import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
+import { Producto, CartItem, OdooSession, ClientConfig, SedeStore } from '../types';
 import { OdooClient } from '../services/odoo';
 import { getProductExtras } from '../services/clientManager';
 import { supabase } from '../services/supabaseClient';
@@ -28,7 +27,6 @@ type StoreStep = 'cart' | 'details' | 'payment' | 'voucher' | 'processing' | 'su
 const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -42,6 +40,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin'>('yape');
   const [deliveryType, setDeliveryType] = useState<'recojo' | 'delivery'>('recojo');
+  const [selectedSede, setSelectedSede] = useState<SedeStore | null>(null);
   const [clientData, setClientData] = useState({ nombre: '', telefono: '', direccion: '' });
   const [voucherImage, setVoucherImage] = useState<string | null>(null);
   const [isOrderLoading, setIsOrderLoading] = useState(false);
@@ -139,9 +138,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const fetchProducts = async () => {
     if (!session) return;
     setLoading(true);
-    setErrorMsg(null);
     const client = new OdooClient(session.url, session.db, session.useProxy);
-    const fieldSets = [['display_name', 'list_price', 'categ_id', 'image_128', 'qty_available', 'uom_id', 'description_sale'], ['display_name', 'list_price', 'categ_id', 'image_128', 'uom_id']];
+    const fieldSets = [['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale'], ['display_name', 'list_price', 'categ_id', 'image_128']];
     try {
       const extrasMap = await getProductExtras(config.code);
       let data = null;
@@ -149,7 +147,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         try {
           data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 1000, order: 'display_name asc' });
           if (data && Array.isArray(data)) break;
-        } catch (e) { console.warn("Fallback Odoo fields"); }
+        } catch (e) { }
       }
       if (data && Array.isArray(data)) {
         setProductos(data.map((p: any) => {
@@ -160,16 +158,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             precio: p.list_price || 0,
             costo: 0,
             categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
-            stock: p.qty_available || 0,
             imagen: p.image_128 || p.image_medium || p.image_small || p.image_1920,
             descripcion_venta: extra?.descripcion_lemon || p.description_sale || '',
-            uso_sugerido: extra?.instrucciones_lemon || '',
             categoria_personalizada: extra?.categoria_personalizada || '',
-            uom_id: Array.isArray(p.uom_id) ? p.uom_id[0] : (typeof p.uom_id === 'number' ? p.uom_id : 1)
           };
         }));
       }
-    } catch (e: any) { setErrorMsg(`Error: ${e.message}`); } finally { setLoading(false); }
+    } catch (e: any) { } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchProducts(); }, [session, config.code]);
@@ -191,53 +186,33 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     if (isOrderLoading) return;
     setIsOrderLoading(true);
     try {
-      const rawNumber = config.whatsappNumbers || config.whatsappHelpNumber || '51975615244';
-      const waNumber = rawNumber.split(',')[0].trim().replace(/\D/g, '');
-      
+      const waNumber = (config.whatsappNumbers || config.whatsappHelpNumber || '51975615244').replace(/\D/g, '');
       const orderRef = `WEB-${Date.now().toString().slice(-6)}`;
-      const client = new OdooClient(session.url, session.db, session.useProxy);
       
-      const partnerSearch = await client.searchRead(session.uid, session.apiKey, 'res.partner', [['name', '=', clientData.nombre]], ['id'], { limit: 1 });
-      let partnerId = partnerSearch.length > 0 ? partnerSearch[0].id : null;
-      if (!partnerId) {
-          partnerId = await client.create(session.uid, session.apiKey, 'res.partner', {
-              name: clientData.nombre, 
-              phone: clientData.telefono, 
-              street: clientData.direccion || 'Pedido Web', 
-              company_id: session.companyId
-          });
+      // Subir voucher a supabase para tener un link público (o usar el base64 si no hay storage)
+      let finalVoucherUrl = '';
+      if (voucherImage) {
+          const { data, error } = await supabase.from('pedidos_tienda').insert([{
+            order_name: orderRef, 
+            cliente_nombre: clientData.nombre, 
+            monto: cartTotal, 
+            voucher_url: voucherImage, // En LemonBI se suele guardar el base64 si no hay buckets configurados
+            empresa_code: config.code, 
+            estado: 'pendiente'
+          }]).select();
+          if (data) finalVoucherUrl = `${window.location.origin}/voucher-view?ref=${orderRef}`; // Simulación de link
       }
 
-      const orderLines = cart.map(item => [0, 0, {
-          product_id: item.producto.id, 
-          product_uom_qty: item.cantidad, 
-          price_unit: item.producto.precio, 
-          product_uom: item.producto.uom_id || 1, 
-          name: item.producto.nombre
-      }]);
+      let locationText = '';
+      if (deliveryType === 'recojo' && selectedSede) {
+          locationText = `\n*Lugar de Recojo:* ${selectedSede.nombre}\n*Dirección:* ${selectedSede.direccion}`;
+      } else if (deliveryType === 'delivery') {
+          locationText = `\n*Dirección Delivery:* ${clientData.direccion}`;
+      }
 
-      await client.create(session.uid, session.apiKey, 'sale.order', {
-          partner_id: partnerId, 
-          company_id: session.companyId, 
-          order_line: orderLines, 
-          origin: `TIENDA WEB: ${orderRef}`,
-          note: `Pago: ${paymentMethod.toUpperCase()} | Entrega: ${deliveryType.toUpperCase()} | Titular: ${paymentMethod === 'yape' ? (config.yapeName || '') : (config.plinName || '')}`,
-          state: 'draft' 
-      });
-
-      await supabase.from('pedidos_tienda').insert([{
-        order_name: orderRef, 
-        cliente_nombre: clientData.nombre, 
-        monto: cartTotal, 
-        voucher_url: voucherImage || '', 
-        empresa_code: config.code, 
-        estado: 'pendiente'
-      }]);
-
-      const message = `*NUEVO PEDIDO WEB*\nRef: ${orderRef}\nCliente: ${clientData.nombre}\nCelular: ${clientData.telefono}\n\n*Pedido:* \n${cart.map(i => `- ${i.cantidad}x ${i.producto.nombre}`).join('\n')}\n\n*Total:* S/ ${cartTotal.toFixed(2)}\n*Método:* ${paymentMethod.toUpperCase()}\n*Entrega:* ${deliveryType.toUpperCase()}\n\nYa adjunté el comprobante.`;
+      const message = `*NUEVO PEDIDO WEB*\nRef: ${orderRef}\nCliente: ${clientData.nombre}\nCelular: ${clientData.telefono}\n\n*Pedido:* \n${cart.map(i => `- ${i.cantidad}x ${i.producto.nombre}`).join('\n')}\n\n*Total:* S/ ${cartTotal.toFixed(2)}\n*Pago:* ${paymentMethod.toUpperCase()}${locationText}\n\n*Comprobante de Pago:* ${finalVoucherUrl || 'Adjunto en este chat'}`;
       
       window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
-      
       setCurrentStep('success');
     } catch (err: any) { 
       alert("Error al procesar el pedido."); 
@@ -318,28 +293,17 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </section>
       )}
 
-      {/* CATEGORÍAS */}
-      {!loading && (
-         <div className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-[72px] z-50 py-3 shadow-sm">
-            <div className="max-w-7xl mx-auto px-4 overflow-x-auto flex gap-3 no-scrollbar">
-               {availableCategories.map(cat => (
-                  <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${selectedCategory === cat ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-400 hover:text-slate-600'}`}>{cat}</button>
-               ))}
-            </div>
-         </div>
-      )}
-
       {/* PRODUCTOS */}
       <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-40 gap-4">
              <Loader2 className="w-10 h-10 animate-spin text-brand-500" />
-             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando productos...</p>
+             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cargando...</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
             {filteredProducts.map(p => (
-              <div key={p.id} onClick={() => setSelectedProduct(p)} className="bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col group hover:shadow-xl hover:-translate-y-2 transition-all duration-500 cursor-pointer">
+              <div key={p.id} onClick={() => setSelectedProduct(p)} className="bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col group hover:shadow-xl transition-all cursor-pointer">
                 <div className="aspect-square bg-slate-50 rounded-[1.5rem] mb-4 flex items-center justify-center overflow-hidden">
                   {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-contain p-2 mix-blend-multiply" alt={p.nombre} /> : <Package className="w-8 h-8 text-slate-200" />}
                 </div>
@@ -369,7 +333,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                  )}
                  <div className="h-10 w-px bg-white/10 hidden md:block"></div>
                  <p className="text-[9px] font-black uppercase tracking-widest text-white/40 max-w-[220px] leading-relaxed">
-                    {config.footer_description || "Calidad y bienestar garantizado en cada uno de tus pedidos digitales."}
+                    {config.footer_description || "Calidad y bienestar garantizado."}
                  </p>
               </div>
 
@@ -378,13 +342,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                  <a 
                     href={`https://wa.me/${(config.whatsappHelpNumber || config.whatsappNumbers || '51975615244').replace(/\D/g, '')}`} 
                     target="_blank" 
-                    className="flex items-center gap-6 bg-white/5 border border-white/10 px-10 py-6 rounded-[2.5rem] hover:bg-brand-500 hover:border-brand-600 transition-all group shadow-2xl"
+                    className="flex items-center gap-6 bg-white/5 border border-white/10 px-10 py-6 rounded-[2.5rem] hover:bg-brand-500 transition-all group shadow-2xl"
                  >
                     <div className="p-4 bg-brand-500/20 rounded-2xl group-hover:bg-white/20 transition-colors">
                        <MessageCircle className="w-8 h-8 text-white"/>
                     </div>
                     <div className="text-left">
-                       <p className="text-[10px] font-black uppercase text-brand-400 group-hover:text-white/80 tracking-[0.2em] leading-none mb-1.5">Atención al Cliente</p>
+                       <p className="text-[10px] font-black uppercase text-brand-400 group-hover:text-white/80 tracking-widest leading-none mb-1.5">Centro de Ayuda</p>
                        <p className="text-xl font-black uppercase tracking-tighter group-hover:text-white leading-none">Ayuda WhatsApp</p>
                     </div>
                  </a>
@@ -395,38 +359,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     {config.facebook_url && <a href={config.facebook_url} target="_blank" className="p-4 bg-white/5 rounded-2xl hover:bg-blue-600 transition-all border border-white/5 shadow-lg"><Facebook className="w-5 h-5"/></a>}
                     {config.instagram_url && <a href={config.instagram_url} target="_blank" className="p-4 bg-white/5 rounded-2xl hover:bg-pink-600 transition-all border border-white/5 shadow-lg"><Instagram className="w-5 h-5"/></a>}
                  </div>
-                 <div className="flex flex-col items-center lg:items-end gap-1">
-                    <p className="text-[8px] font-black uppercase tracking-[0.3em] opacity-30">Lemon BI Analytics &copy; 2025</p>
-                    <p className="text-[7px] font-bold text-brand-400 uppercase tracking-widest">GaorSystem Perú</p>
-                 </div>
+                 <p className="text-[8px] font-black uppercase tracking-widest opacity-30">Lemon BI Analytics &copy; 2025</p>
               </div>
            </div>
         </footer>
-      )}
-
-      {/* MODAL DETALLE PRODUCTO */}
-      {selectedProduct && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md animate-in fade-in" onClick={() => setSelectedProduct(null)}></div>
-           <div className="relative bg-white w-full max-w-3xl rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in duration-300">
-              <div className="w-full md:w-1/2 bg-slate-50 flex items-center justify-center p-12">
-                 {selectedProduct.imagen ? (
-                   <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="max-w-full h-auto object-contain mix-blend-multiply drop-shadow-lg" alt={selectedProduct.nombre} />
-                 ) : (
-                   <Package className="w-24 h-24 text-slate-200" />
-                 )}
-              </div>
-              <div className="w-full md:w-1/2 p-10 flex flex-col justify-center">
-                 <h2 className="text-2xl font-black uppercase text-slate-900 mb-4 tracking-tight leading-tight">{selectedProduct.nombre}</h2>
-                 <p className="text-3xl font-black text-brand-600 mb-8 tracking-tighter">S/ {selectedProduct.precio.toFixed(2)}</p>
-                 <div className="space-y-4 mb-10">
-                    <p className="text-[11px] font-black uppercase text-slate-400 tracking-widest pb-2 border-b">Detalles del Producto</p>
-                    <p className="text-xs text-slate-600 uppercase font-bold leading-relaxed">{selectedProduct.descripcion_venta || "No hay información adicional para este producto."}</p>
-                 </div>
-                 <button onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); }} className="w-full py-6 bg-slate-900 text-white rounded-3xl font-black uppercase text-xs tracking-widest hover:bg-brand-500 transition-all shadow-xl">Agregar al Carrito</button>
-              </div>
-           </div>
-        </div>
       )}
 
       {/* DRAWER CARRITO */}
@@ -478,16 +414,46 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                  <div className="space-y-6 animate-in slide-in-from-right">
                     <input type="text" placeholder="NOMBRE COMPLETO" className="w-full p-6 bg-slate-50 border border-slate-100 rounded-3xl text-xs font-bold uppercase outline-none focus:ring-4 focus:ring-brand-500/10 transition-all" value={clientData.nombre} onChange={e => setClientData({...clientData, nombre: e.target.value})} />
                     <input type="tel" placeholder="TELÉFONO WHATSAPP" className="w-full p-6 bg-slate-50 border border-slate-100 rounded-3xl text-xs font-bold uppercase outline-none focus:ring-4 focus:ring-brand-500/10 transition-all" value={clientData.telefono} onChange={e => setClientData({...clientData, telefono: e.target.value})} />
+                    
                     <div className="flex gap-4">
-                       <button onClick={() => setDeliveryType('recojo')} className={`flex-1 py-5 rounded-3xl text-[10px] font-black uppercase border-2 transition-all ${deliveryType === 'recojo' ? 'bg-slate-900 text-white border-slate-900 shadow-xl' : 'border-slate-100 text-slate-400'}`}>Recojo Local</button>
+                       <button onClick={() => setDeliveryType('recojo')} className={`flex-1 py-5 rounded-3xl text-[10px] font-black uppercase border-2 transition-all ${deliveryType === 'recojo' ? 'bg-slate-900 text-white border-slate-900 shadow-xl' : 'border-slate-100 text-slate-400'}`}>Recojo</button>
                        <button onClick={() => setDeliveryType('delivery')} className={`flex-1 py-5 rounded-3xl text-[10px] font-black uppercase border-2 transition-all ${deliveryType === 'delivery' ? 'bg-slate-900 text-white border-slate-900 shadow-xl' : 'border-slate-100 text-slate-400'}`}>Delivery</button>
                     </div>
+
+                    {deliveryType === 'recojo' && (
+                       <div className="space-y-4">
+                          <p className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Selecciona local de recojo</p>
+                          {(config.sedes_recojo || []).map(sede => (
+                             <button 
+                                key={sede.id} 
+                                onClick={() => setSelectedSede(sede)}
+                                className={`w-full p-6 rounded-3xl text-left border-2 transition-all ${selectedSede?.id === sede.id ? 'bg-brand-50 border-brand-500' : 'bg-slate-50 border-slate-100'}`}
+                             >
+                                <p className="text-[10px] font-black uppercase text-brand-600 mb-1">{sede.nombre}</p>
+                                <p className="text-xs font-bold text-slate-600">{sede.direccion}</p>
+                                {selectedSede?.id === sede.id && sede.googleMapsUrl && (
+                                   <a href={sede.googleMapsUrl} target="_blank" className="mt-3 flex items-center gap-2 text-[9px] font-black uppercase text-slate-400 hover:text-brand-500">
+                                      <MapPin className="w-3 h-3"/> Abrir en Maps
+                                   </a>
+                                )}
+                             </button>
+                          ))}
+                       </div>
+                    )}
+
                     {deliveryType === 'delivery' && (
                        <textarea placeholder="DIRECCIÓN EXACTA..." className="w-full p-6 bg-slate-50 border border-slate-100 rounded-3xl text-xs font-bold uppercase h-32 outline-none focus:ring-4 focus:ring-brand-500/10 transition-all" value={clientData.direccion} onChange={e => setClientData({...clientData, direccion: e.target.value})} />
                     )}
+                    
                     <div className="flex gap-3 pt-6">
                        <button onClick={() => setCurrentStep('cart')} className="flex-1 py-5 bg-slate-100 rounded-2xl text-[10px] font-black uppercase text-slate-400">Atrás</button>
-                       <button onClick={() => setCurrentStep('payment')} disabled={!clientData.nombre || !clientData.telefono} className="flex-[2] py-5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl disabled:opacity-20">Confirmar Datos</button>
+                       <button 
+                          onClick={() => setCurrentStep('payment')} 
+                          disabled={!clientData.nombre || !clientData.telefono || (deliveryType === 'recojo' && !selectedSede) || (deliveryType === 'delivery' && !clientData.direccion)} 
+                          className="flex-[2] py-5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl disabled:opacity-20"
+                       >
+                          Continuar
+                       </button>
                     </div>
                  </div>
               )}
@@ -505,7 +471,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                           config.plinQR ? <img src={config.plinQR} className="max-w-full h-auto rounded-3xl group-hover:scale-105 transition-transform" alt="QR Plin" /> : <QrCode className="w-16 h-16 opacity-10"/>
                        )}
                     </div>
-                    <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100">
+                    <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 text-left">
                        <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Pagar a nombre de:</p>
                        <p className="text-sm font-black text-slate-900 uppercase leading-none">{paymentMethod === 'yape' ? (config.yapeName || 'Titular') : (config.plinName || 'Titular')}</p>
                        <p className="text-2xl font-black text-slate-900 mt-4 tracking-widest">{paymentMethod === 'yape' ? (config.yapeNumber || '--- --- ---') : (config.plinNumber || '--- --- ---')}</p>
@@ -527,7 +493,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                              <div className="p-6 bg-white rounded-3xl shadow-xl mb-6 text-slate-400 group-hover:text-brand-500 group-hover:scale-110 transition-all">
                                 <Camera className="w-12 h-12"/>
                              </div>
-                             <span className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400">Capturar Voucher</span>
+                             <span className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 text-center">Toma foto del voucher de pago</span>
                              <input type="file" className="hidden" accept="image/*" onChange={handleVoucherUpload} />
                           </label>
                        )}
@@ -549,10 +515,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                        <CheckCircle2 className="w-16 h-16"/>
                     </div>
                     <div className="space-y-4">
-                       <h3 className="text-4xl font-black uppercase tracking-tighter">¡PEDIDO ENVIADO!</h3>
-                       <p className="text-[11px] text-slate-500 uppercase font-bold tracking-widest max-w-[250px] mx-auto">Tu comprobante ha sido recibido. Te contactaremos por WhatsApp para la entrega.</p>
+                       <h3 className="text-4xl font-black uppercase tracking-tighter">¡PEDIDO RECIBIDO!</h3>
+                       <p className="text-[11px] text-slate-500 uppercase font-bold tracking-widest max-w-[250px] mx-auto">Tu comprobante ha sido enviado. Atento a tu WhatsApp para coordinar la entrega.</p>
                     </div>
-                    <button onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); setVoucherImage(null); }} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-xl hover:bg-brand-500 transition-all">Regresar a la Tienda</button>
+                    <button onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); setVoucherImage(null); }} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-xl hover:bg-brand-500 transition-all">Seguir Explorando</button>
                  </div>
               )}
            </div>

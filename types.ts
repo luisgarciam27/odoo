@@ -49,6 +49,7 @@ export interface SedeStore {
   id: string;
   nombre: string;
   direccion: string;
+  googleMapsUrl?: string;
 }
 
 export interface ClientConfig {
