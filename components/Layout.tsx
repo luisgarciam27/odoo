@@ -17,7 +17,10 @@ import {
   Bell,
   CheckCircle,
   Clock,
-  ExternalLink
+  ExternalLink,
+  Link as LinkIcon,
+  Copy,
+  Check
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { PedidoTienda } from '../types';
@@ -28,13 +31,24 @@ interface LayoutProps {
   currentView: string;
   onNavigate: (view: string) => void;
   showStoreLink?: boolean;
+  clientCode?: string;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavigate, showStoreLink }) => {
+const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavigate, showStoreLink, clientCode }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<PedidoTienda[]>([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [hasNew, setHasNew] = useState(false);
+  const [copyStatus, setCopyStatus] = useState(false);
+
+  const storeUrl = clientCode ? `${window.location.origin}/?shop=${clientCode}` : '';
+
+  const handleCopyLink = () => {
+    if (!storeUrl) return;
+    navigator.clipboard.writeText(storeUrl);
+    setCopyStatus(true);
+    setTimeout(() => setCopyStatus(false), 2000);
+  };
 
   // Escuchar pedidos en tiempo real
   useEffect(() => {
@@ -47,7 +61,6 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
           const newOrder = payload.new as PedidoTienda;
           setNotifications(prev => [newOrder, ...prev]);
           setHasNew(true);
-          // Opcional: Sonido de notificación
           try { new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play(); } catch(e){}
         }
       )
@@ -150,7 +163,6 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
       </aside>
 
       <main className="flex-1 transition-all w-full h-screen overflow-y-auto relative z-10 scroll-smooth">
-        {/* TOP BAR CON CAMPANA */}
         <div className="bg-white/90 backdrop-blur-md border-b border-slate-200 text-slate-800 p-4 flex items-center justify-between sticky top-0 z-20 shadow-sm px-8">
           <div className="flex items-center gap-2">
             <Citrus className="w-6 h-6 text-brand-500 md:hidden" />
@@ -158,6 +170,18 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout, currentView, onNavi
           </div>
           
           <div className="flex items-center gap-4">
+             {showStoreLink && clientCode && (
+               <button 
+                onClick={handleCopyLink}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${copyStatus ? 'bg-brand-500 text-white border-brand-600' : 'bg-slate-50 border-slate-100 text-slate-500 hover:border-brand-200 hover:text-brand-600'}`}
+               >
+                 {copyStatus ? <Check className="w-4 h-4" /> : <LinkIcon className="w-4 h-4" />}
+                 <span className="text-[10px] font-black uppercase tracking-widest hidden sm:block">
+                   {copyStatus ? 'Copiado' : 'Link Tienda'}
+                 </span>
+               </button>
+             )}
+
              <div className="relative">
                 <button 
                   onClick={() => { setShowNotifPanel(!showNotifPanel); setHasNew(false); }}

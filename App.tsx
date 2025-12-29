@@ -105,7 +105,13 @@ const App: React.FC = () => {
 
   return (
     <div className="antialiased text-slate-800 bg-slate-50 min-h-screen">
-      <Layout onLogout={handleLogout} currentView={currentView} onNavigate={setCurrentView} showStoreLink={clientConfig?.showStore}>
+      <Layout 
+        onLogout={handleLogout} 
+        currentView={currentView} 
+        onNavigate={setCurrentView} 
+        showStoreLink={clientConfig?.showStore}
+        clientCode={clientConfig?.code}
+      >
         {currentView === 'store' && odooSession && clientConfig ? (
            <StoreView session={odooSession} config={clientConfig} onBack={() => setCurrentView('general')} />
         ) : currentView === 'product-manager' && odooSession && clientConfig ? (

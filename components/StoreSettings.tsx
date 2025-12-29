@@ -5,7 +5,9 @@ import {
   Sparkles, Wallet, Phone, X, Facebook, Instagram, MessageCircle,
   RefreshCw, Share2, LayoutPanelTop, QrCode, Upload, Smartphone, AlertCircle,
   Eye, Image as ImageIcon, Paintbrush, Footprints, Layout, AlignLeft, Citrus,
-  Video, Layers, User, Dog, Tag, Link as LinkIcon, MonitorPlay
+  Video, Layers, User, Dog, Tag, Link as LinkIcon, MonitorPlay, Copy, ExternalLink,
+  /* Added missing Globe icon import */
+  Globe
 } from 'lucide-react';
 import { ClientConfig, SedeStore } from '../types';
 import { saveClient } from '../services/clientManager';
@@ -20,7 +22,15 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
   const [currentConfig, setCurrentConfig] = useState<ClientConfig>(config);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [newCat, setNewCat] = useState('');
+  const [copyStatus, setCopyStatus] = useState(false);
+
+  const storeUrl = `${window.location.origin}/?shop=${config.code}`;
+
+  const handleCopyUrl = () => {
+    navigator.clipboard.writeText(storeUrl);
+    setCopyStatus(true);
+    setTimeout(() => setCopyStatus(false), 2000);
+  };
 
   const handleFileUpload = (field: 'yapeQR' | 'plinQR' | 'logoUrl' | 'footerLogoUrl' | 'slide') => (e: React.ChangeEvent<HTMLInputElement>, index?: number) => {
     const file = e.target.files?.[0];
@@ -93,49 +103,85 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
         </button>
       </div>
 
+      {/* SECCIÓN DE URL PÚBLICA */}
+      <section className="bg-gradient-to-r from-slate-900 to-slate-800 p-8 md:p-12 rounded-[4rem] shadow-2xl border border-white/5 relative overflow-hidden group">
+         <div className="absolute -top-24 -right-24 w-64 h-64 bg-brand-500/10 blur-[80px] rounded-full group-hover:scale-150 transition-transform duration-1000"></div>
+         
+         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
+            <div className="space-y-4 text-center md:text-left">
+               <div className="flex items-center gap-3 justify-center md:justify-start">
+                  <Globe className="w-6 h-6 text-brand-400" />
+                  <h3 className="text-xl font-black text-white uppercase tracking-tighter">Tu Tienda Online está Activa</h3>
+               </div>
+               <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest max-w-md">Comparte este enlace con tus clientes para que puedan realizar pedidos directamente por WhatsApp.</p>
+            </div>
+
+            <div className="w-full md:w-auto flex flex-col sm:flex-row gap-4">
+               <div className="bg-white/5 backdrop-blur-md px-8 py-5 rounded-[2rem] border border-white/10 flex items-center gap-6 group/link min-w-[300px]">
+                  <div className="flex flex-col">
+                     <span className="text-[9px] font-black text-brand-500 uppercase tracking-widest mb-1">Enlace Público</span>
+                     <span className="text-white font-mono text-xs truncate max-w-[200px]">{storeUrl}</span>
+                  </div>
+                  <button 
+                    onClick={handleCopyUrl}
+                    className={`ml-auto p-3 rounded-xl transition-all ${copyStatus ? 'bg-brand-500 text-white' : 'bg-white/10 text-slate-300 hover:bg-white hover:text-slate-900'}`}
+                  >
+                    {copyStatus ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                  </button>
+               </div>
+               <a 
+                 href={storeUrl} 
+                 target="_blank" 
+                 rel="noreferrer"
+                 className="px-8 py-5 bg-white text-slate-900 rounded-[2rem] font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 hover:bg-brand-500 hover:text-white transition-all shadow-xl"
+               >
+                  Probar Tienda <ExternalLink className="w-4 h-4" />
+               </a>
+            </div>
+         </div>
+      </section>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         
         {/* COLUMNA IZQUIERDA: BANNERS Y LOGOS */}
         <div className="lg:col-span-8 space-y-10">
           
-          {/* SECCIÓN DE SLIDER / DIAPOSITIVAS - ¡MÁS VISIBLE! */}
-          <section className="bg-slate-900 p-10 md:p-14 rounded-[4rem] shadow-2xl relative overflow-hidden border-4 border-brand-500/20">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-500/10 blur-[100px] rounded-full"></div>
-            
+          {/* SECCIÓN DE SLIDER / DIAPOSITIVAS */}
+          <section className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-100 relative overflow-hidden">
             <div className="flex flex-col md:flex-row items-center justify-between mb-12 relative z-10 gap-6">
                <div className="flex items-center gap-5">
-                  <div className="p-4 bg-brand-500 text-white rounded-3xl shadow-lg">
+                  <div className="p-4 bg-brand-50 text-brand-600 rounded-3xl">
                     <MonitorPlay className="w-8 h-8"/>
                   </div>
                   <div>
-                    <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Banners de Portada</h3>
-                    <p className="text-brand-400 text-[10px] font-black uppercase tracking-widest mt-1">Slider Principal de la Tienda</p>
+                    <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Banners de Portada</h3>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-1">Imágenes principales de tu tienda</p>
                   </div>
                </div>
-               <button onClick={addSlide} className="px-8 py-4 bg-white text-slate-900 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-3 hover:bg-brand-500 hover:text-white transition-all shadow-xl">
+               <button onClick={addSlide} className="px-8 py-4 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-3 hover:bg-brand-500 transition-all shadow-xl">
                   <Plus className="w-5 h-5"/> Agregar Banner
                </button>
             </div>
             
             <div className="grid grid-cols-1 gap-6 relative z-10">
                {(currentConfig.slide_images || []).length === 0 ? (
-                  <div className="py-20 bg-white/5 rounded-[3rem] border-2 border-dashed border-white/10 text-center flex flex-col items-center gap-5">
-                     <ImageIcon className="w-16 h-16 text-white/10" />
-                     <p className="text-[11px] font-black uppercase text-white/30 tracking-[0.3em]">No has subido ningún banner publicitario</p>
+                  <div className="py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200 text-center flex flex-col items-center gap-5">
+                     <ImageIcon className="w-16 h-16 text-slate-200" />
+                     <p className="text-[11px] font-black uppercase text-slate-400 tracking-[0.3em]">Sube banners publicitarios para impactar a tus clientes</p>
                   </div>
                ) : (
                   currentConfig.slide_images?.map((slide, idx) => (
-                    <div key={idx} className="bg-white/5 p-8 rounded-[3rem] border border-white/5 hover:border-brand-500/50 transition-all group">
+                    <div key={idx} className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 hover:border-brand-500 transition-all group">
                        <div className="flex flex-col md:flex-row gap-8">
-                          <div className="w-full md:w-56 h-32 bg-slate-800 rounded-3xl overflow-hidden shadow-2xl border-2 border-white/10 shrink-0 relative">
+                          <div className="w-full md:w-56 h-32 bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100 shrink-0 relative">
                              {slide ? (
                                 <img src={slide} className="w-full h-full object-cover" />
                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-white/10"><ImageIcon className="w-12 h-12"/></div>
+                                <div className="w-full h-full flex items-center justify-center text-slate-200"><ImageIcon className="w-12 h-12"/></div>
                              )}
                              <label className="absolute inset-0 bg-brand-500/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all duration-300">
                                 <Upload className="text-white w-8 h-8 mb-2 animate-bounce"/>
-                                <span className="text-[9px] font-black text-white uppercase">Subir Foto</span>
+                                <span className="text-[9px] font-black text-white uppercase">Cambiar Foto</span>
                                 <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload('slide')(e, idx)} />
                              </label>
                           </div>
@@ -143,14 +189,14 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                           <div className="flex-1 flex flex-col justify-center space-y-4">
                              <div className="flex items-center justify-between">
                                 <span className="text-[10px] font-black text-brand-500 uppercase tracking-[0.4em]">Diapositiva #{idx + 1}</span>
-                                <button onClick={() => removeSlide(idx)} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all"><Trash2 className="w-4 h-4"/></button>
+                                <button onClick={() => removeSlide(idx)} className="p-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all"><Trash2 className="w-4 h-4"/></button>
                              </div>
                              <div className="relative">
-                                <LinkIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20"/>
+                                <LinkIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300"/>
                                 <input 
                                    type="text" 
-                                   placeholder="Pega la URL de la imagen aquí..." 
-                                   className="w-full pl-14 pr-6 py-4 bg-white/5 border border-white/5 rounded-2xl text-[10px] font-bold text-white outline-none focus:ring-4 focus:ring-brand-500/20"
+                                   placeholder="URL de la imagen..." 
+                                   className="w-full pl-14 pr-6 py-4 bg-white border border-slate-100 rounded-2xl text-[10px] font-bold outline-none focus:ring-4 focus:ring-brand-500/10"
                                    value={slide}
                                    onChange={e => {
                                       const slides = [...(currentConfig.slide_images || [])];
@@ -238,7 +284,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                    <input type="text" placeholder="URL de Facebook" className="w-full pl-14 pr-5 py-5 bg-slate-50 rounded-[1.5rem] text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-100" value={currentConfig.facebook_url || ''} onChange={e => setCurrentConfig({...currentConfig, facebook_url: e.target.value})} />
                 </div>
                 <div className="relative">
-                   <Instagram className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-pink-500"/>
+                   <span className="absolute left-5 top-1/2 -translate-y-1/2"><Instagram className="w-5 h-5 text-pink-500"/></span>
                    <input type="text" placeholder="URL de Instagram" className="w-full pl-14 pr-5 py-5 bg-slate-50 rounded-[1.5rem] text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-pink-100" value={currentConfig.instagram_url || ''} onChange={e => setCurrentConfig({...currentConfig, instagram_url: e.target.value})} />
                 </div>
                 <div className="relative">

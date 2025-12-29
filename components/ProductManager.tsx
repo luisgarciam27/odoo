@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Package, Save, RefreshCw, Loader2, Edit, X, CheckCircle2, 
   UploadCloud, Boxes, EyeOff, Eye, Layers, Tag, Info, AlertCircle,
-  Database, Zap, ArrowRight, PackageSearch
+  Database, Zap, ArrowRight, PackageSearch, Globe, ExternalLink, Copy
 } from 'lucide-react';
 import { Producto, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -26,9 +26,18 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
   const [editingProduct, setEditingProduct] = useState<Producto | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState<'productos' | 'categorias'>('productos');
+  const [copyStatus, setCopyStatus] = useState(false);
   
   const [hiddenIds, setHiddenIds] = useState<number[]>(config.hiddenProducts || []);
   const [hiddenCats, setHiddenCats] = useState<string[]>(config.hiddenCategories || []);
+
+  const storeUrl = `${window.location.origin}/?shop=${config.code}`;
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(storeUrl);
+    setCopyStatus(true);
+    setTimeout(() => setCopyStatus(false), 2000);
+  };
 
   const fetchCatalogData = async () => {
     if (loading) return;
@@ -134,6 +143,31 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 pb-32 animate-in fade-in duration-500 font-sans">
       
+      {/* SECCIÓN DE LINK RÁPIDO */}
+      <div className="bg-slate-900 rounded-[2.5rem] p-6 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl border border-white/5">
+         <div className="flex items-center gap-4">
+            <div className="p-3 bg-brand-500/20 rounded-2xl text-brand-400">
+               <Globe className="w-6 h-6"/>
+            </div>
+            <div>
+               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Tu tienda online está activa</p>
+               <p className="text-xs font-bold font-mono opacity-80">{storeUrl}</p>
+            </div>
+         </div>
+         <div className="flex gap-3">
+            <button 
+              onClick={handleCopyLink}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${copyStatus ? 'bg-brand-500 text-white' : 'bg-white/10 text-white hover:bg-white hover:text-slate-900'}`}
+            >
+              {copyStatus ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copyStatus ? 'Copiado' : 'Copiar Enlace'}
+            </button>
+            <a href={storeUrl} target="_blank" className="flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-slate-900 transition-all">
+               Probar <ExternalLink className="w-4 h-4" />
+            </a>
+         </div>
+      </div>
+
       {/* HEADER GESTIÓN */}
       <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-xl flex flex-col md:flex-row justify-between items-center gap-8">
         <div className="flex items-center gap-6">
