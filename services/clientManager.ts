@@ -20,7 +20,7 @@ const NEW_FIELDS = [
   'footer_description', 'slide_images', 'quality_text', 'support_text', 
   'categorias_ocultas', 'whatsapp_help_number', 'productos_ocultos',
   'tienda_habilitada', 'tienda_categoria_nombre', 'sedes_recojo', 'campos_medicos_visibles',
-  'footer_logo_url', 'yape_qr', 'plin_qr'
+  'footer_logo_url', 'yape_qr', 'plin_qr', 'custom_categories'
 ];
 
 const mapRowToConfig = (row: any): ClientConfig => ({
@@ -43,6 +43,7 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     tiendaCategoriaNombre: row.tienda_categoria_nombre || 'Catalogo',
     hiddenProducts: Array.isArray(row.productos_ocultos) ? row.productos_ocultos.map(Number) : [],
     hiddenCategories: Array.isArray(row.categorias_ocultas) ? row.categorias_ocultas : [],
+    customCategories: Array.isArray(row.custom_categories) ? row.custom_categories : [],
     yapeNumber: row.yape_numero || '',
     yapeName: row.yape_nombre || '',
     yapeQR: row.yape_qr || '',
@@ -102,6 +103,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         tienda_categoria_nombre: client.tiendaCategoriaNombre,
         productos_ocultos: client.hiddenProducts || [],
         categorias_ocultas: client.hiddenCategories || [],
+        custom_categories: client.customCategories || [],
         yape_numero: client.yapeNumber,
         yape_nombre: client.yapeName,
         yape_qr: client.yapeQR,

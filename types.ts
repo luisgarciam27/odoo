@@ -72,6 +72,7 @@ export interface ClientConfig {
   tiendaCategoriaNombre?: string;
   hiddenProducts?: number[];
   hiddenCategories?: string[];
+  customCategories?: string[];
   yapeNumber?: string;
   yapeName?: string;
   yapeQR?: string; 
