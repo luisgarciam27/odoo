@@ -52,31 +52,42 @@ const mapRowToConfig = (row: any): ClientConfig => ({
 });
 
 export const getClients = async (): Promise<ClientConfig[]> => {
-    const { data, error } = await supabase
-        .from('empresas')
-        .select('*')
-        .order('created_at', { ascending: false });
+    try {
+        const { data, error } = await supabase
+            .from('empresas')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error('Error fetching clients:', error);
+        if (error) {
+            console.error('Error fetching clients:', error);
+            return [];
+        }
+
+        return (data || []).map(mapRowToConfig);
+    } catch (err) {
+        console.error('Critical error in getClients:', err);
         return [];
     }
-
-    return (data || []).map(mapRowToConfig);
 };
 
 export const getClientByCode = async (code: string): Promise<ClientConfig | null> => {
-    const { data, error } = await supabase
-        .from('empresas')
-        .select('*')
-        .eq('codigo_acceso', code)
-        .maybeSingle();
-    
-    if (error || !data) return null;
-    return mapRowToConfig(data);
+    try {
+        const { data, error } = await supabase
+            .from('empresas')
+            .select('*')
+            .eq('codigo_acceso', code)
+            .maybeSingle();
+        
+        if (error || !data) return null;
+        return mapRowToConfig(data);
+    } catch (err) {
+        console.error('Error in getClientByCode:', err);
+        return null;
+    }
 };
 
 export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<{ success: boolean; message?: string }> => {
+    // Construimos el payload de forma dinámica para evitar errores de esquema si faltan columnas
     const fullPayload: any = {
         codigo_acceso: client.code,
         odoo_url: client.url,
@@ -123,6 +134,13 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         }
         
         if (response.error) {
+            // Si el error es específicamente por una columna faltante, damos un mensaje más claro
+            if (response.error.message.includes('column') || response.error.code === '42703') {
+                return { 
+                    success: false, 
+                    message: "Faltan columnas en la tabla 'empresas'. Por favor ejecute el script SQL de migración en Supabase." 
+                };
+            }
             throw response.error;
         }
         return { success: true };
@@ -134,7 +152,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
 
 // GESTIÓN DE METADATOS EXTRA DE PRODUCTOS
 export const saveProductExtra = async (extra: ProductoExtra) => {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('productos_extra')
     .upsert([
       { 

@@ -7,14 +7,17 @@ export interface Producto {
   categoria?: string;
   stock?: number;
   imagen?: string; 
-  descripcion_venta?: string;
+  descripcion_venta?: string; // Descripción limpia
+  descripcion_raw?: string;   // Texto original de Odoo
   registro_sanitario?: string;
   laboratorio?: string;
+  marca?: string;
   principio_activo?: string;
   principio_activo_id?: number;
   presentacion?: string;
   uso_sugerido?: string;
   especie?: string; 
+  peso_rango?: string;
   duracion_sesion?: string; 
 }
 

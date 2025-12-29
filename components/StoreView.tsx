@@ -7,7 +7,8 @@ import {
   Star, Facebook, Instagram, Pill, Beaker, ClipboardCheck, AlertCircle,
   Stethoscope, Footprints, PawPrint, Calendar, Wallet, CheckCircle2, Camera, ChevronRight,
   Loader2, BadgeCheck, Send, UserCheck, Sparkles, Zap, Award, HeartHandshake, ShieldAlert,
-  RefreshCw, Trash2, CreditCard, Building2, Smartphone, CheckCircle, QrCode, Music2, Upload, Briefcase
+  RefreshCw, Trash2, CreditCard, Building2, Smartphone, CheckCircle, QrCode, Music2, Upload, Briefcase,
+  Dog, Cat, Syringe
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -44,6 +45,39 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const colorA = config?.colorAcento || '#0ea5e9';
   const bizType = config?.businessType || 'pharmacy';
 
+  // Helper para extraer info de la descripción de Odoo
+  const parseOdooDescription = (rawText: string = "") => {
+    const lines = rawText.split('\n');
+    let marca = "";
+    let especie = "";
+    let peso = "";
+    let registro = "";
+    let descripcionLimpiaLines: string[] = [];
+
+    lines.forEach(line => {
+      const upperLine = line.toUpperCase();
+      if (upperLine.includes("MARCA:")) {
+        marca = line.split(":")[1]?.trim();
+      } else if (upperLine.includes("ESPECIE:") || upperLine.includes("PERROS") || upperLine.includes("GATOS")) {
+        especie = line.trim();
+      } else if (upperLine.includes("PESO:") || upperLine.includes("KG")) {
+        peso = line.trim();
+      } else if (upperLine.includes("R.S.") || upperLine.includes("REGISTRO")) {
+        registro = line.split(":")[1]?.trim() || line.trim();
+      } else if (line.trim().length > 0 && !upperLine.includes("IMÁGENES REFERENCIALES")) {
+        descripcionLimpiaLines.push(line.trim());
+      }
+    });
+
+    return {
+      marca: marca || "Premium",
+      especie: especie || "Caninos / Felinos",
+      peso: peso,
+      registro: registro,
+      cleanDesc: descripcionLimpiaLines.join(' ')
+    };
+  };
+
   const slides = useMemo(() => {
     if (config.slide_images && config.slide_images.some(img => img)) {
       return config.slide_images.filter(img => img).map((url) => ({
@@ -76,8 +110,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const extras = await getProductExtras(config.code);
       const domain: any[] = [['sale_ok', '=', true], ['company_id', '=', session.companyId]];
       const data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'], { limit: 1000 });
+      
       setProductos(data.map((p: any) => {
         const extra = extras[p.id];
+        const parsed = parseOdooDescription(p.description_sale);
+
         return {
           id: p.id,
           nombre: p.display_name,
@@ -85,10 +122,14 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
           stock: p.qty_available || 0,
           imagen: p.image_128,
-          descripcion_venta: extra?.descripcion_lemon || p.description_sale || '',
+          descripcion_raw: p.description_sale,
+          descripcion_venta: extra?.descripcion_lemon || parsed.cleanDesc || p.description_sale || '',
           uso_sugerido: extra?.instrucciones_lemon || '',
-          laboratorio: 'Oficial',
-          registro_sanitario: 'Validado Odoo'
+          laboratorio: parsed.marca, // Usamos la marca extraída como laboratorio/marca principal
+          marca: parsed.marca,
+          especie: parsed.especie,
+          peso_rango: parsed.peso,
+          registro_sanitario: parsed.registro || 'Validado Odoo'
         };
       }));
     } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -145,13 +186,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     try {
       const client = new OdooClient(session.url, session.db, true);
       
-      // 1. Buscar o Crear Cliente en Odoo
       let partnerId: number;
       const partners = await client.searchRead(session.uid, session.apiKey, 'res.partner', [['phone', '=', clientData.telefono]], ['id'], { limit: 1 });
       if (partners.length > 0) partnerId = partners[0].id;
       else partnerId = await client.create(session.uid, session.apiKey, 'res.partner', { name: clientData.nombre.toUpperCase(), phone: clientData.telefono, company_id: session.companyId });
 
-      // 2. Preparar Líneas de Pedido
       const orderLines = cart.map(item => [0, 0, { 
         product_id: item.producto.id, 
         product_uom_qty: item.cantidad, 
@@ -161,7 +200,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       
       const note = `[PEDIDO LEMON STORE]\nMétodo: ${paymentMethod.toUpperCase()}\nEntrega: ${deliveryType.toUpperCase()}\nDetalle: ${deliveryType === 'recojo' ? 'SEDE: '+clientData.sede : 'DIR: '+clientData.direccion}`;
       
-      // 3. Crear Pedido en Odoo
       const newOrderId = await client.create(session.uid, session.apiKey, 'sale.order', { 
         partner_id: partnerId, 
         company_id: session.companyId, 
@@ -173,7 +211,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const orderName = orderInfo[0]?.name || `#${newOrderId}`;
       setLastOrderId(orderName);
 
-      // 4. Subir Voucher a Supabase Storage (si existe)
       let voucherUrl = "";
       if (voucherFile) {
         const fileExt = voucherFile.name.split('.').pop();
@@ -190,7 +227,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         }
       }
 
-      // 5. NUEVO: Registrar en pedidos_tienda para activar Alerta en Dashboard
       await supabase.from('pedidos_tienda').insert([{
         order_name: orderName,
         cliente_nombre: clientData.nombre,
@@ -202,7 +238,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       setCurrentStep('success');
       
-      // 6. Construir Mensaje de WhatsApp para el Dueño
       const itemsText = cart.map(item => `• ${item.cantidad}x ${item.producto.nombre}`).join('%0A');
       const deliveryEmoji = deliveryType === 'recojo' ? '🏢' : '🚚';
       const paymentEmoji = paymentMethod === 'efectivo' ? '💵' : '📱';
@@ -216,11 +251,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       msg += `📍 *Dirección/Sede:* ${deliveryType === 'recojo' ? clientData.sede : clientData.direccion}%0A`;
       msg += `${paymentEmoji} *Pago:* ${paymentMethod.toUpperCase()}%0A%0A`;
       
-      if (voucherUrl) {
-        msg += `🖼️ *COMPROBANTE:* ${voucherUrl}%0A`;
-      } else {
-        msg += `⚠️ *Sin voucher adjunto (Pago en efectivo/POS)*%0A`;
-      }
+      if (voucherUrl) msg += `🖼️ *COMPROBANTE:* ${voucherUrl}%0A`;
+      else msg += `⚠️ *Sin voucher adjunto (Pago en efectivo/POS)*%0A`;
 
       msg += `%0A_Generado por Lemon BI Store_`;
       
@@ -238,16 +270,15 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   };
 
   const bizIcons = {
-    pharmacy: { main: Pill, ficha: ClipboardCheck, tag: 'FARMACÉUTICO', label: 'Farmacia' },
-    veterinary: { main: PawPrint, ficha: PawPrint, tag: 'VETERINARIO', label: 'Veterinaria' },
-    podiatry: { main: Footprints, ficha: Footprints, tag: 'PODOLOGÍA', label: 'Podología' },
-    general: { main: Briefcase, ficha: Info, tag: 'PRODUCTO', label: 'Comercio' }
+    pharmacy: { main: Pill, ficha: ClipboardCheck, tag: 'FARMACÉUTICO', label: 'Farmacia', spec: Stethoscope },
+    veterinary: { main: PawPrint, ficha: PawPrint, tag: 'VETERINARIO', label: 'Veterinaria', spec: Dog },
+    podiatry: { main: Footprints, ficha: Footprints, tag: 'PODOLOGÍA', label: 'Podología', spec: Footprints },
+    general: { main: Briefcase, ficha: Info, tag: 'PRODUCTO', label: 'Comercio', spec: Briefcase }
   }[bizType];
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col overflow-x-hidden">
       
-      {/* AYUDA WHATSAPP */}
       {config.whatsappHelpNumber && (
         <a 
           href={`https://wa.me/${config.whatsappHelpNumber}?text=Hola, tengo una consulta sobre sus productos.`} 
@@ -258,7 +289,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </a>
       )}
 
-      {/* HEADER */}
       <header className="bg-white/95 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 shrink-0">
@@ -282,7 +312,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       </header>
 
-      {/* BANNER DINÁMICO */}
       <div className="px-4 md:px-6 pt-4">
         <div className="max-w-7xl mx-auto overflow-hidden rounded-[2rem] md:rounded-[3rem] shadow-xl relative h-[160px] md:h-[320px]">
           {slides.map((slide: any, idx) => (
@@ -319,8 +348,14 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 md:gap-10">
             {filteredProducts.map(p => (
               <div key={p.id} onClick={() => { setSelectedProduct(p); setActiveTab('info'); }} className="group bg-white rounded-[2.5rem] p-4 border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-500 cursor-pointer flex flex-col relative">
-                <div className="aspect-square bg-slate-50 rounded-[2rem] mb-5 overflow-hidden flex items-center justify-center group-hover:bg-white transition-colors">
+                <div className="aspect-square bg-slate-50 rounded-[2rem] mb-5 overflow-hidden flex items-center justify-center group-hover:bg-white transition-colors relative">
                   {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" /> : <Package className="w-10 h-10 text-slate-200"/>}
+                  {p.marca && (
+                    <div className="absolute top-2 left-2 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-slate-100">
+                       <p className="text-[7px] font-black uppercase tracking-tighter text-slate-400 leading-none">Marca</p>
+                       <p className="text-[8px] font-black uppercase text-brand-600 truncate max-w-[60px]">{p.marca}</p>
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 flex flex-col">
                   <span className="text-[8px] font-black uppercase tracking-widest mb-2 px-3 py-1 bg-slate-100 rounded-lg w-fit text-slate-400 group-hover:bg-brand-50 group-hover:text-brand-600 transition-colors">{p.categoria}</span>
@@ -336,7 +371,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* FICHA TÉCNICA DINÁMICA (MODAL) */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-md animate-in fade-in" onClick={() => setSelectedProduct(null)}></div>
@@ -357,12 +391,17 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                 <div className="mb-10">
                   <div className="flex items-center gap-4 mb-5">
                     <span className="text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-xl bg-slate-900 text-white">{bizIcons.tag}</span>
-                    <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-xl text-amber-600 border border-amber-100"><Star className="w-3.5 h-3.5 fill-amber-500"/><span className="text-[9px] font-black uppercase tracking-tighter">Calidad Premium</span></div>
+                    {selectedProduct.marca && (
+                      <div className="flex items-center gap-1.5 bg-brand-50 px-3 py-1.5 rounded-xl text-brand-600 border border-brand-100">
+                        <Star className="w-3.5 h-3.5 fill-brand-500"/>
+                        <span className="text-[9px] font-black uppercase tracking-tighter">{selectedProduct.marca}</span>
+                      </div>
+                    )}
                   </div>
                   <h2 className="text-2xl md:text-3xl font-black text-slate-900 leading-tight tracking-tighter uppercase mb-5">{selectedProduct.nombre}</h2>
                   <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-brand-50 rounded-xl"><bizIcons.ficha className="w-4 h-4 text-brand-600"/></div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Información Validada por {config.nombreComercial || 'Especialistas'}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Información Técnica Sincronizada</p>
                   </div>
                 </div>
 
@@ -401,12 +440,31 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
                    {activeTab === 'tech' && (
                      <div className="animate-in fade-in duration-300 grid grid-cols-2 gap-5">
-                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Laboratorio / Marca</p><p className="text-xs font-black text-slate-900 uppercase">{selectedProduct.laboratorio || 'Oficial'}</p></div>
-                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Categoría</p><p className="text-xs font-black text-slate-900 uppercase">{selectedProduct.categoria}</p></div>
-                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 col-span-2"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Certificación de Calidad</p><p className="text-xs font-black text-slate-900 uppercase tracking-tight">{selectedProduct.registro_sanitario || 'Validado por Autoridades de Salud'}</p></div>
+                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-1">
+                          <p className="text-[9px] font-black text-slate-400 uppercase">Marca / Lab</p>
+                          <p className="text-xs font-black text-slate-900 uppercase">{selectedProduct.marca || 'Oficial'}</p>
+                        </div>
+                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-1">
+                          <p className="text-[9px] font-black text-slate-400 uppercase">Especie Destino</p>
+                          <p className="text-xs font-black text-slate-900 uppercase flex items-center gap-2">
+                             {bizType === 'veterinary' && <Dog className="w-3 h-3 text-brand-600"/>}
+                             {selectedProduct.especie}
+                          </p>
+                        </div>
+                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-1">
+                          <p className="text-[9px] font-black text-slate-400 uppercase">Peso / Rango</p>
+                          <p className="text-xs font-black text-slate-900 uppercase">{selectedProduct.peso_rango || 'N/A'}</p>
+                        </div>
+                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-1">
+                          <p className="text-[9px] font-black text-slate-400 uppercase">Certificación</p>
+                          <p className="text-xs font-black text-slate-900 uppercase truncate">{selectedProduct.registro_sanitario}</p>
+                        </div>
                         <div className="p-8 bg-brand-500/5 rounded-[2.5rem] border border-brand-500/10 col-span-2 flex items-center gap-6">
                            <ShieldCheck className="w-10 h-10 text-brand-500"/>
-                           <div className="flex-1"><p className="text-[10px] font-black text-brand-600 uppercase tracking-widest">Compromiso Lemon BI</p><p className="text-sm font-black text-slate-800 tracking-tighter uppercase leading-tight">Garantía de Procedencia y Almacenamiento Óptimo</p></div>
+                           <div className="flex-1">
+                             <p className="text-[10px] font-black text-brand-600 uppercase tracking-widest">Compromiso Lemon BI</p>
+                             <p className="text-sm font-black text-slate-800 tracking-tighter uppercase leading-tight">Garantía de Procedencia y Almacenamiento Óptimo</p>
+                           </div>
                         </div>
                      </div>
                    )}
@@ -419,7 +477,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                               <h4 className="text-xs font-black uppercase text-brand-800 tracking-widest">Protocolo Sugerido</h4>
                            </div>
                            <p className="text-base font-bold text-slate-700 leading-relaxed italic opacity-90">"{selectedProduct.uso_sugerido || 'Para una correcta administración, se recomienda seguir estrictamente las indicaciones terapéuticas detalladas por su profesional de confianza o el empaque del fabricante.'}"</p>
-                           <div className="flex items-center gap-3 pt-6 border-t border-brand-100/50"><BadgeCheck className="w-5 h-5 text-brand-500"/><span className="text-[10px] font-black uppercase text-brand-400 tracking-widest">Información Oficial del Catálogo</span></div>
+                           <div className="flex items-center gap-3 pt-6 border-t border-brand-100/50">
+                             <BadgeCheck className="w-5 h-5 text-brand-500"/>
+                             <span className="text-[10px] font-black uppercase text-brand-400 tracking-widest">Información Oficial del Catálogo</span>
+                           </div>
                         </div>
                      </div>
                    )}
@@ -435,7 +496,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
-      {/* CARRITO / CHECKOUT */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in" onClick={() => setIsCartOpen(false)}></div>
@@ -566,7 +626,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               )}
             </div>
 
-            {/* BOTÓN FOOTER ACCIÓN */}
             {currentStep !== 'processing' && currentStep !== 'success' && cart.length > 0 && (
               <div className="p-8 border-t border-slate-100 bg-white space-y-5 shadow-[0_-20px_40px_rgba(0,0,0,0.04)]">
                 <div className="flex items-center justify-between">
@@ -587,7 +646,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
-      {/* FOOTER */}
       <footer className="mt-auto py-20 bg-slate-900 text-white border-t border-white/5">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-16">
            <div className="space-y-6 max-w-sm text-center md:text-left">
