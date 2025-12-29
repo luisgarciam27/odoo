@@ -31,7 +31,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: `Analiza el logo (${currentConfig.logoUrl}). Sugiere 2 colores hex (primario y acento) y un slogan. Responde en JSON.`,
+            contents: `Analiza el logo (${currentConfig.logoUrl}). Sugiere 2 colores hex (primario y acento) y un slogan profesional. Responde en JSON.`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -117,7 +117,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
            <div className="p-4 bg-brand-50 rounded-[2rem] border border-brand-100"><Palette className="w-10 h-10 text-brand-600" /></div>
            <div>
               <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">Configurar Tienda</h2>
-              <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">Sincronización Lemon BI v2.5</p>
+              <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">Identidad Lemon BI</p>
            </div>
         </div>
         <button onClick={handleSave} disabled={isSaving} className="px-12 py-6 text-white rounded-[2.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl flex items-center gap-4 transition-all hover:scale-105 active:scale-95" style={{backgroundColor: brandColor}}>
@@ -130,43 +130,43 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
         {/* IDENTIDAD VISUAL */}
         <div className="space-y-8">
           <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 space-y-8">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><Palette className="w-7 h-7 text-indigo-500"/> Identidad Visual</h3>
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><Palette className="w-7 h-7 text-indigo-500"/> Logo & Colores</h3>
             <div className="space-y-6">
               <div className="space-y-3">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre Comercial</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Nombre Comercial</label>
                 <input type="text" className="w-full p-5 bg-slate-50 border-none rounded-2xl font-black uppercase text-sm shadow-inner" value={currentConfig.nombreComercial || ''} onChange={e => setCurrentConfig({...currentConfig, nombreComercial: e.target.value})} />
               </div>
               <div className="space-y-3">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Logo Principal (Cabecera)</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Logo Principal (Header)</label>
                 <div className="flex gap-2">
-                    <input type="url" placeholder="https://logo-principal.png" className="w-full p-4 bg-slate-50 border-none rounded-2xl text-xs font-bold shadow-inner" value={currentConfig.logoUrl || ''} onChange={e => setCurrentConfig({...currentConfig, logoUrl: e.target.value})} />
+                    <input type="url" placeholder="URL Logo PNG" className="w-full p-4 bg-slate-50 border-none rounded-2xl text-xs font-bold shadow-inner" value={currentConfig.logoUrl || ''} onChange={e => setCurrentConfig({...currentConfig, logoUrl: e.target.value})} />
                     <button type="button" onClick={handleSuggestPalette} className="p-4 bg-brand-500 text-white rounded-2xl shadow-lg">{isGenerating ? <RefreshCw className="animate-spin w-5 h-5"/> : <Sparkles className="w-5 h-5"/>}</button>
                 </div>
               </div>
               <div className="space-y-3">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Logo Footer (Pie de Página)</label>
-                <input type="url" placeholder="https://logo-footer.jpg" className="w-full p-4 bg-slate-50 border-none rounded-2xl text-xs font-bold shadow-inner" value={currentConfig.footerLogoUrl || ''} onChange={e => setCurrentConfig({...currentConfig, footerLogoUrl: e.target.value})} />
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Logo Footer (Pie de Página)</label>
+                <input type="url" placeholder="URL Logo Footer" className="w-full p-4 bg-slate-50 border-none rounded-2xl text-xs font-bold shadow-inner" value={currentConfig.footerLogoUrl || ''} onChange={e => setCurrentConfig({...currentConfig, footerLogoUrl: e.target.value})} />
               </div>
               <div className="flex gap-4">
                  <div className="flex-1 space-y-2">
-                    <label className="text-[9px] font-black text-slate-400 uppercase">Color Marca</label>
-                    <input type="color" className="w-full h-14 rounded-2xl cursor-pointer shadow-sm" value={currentConfig.colorPrimario} onChange={e => setCurrentConfig({...currentConfig, colorPrimario: e.target.value})} />
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Primario</label>
+                    <input type="color" className="w-full h-14 rounded-2xl cursor-pointer shadow-sm border-none" value={currentConfig.colorPrimario} onChange={e => setCurrentConfig({...currentConfig, colorPrimario: e.target.value})} />
                  </div>
                  <div className="flex-1 space-y-2">
-                    <label className="text-[9px] font-black text-slate-400 uppercase">Color Acento</label>
-                    <input type="color" className="w-full h-14 rounded-2xl cursor-pointer shadow-sm" value={currentConfig.colorAcento} onChange={e => setCurrentConfig({...currentConfig, colorAcento: e.target.value})} />
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Acento</label>
+                    <input type="color" className="w-full h-14 rounded-2xl cursor-pointer shadow-sm border-none" value={currentConfig.colorAcento} onChange={e => setCurrentConfig({...currentConfig, colorAcento: e.target.value})} />
                  </div>
               </div>
             </div>
           </section>
 
           <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 space-y-8">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><LayoutPanelTop className="w-7 h-7 text-orange-500"/> Imágenes Cabecera</h3>
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><LayoutPanelTop className="w-7 h-7 text-orange-500"/> Imágenes Cabecera (Slides)</h3>
             <div className="space-y-4">
                {(currentConfig.slide_images || []).map((url, idx) => (
                   <div key={idx} className="flex gap-2">
                      <input type="url" placeholder="URL Imagen Slide" className="flex-1 p-3 bg-slate-50 border-none rounded-xl text-[10px] font-bold shadow-inner" value={url} onChange={e => updateSlide(idx, e.target.value)} />
-                     <button onClick={() => removeSlide(idx)} className="p-3 text-red-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                     <button onClick={() => removeSlide(idx)} className="p-3 text-red-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
                   </div>
                ))}
                <button onClick={addSlide} className="w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-black text-[9px] uppercase tracking-widest hover:border-orange-200 hover:text-orange-500 transition-all">
@@ -176,49 +176,49 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
           </section>
         </div>
 
-        {/* PRESENCIA DIGITAL */}
+        {/* REDES & MARKETING */}
         <div className="space-y-8">
           <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 space-y-8">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><Share2 className="w-7 h-7 text-blue-500"/> Redes & Contacto</h3>
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><Share2 className="w-7 h-7 text-blue-500"/> Redes Sociales</h3>
             <div className="space-y-5">
-               <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl shadow-inner">
+               <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl shadow-inner border border-slate-100">
                   <Facebook className="w-5 h-5 text-blue-600"/>
-                  <input type="text" placeholder="URL Facebook" className="w-full bg-transparent outline-none text-xs font-bold" value={currentConfig.facebook_url || ''} onChange={e => setCurrentConfig({...currentConfig, facebook_url: e.target.value})} />
+                  <input type="text" placeholder="Facebook URL" className="w-full bg-transparent outline-none text-xs font-bold" value={currentConfig.facebook_url || ''} onChange={e => setCurrentConfig({...currentConfig, facebook_url: e.target.value})} />
                </div>
-               <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl shadow-inner">
+               <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl shadow-inner border border-slate-100">
                   <Instagram className="w-5 h-5 text-pink-500"/>
-                  <input type="text" placeholder="URL Instagram" className="w-full bg-transparent outline-none text-xs font-bold" value={currentConfig.instagram_url || ''} onChange={e => setCurrentConfig({...currentConfig, instagram_url: e.target.value})} />
+                  <input type="text" placeholder="Instagram URL" className="w-full bg-transparent outline-none text-xs font-bold" value={currentConfig.instagram_url || ''} onChange={e => setCurrentConfig({...currentConfig, instagram_url: e.target.value})} />
                </div>
-               <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl shadow-inner">
+               <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl shadow-inner border border-slate-100">
                   <Music2 className="w-5 h-5 text-slate-900"/>
-                  <input type="text" placeholder="URL TikTok" className="w-full bg-transparent outline-none text-xs font-bold" value={currentConfig.tiktok_url || ''} onChange={e => setCurrentConfig({...currentConfig, tiktok_url: e.target.value})} />
+                  <input type="text" placeholder="TikTok URL" className="w-full bg-transparent outline-none text-xs font-bold" value={currentConfig.tiktok_url || ''} onChange={e => setCurrentConfig({...currentConfig, tiktok_url: e.target.value})} />
                </div>
                <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl shadow-inner border border-emerald-100">
                   <MessageCircle className="w-5 h-5 text-emerald-500"/>
-                  <input type="text" placeholder="WhatsApp Soporte" className="w-full bg-transparent outline-none text-xs font-bold" value={currentConfig.whatsappHelpNumber || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappHelpNumber: e.target.value})} />
+                  <input type="text" placeholder="WhatsApp Consultas" className="w-full bg-transparent outline-none text-xs font-bold" value={currentConfig.whatsappHelpNumber || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappHelpNumber: e.target.value})} />
                </div>
             </div>
           </section>
 
           <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 space-y-8">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><MessageCircle className="w-7 h-7 text-emerald-600" /> Pedidos & Slogan</h3>
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><MessageCircle className="w-7 h-7 text-emerald-600" /> Slogan Footer</h3>
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">WhatsApp Pedidos (519...)</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">WhatsApp Pedidos</label>
                 <input type="text" placeholder="51975615244" className="w-full p-5 bg-slate-50 border-none rounded-2xl text-sm font-black shadow-inner" value={currentConfig.whatsappNumbers || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappNumbers: e.target.value})} />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Garantía / Descripción Footer</label>
-                <textarea className="w-full p-5 bg-slate-50 border-none rounded-2xl text-xs font-bold h-32 shadow-inner" placeholder="Escribe aquí tu garantía o slogan..." value={currentConfig.footer_description || ''} onChange={e => setCurrentConfig({...currentConfig, footer_description: e.target.value})}></textarea>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Slogan de Garantía (Pie)</label>
+                <textarea className="w-full p-5 bg-slate-50 border-none rounded-2xl text-xs font-bold h-32 shadow-inner" placeholder="Escribe aquí tu frase de marca..." value={currentConfig.footer_description || ''} onChange={e => setCurrentConfig({...currentConfig, footer_description: e.target.value})}></textarea>
               </div>
             </div>
           </section>
         </div>
 
-        {/* OPERACIONES */}
+        {/* PAGOS & SEDES */}
         <div className="space-y-8">
            <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 space-y-8">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><Wallet className="w-7 h-7 text-brand-600" /> Pagos Digitales</h3>
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><Wallet className="w-7 h-7 text-brand-600" /> Cobros Digitales</h3>
             <div className="space-y-4">
                <div className="p-6 bg-[#742284]/5 rounded-[2.5rem] border border-[#742284]/10 space-y-3">
                   <div className="flex items-center gap-3"><div className="w-8 h-8 bg-[#742284] rounded-lg flex items-center justify-center text-white font-black text-xs">Y</div><span className="text-[10px] font-black uppercase text-[#742284]">Yape</span></div>
@@ -234,18 +234,18 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
           </section>
 
           <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 space-y-6">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><MapPin className="w-7 h-7 text-blue-500" /> Sedes de Recojo</h3>
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-4"><MapPin className="w-7 h-7 text-blue-500" /> Sedes de Entrega</h3>
             <div className="space-y-4">
               {(currentConfig.sedes_recojo || []).map(sede => (
                 <div key={sede.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex gap-2 shadow-inner">
                    <div className="flex-1 space-y-2">
-                     <input type="text" placeholder="Nombre Sede" className="w-full p-2 bg-white border rounded-lg text-[10px] font-black uppercase" value={sede.nombre} onChange={e => updateSede(sede.id, 'nombre', e.target.value)} />
+                     <input type="text" placeholder="Nombre" className="w-full p-2 bg-white border rounded-lg text-[10px] font-black uppercase" value={sede.nombre} onChange={e => updateSede(sede.id, 'nombre', e.target.value)} />
                      <input type="text" placeholder="Dirección" className="w-full p-2 bg-white border rounded-lg text-[10px] font-bold" value={sede.direccion} onChange={e => updateSede(sede.id, 'direccion', e.target.value)} />
                    </div>
-                   <button type="button" onClick={() => removeSede(sede.id)} className="p-2 text-red-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                   <button type="button" onClick={() => removeSede(sede.id)} className="p-2 text-red-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
                 </div>
               ))}
-              <button type="button" onClick={addSede} className="w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:border-blue-200 hover:text-blue-500">
+              <button type="button" onClick={addSede} className="w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:border-blue-200 hover:text-blue-500 transition-all">
                 <Plus className="w-4 h-4"/> Añadir Sede
               </button>
             </div>
@@ -257,7 +257,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
       {showSuccess && (
          <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[300] bg-slate-900 text-white px-12 py-6 rounded-full shadow-2xl animate-in slide-in-from-bottom-12 flex items-center gap-5 border border-white/10">
             <CheckCircle2 className="text-brand-400 w-8 h-8"/>
-            <span className="text-sm font-black uppercase tracking-widest">¡Tienda Sincronizada!</span>
+            <span className="text-sm font-black uppercase tracking-widest">¡Marca Actualizada!</span>
          </div>
       )}
     </div>

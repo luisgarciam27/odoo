@@ -31,20 +31,19 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState<StoreStep>('cart');
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
-  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [activeSlide, setActiveSlide] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   
   const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin' | 'efectivo'>('yape');
   const [deliveryType, setDeliveryType] = useState<'recojo' | 'delivery'>('recojo');
   const [clientData, setClientData] = useState({ nombre: '', telefono: '', direccion: '', sede: '' });
-  const [voucherFile, setVoucherFile] = useState<File | null>(null);
 
   const brandColor = config?.colorPrimario || '#84cc16'; 
   const colorA = config?.colorAcento || '#0ea5e9';
   const bizType = config?.businessType || 'pharmacy';
 
   const parseOdooDescription = (rawText: string = "") => {
+    if (!rawText) return { marca: "Genérico", especie: "General", registro: "S/N", cleanDesc: "" };
     const lines = rawText.split('\n');
     let marca = ""; let especie = ""; let registro = "";
     let descripcionLimpiaLines: string[] = [];
@@ -63,8 +62,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       return config.slide_images.filter(img => img).map((url) => ({ image: url }));
     }
     return [
-      { title: "Salud y Bienestar", desc: "Sincronizado con inventarios reales en tiempo real.", icon: ShieldCheck, badge: "Garantía Oficial", bg: `linear-gradient(135deg, ${brandColor}, ${colorA})` },
-      { title: "Atención Especializada", desc: "Expertos cuidando de lo que más quieres.", icon: HeartHandshake, badge: "Confianza", bg: `linear-gradient(135deg, ${colorA}, ${brandColor})` }
+      { title: "Salud y Bienestar", desc: "Tus productos de confianza ahora online.", icon: ShieldCheck, badge: "Garantía", bg: `linear-gradient(135deg, ${brandColor}, ${colorA})` },
+      { title: "Atención Especializada", desc: "Expertos cuidando de ti.", icon: HeartHandshake, badge: "Confianza", bg: `linear-gradient(135deg, ${colorA}, ${brandColor})` }
     ];
   }, [config.slide_images, brandColor, colorA]);
 
@@ -83,20 +82,29 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const extras = await getProductExtras(config.code);
       const fields = ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'];
       
-      // Intento 1: Filtros estrictos (Sale OK + Activo)
-      let domain: any[] = [['sale_ok', '=', true], ['active', '=', true]];
-      const context = { allowed_company_ids: [session.companyId], company_id: session.companyId };
-      
-      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, { limit: 1000, context });
-
-      // Intento 2: Si falla el 1, probar sin filtro 'active' (algunos usuarios técnicos no pueden filtrar por este campo)
-      if (!data || data.length === 0) {
-        data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 1000, context });
+      // ULTRA-RESILIENT FETCH STRATEGY (Odoo 14-17 Compatibility)
+      const domain: any[] = [['sale_ok', '=', true]];
+      if (session.companyId) {
+          domain.push(['company_id', 'in', [false, session.companyId]]);
       }
 
-      // Intento 3: Si sigue fallando, intentar con el modelo product.template (algunas instalaciones no tienen variantes)
+      let data = [];
+      try {
+        // Attempt 1: Default search read
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, { limit: 1000 });
+      } catch (e) {
+        console.debug("Attempt 1 failed (company filter), trying global fetch...");
+        // Attempt 2: Global search without company filter
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 1000 });
+      }
+
+      // Attempt 3: If no variants found, try product templates
       if (!data || data.length === 0) {
-        data = await client.searchRead(session.uid, session.apiKey, 'product.template', [['sale_ok', '=', true]], fields, { limit: 500, context });
+        try {
+          data = await client.searchRead(session.uid, session.apiKey, 'product.template', [['sale_ok', '=', true]], fields, { limit: 500 });
+        } catch (e) {
+          console.debug("Attempt 3 (template) failed.");
+        }
       }
 
       if (data && data.length > 0) {
@@ -121,7 +129,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         setProductos([]);
       }
     } catch (e) { 
-      console.error("Odoo Sync Error:", e); 
+      console.error("Critical Odoo Sync Error:", e); 
       setProductos([]);
     } finally { 
       setLoading(false); 
@@ -175,7 +183,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             {config.logoUrl ? <img src={config.logoUrl} className="h-10 md:h-12 object-contain" /> : <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg" style={{backgroundColor: brandColor}}><bizIcons.main className="w-6 h-6" /></div>}
             <div className="hidden md:block">
                <h1 className="font-black text-slate-900 uppercase text-[14px] leading-none tracking-tighter">{config.nombreComercial || config.code}</h1>
-               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1.5 flex items-center gap-1"><BadgeCheck className="w-3.5 h-3.5 text-brand-500" /> {bizIcons.label} Certificada</p>
+               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1.5 flex items-center gap-1"><BadgeCheck className="w-3.5 h-3.5 text-brand-500" /> Tienda Online</p>
             </div>
           </div>
           <div className="flex-1 max-w-lg">
@@ -192,7 +200,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       </header>
 
       <div className="px-6 pt-6">
-        <div className="max-w-7xl mx-auto overflow-hidden rounded-[3rem] shadow-2xl relative h-[250px] md:h-[450px]">
+        <div className="max-w-7xl mx-auto overflow-hidden rounded-[3rem] shadow-2xl relative h-[220px] md:h-[450px]">
           {slides.map((slide: any, idx) => (
             <div key={idx} className={`absolute inset-0 transition-all duration-1000 ${activeSlide === idx ? 'opacity-100 scale-100' : 'opacity-0 scale-110 pointer-events-none'}`}>
               {slide.image ? <img src={slide.image} className="w-full h-full object-cover" /> : (
@@ -223,16 +231,16 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-6">
              <Loader2 className="w-12 h-12 animate-spin text-brand-500" />
-             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400 animate-pulse">Sincronizando Catálogo de Odoo...</p>
+             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 animate-pulse">Sincronizando Catálogo Odoo...</p>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="py-32 text-center flex flex-col items-center gap-8 opacity-40">
              <SearchX className="w-20 h-20 text-slate-200" />
              <div className="space-y-2">
-                <h3 className="text-2xl font-black uppercase tracking-widest text-slate-400">Catálogo Vacío</h3>
-                <p className="text-[10px] font-bold uppercase">Verifica el filtro de activo y ventas en Odoo v17.</p>
+                <h3 className="text-2xl font-black uppercase tracking-widest text-slate-400">Sin productos disponibles</h3>
+                <p className="text-[10px] font-bold uppercase">Verifica que los productos tengan "Puede ser vendido" activo en Odoo.</p>
              </div>
-             <button onClick={fetchProducts} className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-xl"><RefreshCw className="w-4 h-4" /> Reintentar Búsqueda Global</button>
+             <button onClick={fetchProducts} className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-xl"><RefreshCw className="w-4 h-4" /> Reintentar Carga</button>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 md:gap-12">
@@ -256,31 +264,31 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       </main>
 
       <footer className="mt-auto py-24 relative overflow-hidden" style={{backgroundColor: brandColor}}>
-        <div className="absolute inset-0 bg-black/15"></div>
+        <div className="absolute inset-0 bg-black/20"></div>
         <div className="max-w-7xl mx-auto px-10 flex flex-col md:flex-row justify-between items-center gap-16 relative z-10 text-white">
            <div className="space-y-8 max-w-md text-center md:text-left">
               <div className="flex items-center gap-6 justify-center md:justify-start">
                  {config.footerLogoUrl ? (
                    <img src={config.footerLogoUrl} className="h-20 object-contain drop-shadow-2xl" />
                  ) : (
-                   <div className="flex items-center gap-4 bg-white/10 p-4 rounded-3xl">
-                     <bizIcons.main className="w-10 h-10" />
-                     <span className="font-black text-4xl tracking-tighter uppercase">{config.nombreComercial || config.code}</span>
+                   <div className="flex items-center gap-4 bg-white/10 p-5 rounded-[2rem] border border-white/20">
+                     <bizIcons.main className="w-10 h-10 text-white" />
+                     <span className="font-black text-4xl tracking-tighter uppercase text-white">{config.nombreComercial || config.code}</span>
                    </div>
                  )}
               </div>
-              <p className="text-sm font-bold leading-relaxed italic border-l-4 border-white/40 pl-8 uppercase tracking-widest opacity-90">"{config.footer_description || 'Excelencia y garantía en cada servicio de salud.'}"</p>
+              <p className="text-sm font-bold leading-relaxed italic border-l-4 border-white/40 pl-8 uppercase tracking-widest opacity-90 text-white">"{config.footer_description || 'Excelencia y garantía en cada servicio.'}"</p>
            </div>
            <div className="text-right flex flex-col items-center md:items-end gap-10">
               <div className="flex gap-4">
-                  {config.facebook_url && <a href={config.facebook_url} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl"><Facebook className="w-8 h-8"/></a>}
-                  {config.instagram_url && <a href={config.instagram_url} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl"><Instagram className="w-8 h-8"/></a>}
-                  {config.tiktok_url && <a href={config.tiktok_url} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl"><Music2 className="w-8 h-8"/></a>}
-                  {config.whatsappHelpNumber && <a href={`https://wa.me/${config.whatsappHelpNumber}`} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl"><MessageCircle className="w-8 h-8"/></a>}
+                  {config.facebook_url && <a href={config.facebook_url} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl text-white"><Facebook className="w-8 h-8"/></a>}
+                  {config.instagram_url && <a href={config.instagram_url} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl text-white"><Instagram className="w-8 h-8"/></a>}
+                  {config.tiktok_url && <a href={config.tiktok_url} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl text-white"><Music2 className="w-8 h-8"/></a>}
+                  {config.whatsappHelpNumber && <a href={`https://wa.me/${config.whatsappHelpNumber}`} target="_blank" rel="noreferrer" className="p-6 bg-white/10 rounded-full hover:bg-white hover:text-slate-900 transition-all shadow-xl text-white"><MessageCircle className="w-8 h-8"/></a>}
               </div>
-              <div className="space-y-3 opacity-60 text-center md:text-right">
-                <p className="text-[11px] font-black uppercase tracking-[0.5em]">LEMON BI CLOUD • GAORSYSTEM 2025</p>
-                <p className="text-[9px] font-black uppercase tracking-widest">Tecnología Inteligente • Impulsando Decisiones</p>
+              <div className="space-y-3 opacity-60 text-center md:text-right text-white">
+                <p className="text-[11px] font-black uppercase tracking-[0.5em]">LEMON BI POWERED • 2025</p>
+                <p className="text-[9px] font-black uppercase tracking-widest">Tecnología Inteligente para el Cuidado de la Salud</p>
               </div>
            </div>
         </div>
