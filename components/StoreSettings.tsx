@@ -4,7 +4,7 @@ import {
   Palette, ImageIcon, Save, CheckCircle2, RotateCcw, MapPin, Plus, Trash2, 
   Sparkles, Pill, Briefcase, PawPrint, Footprints, Wallet, QrCode, Phone, 
   User, X, Globe, Share2, Info, ShieldCheck, Music2, Layers, EyeOff, Eye,
-  RefreshCw, ChevronRight, Tag
+  RefreshCw, ChevronRight, Tag, AlertTriangle
 } from 'lucide-react';
 import { ClientConfig, SedeStore, BusinessType, OdooSession } from '../types';
 import { saveClient } from '../services/clientManager';
@@ -13,7 +13,7 @@ import { OdooClient } from '../services/odoo';
 interface StoreSettingsProps {
   config: ClientConfig;
   onUpdate: (newConfig: ClientConfig) => void;
-  session?: OdooSession | null; // Añadimos la sesión para consultar Odoo
+  session?: OdooSession | null;
 }
 
 const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session }) => {
@@ -22,16 +22,24 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
   const [showSuccess, setShowSuccess] = useState(false);
   const [odooCategories, setOdooCategories] = useState<{id: number, name: string}[]>([]);
   const [isLoadingCats, setIsLoadingCats] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Cargar categorías de Odoo si hay sesión
   const fetchOdooCategories = async () => {
-    if (!session) return;
+    if (!session && !config.url) return;
     setIsLoadingCats(true);
     try {
-      const client = new OdooClient(session.url, session.db, true);
+      // Usamos la config actual si no hay sesión activa por el login admin
+      const url = session?.url || config.url;
+      const db = session?.db || config.db;
+      const user = session?.username || config.username;
+      const key = session?.apiKey || config.apiKey;
+
+      const client = new OdooClient(url, db, true);
+      const uid = session?.uid || await client.authenticate(user, key);
+      
       const cats = await client.searchRead(
-        session.uid, 
-        session.apiKey, 
+        uid, 
+        key, 
         'product.category', 
         [], 
         ['name'], 
@@ -47,16 +55,19 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
 
   useEffect(() => {
     fetchOdooCategories();
-  }, [session]);
+  }, [session, config.code]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
     setIsSaving(true);
     const result = await saveClient(currentConfig, false);
     if (result.success) {
       onUpdate(currentConfig);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
+    } else {
+      setErrorMessage(result.message || "Error al guardar");
     }
     setIsSaving(false);
   };
@@ -98,44 +109,20 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
 
   const brandColor = currentConfig.colorPrimario || '#84cc16';
 
-  const ImageInput = ({ label, value, onChange, placeholder, icon: Icon }: any) => (
-    <div className="space-y-3">
-      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-        <Icon className="w-3 h-3"/> {label}
-      </label>
-      <div className="flex gap-4 items-start">
-        <div className="relative group w-20 h-20 shrink-0">
-          <div className="w-full h-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center overflow-hidden transition-all group-hover:border-brand-500">
-            {value ? (
-              <img src={value} className="w-full h-full object-contain" alt="Preview"/>
-            ) : (
-              <ImageIcon className="w-6 h-6 text-slate-200"/>
-            )}
-          </div>
-          {value && (
-            <button 
-              type="button"
-              onClick={() => onChange('')}
-              className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full shadow-lg hover:scale-110 transition-transform"
-            >
-              <X className="w-3 h-3"/>
-            </button>
-          )}
-        </div>
-        <input 
-          type="text" 
-          placeholder={placeholder} 
-          className="flex-1 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[11px] font-bold outline-none focus:ring-2 focus:ring-brand-500 shadow-inner" 
-          value={value} 
-          onChange={e => onChange(e.target.value)} 
-        />
-      </div>
-    </div>
-  );
-
   return (
     <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-6 pb-32">
       
+      {errorMessage && (
+        <div className="bg-red-50 border-2 border-red-200 p-6 rounded-[2rem] flex items-center gap-4 text-red-700 shadow-xl animate-bounce">
+           <AlertTriangle className="w-10 h-10 shrink-0" />
+           <div className="flex-1">
+             <h4 className="font-black uppercase text-sm tracking-tight">Error Crítico Detectado</h4>
+             <p className="text-xs font-bold leading-relaxed">{errorMessage}</p>
+           </div>
+           <button onClick={() => setErrorMessage(null)} className="p-2 hover:bg-red-100 rounded-full"><X className="w-5 h-5"/></button>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">Panel de Marca</h2>
@@ -145,7 +132,8 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
         </div>
         <button 
             onClick={handleSave}
-            className="px-10 py-5 text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:brightness-110 transition-all flex items-center gap-3"
+            disabled={isSaving}
+            className="px-10 py-5 text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:brightness-110 transition-all flex items-center gap-3 disabled:opacity-50"
             style={{backgroundColor: brandColor}}
         >
             {isSaving ? <RotateCcw className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
@@ -153,7 +141,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
         </button>
       </div>
 
-      <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         
         <div className="space-y-8">
           <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
@@ -163,27 +151,31 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
             <div className="space-y-4">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sincronizado con Odoo</p>
-                <button type="button" onClick={fetchOdooCategories} className="p-2 text-brand-600 hover:bg-brand-50 rounded-lg">
-                  <RefreshCw className={`w-4 h-4 ${isLoadingCats ? 'animate-spin' : ''}`} />
+                <button 
+                  type="button" 
+                  onClick={fetchOdooCategories} 
+                  className="px-4 py-2 bg-brand-50 text-brand-600 rounded-xl flex items-center gap-2 hover:bg-brand-100 transition-all font-black text-[9px] uppercase tracking-widest"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoadingCats ? 'animate-spin' : ''}`} /> Sincronizar
                 </button>
               </div>
 
-              <div className="max-h-64 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+              <div className="max-h-64 overflow-y-auto space-y-2 pr-2 custom-scrollbar border-2 border-slate-50 rounded-2xl p-2">
                 {odooCategories.length === 0 && !isLoadingCats && (
-                  <div className="text-center py-6 opacity-40">
-                    <Tag className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-[9px] font-black uppercase">No se encontraron categorías</p>
+                  <div className="text-center py-10 opacity-30">
+                    <Tag className="w-10 h-10 mx-auto mb-3" />
+                    <p className="text-[10px] font-black uppercase tracking-widest">No hay categorías cargadas</p>
                   </div>
                 )}
                 {odooCategories.map(cat => {
                   const isHidden = (currentConfig.hiddenCategories || []).includes(cat.name);
                   return (
-                    <div key={cat.id} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${isHidden ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 shadow-sm'}`}>
-                      <span className={`text-[11px] font-bold uppercase ${isHidden ? 'text-slate-400' : 'text-slate-800'}`}>{cat.name}</span>
+                    <div key={cat.id} className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${isHidden ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 shadow-sm hover:border-brand-300'}`}>
+                      <span className={`text-[11px] font-black uppercase tracking-tight ${isHidden ? 'text-slate-400' : 'text-slate-800'}`}>{cat.name}</span>
                       <button 
                         type="button"
                         onClick={() => toggleCategoryVisibility(cat.name)}
-                        className={`p-2 rounded-lg transition-all ${isHidden ? 'bg-slate-200 text-slate-500' : 'bg-brand-100 text-brand-600'}`}
+                        className={`p-2.5 rounded-xl transition-all ${isHidden ? 'bg-slate-200 text-slate-500' : 'bg-brand-500 text-white shadow-lg shadow-brand-200'}`}
                       >
                         {isHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -191,7 +183,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
                   );
                 })}
               </div>
-              <p className="text-[8px] text-slate-400 uppercase font-bold italic leading-tight">Mapea las categorías que deseas que el cliente final pueda ver en la barra de navegación de la tienda.</p>
+              <p className="text-[9px] text-slate-400 uppercase font-black italic leading-tight text-center mt-4">Habilita las categorías que tus clientes podrán usar para navegar en la tienda.</p>
             </div>
           </section>
 
@@ -202,20 +194,11 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp de Pedidos</label>
-                <input type="text" placeholder="Ej: 51987654321" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none" value={currentConfig.whatsappNumbers} onChange={e => setCurrentConfig({...currentConfig, whatsappNumbers: e.target.value})} />
+                <input type="text" placeholder="Ej: 51987654321" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none" value={currentConfig.whatsappNumbers || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappNumbers: e.target.value})} />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp de Ayuda (Botón Flotante)</label>
-                <input type="text" placeholder="Ej: 51912345678" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none" value={currentConfig.whatsappHelpNumber} onChange={e => setCurrentConfig({...currentConfig, whatsappHelpNumber: e.target.value})} />
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                 <div className="space-y-2">
-                    <label className="text-[9px] font-black text-slate-400 uppercase">TikTok URL</label>
-                    <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-2xl border border-slate-100">
-                      <Music2 className="w-5 h-5 ml-3 text-slate-400" />
-                      <input type="text" className="flex-1 p-3 bg-transparent border-none outline-none text-[10px]" value={currentConfig.tiktok_url} onChange={e => setCurrentConfig({...currentConfig, tiktok_url: e.target.value})} />
-                    </div>
-                 </div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp de Ayuda</label>
+                <input type="text" placeholder="Ej: 51912345678" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none" value={currentConfig.whatsappHelpNumber || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappHelpNumber: e.target.value})} />
               </div>
             </div>
           </section>
@@ -229,30 +212,32 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre Comercial</label>
-                <input type="text" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black uppercase text-sm outline-none" value={currentConfig.nombreComercial} onChange={e => setCurrentConfig({...currentConfig, nombreComercial: e.target.value})} />
+                <input type="text" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black uppercase text-sm outline-none" value={currentConfig.nombreComercial || ''} onChange={e => setCurrentConfig({...currentConfig, nombreComercial: e.target.value})} />
               </div>
-              <ImageInput label="Logo de Marca" value={currentConfig.logoUrl} onChange={(val: string) => setCurrentConfig({...currentConfig, logoUrl: val})} placeholder="URL del logo..." icon={ImageIcon}/>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Color de Marca</label>
+                <input type="color" className="w-full h-12 p-1 bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer" value={currentConfig.colorPrimario || '#84cc16'} onChange={e => setCurrentConfig({...currentConfig, colorPrimario: e.target.value})} />
+              </div>
             </div>
           </section>
 
           <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-              <ImageIcon className="w-6 h-6 text-pink-500" /> Banner Tienda (Slider)
+              <MapPin className="w-6 h-6 text-blue-500" /> Sedes de Recojo
             </h3>
             <div className="space-y-4">
-               {[0, 1, 2].map(i => (
-                 <div key={i} className="space-y-2">
-                   <label className="text-[9px] font-black text-slate-400 uppercase">Imagen Slide {i + 1}</label>
-                   <input 
-                    type="text" 
-                    placeholder="URL de la imagen..." 
-                    className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold" 
-                    value={currentConfig.slide_images?.[i] || ''} 
-                    onChange={e => updateSlide(i, e.target.value)} 
-                   />
-                 </div>
-               ))}
-               <p className="text-[8px] text-slate-400 uppercase font-bold italic">Se recomiendan imágenes horizontales.</p>
+              {(currentConfig.sedes_recojo || []).map(sede => (
+                <div key={sede.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex gap-4 animate-in slide-in-from-right">
+                   <div className="flex-1 space-y-2">
+                     <input type="text" placeholder="NOMBRE SEDE" className="w-full p-2 bg-white border border-slate-100 rounded-lg text-[10px] font-black uppercase tracking-widest outline-none" value={sede.nombre} onChange={e => updateSede(sede.id, 'nombre', e.target.value)} />
+                     <input type="text" placeholder="DIRECCIÓN" className="w-full p-2 bg-white border border-slate-100 rounded-lg text-[10px] font-bold outline-none" value={sede.direccion} onChange={e => updateSede(sede.id, 'direccion', e.target.value)} />
+                   </div>
+                   <button type="button" onClick={() => removeSede(sede.id)} className="p-2 text-red-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                </div>
+              ))}
+              <button type="button" onClick={addSede} className="w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-black text-[9px] uppercase tracking-widest hover:border-blue-300 hover:text-blue-500 transition-all flex items-center justify-center gap-2">
+                <Plus className="w-4 h-4"/> Añadir Sede
+              </button>
             </div>
           </section>
         </div>
@@ -268,9 +253,8 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
                      <div className="w-8 h-8 bg-[#742284] rounded-lg flex items-center justify-center text-white font-black text-xs">Y</div>
                      <span className="text-[10px] font-black uppercase text-[#742284]">Yape</span>
                   </div>
-                  <input type="text" placeholder="Número" className="w-full p-3 bg-white border border-[#742284]/10 rounded-xl text-xs font-bold" value={currentConfig.yapeNumber} onChange={e => setCurrentConfig({...currentConfig, yapeNumber: e.target.value})} />
-                  <input type="text" placeholder="Titular" className="w-full p-3 bg-white border border-[#742284]/10 rounded-xl text-[9px] font-black uppercase" value={currentConfig.yapeName} onChange={e => setCurrentConfig({...currentConfig, yapeName: e.target.value})} />
-                  <input type="text" placeholder="URL QR Yape" className="w-full p-3 bg-white border border-[#742284]/10 rounded-xl text-[9px]" value={currentConfig.yapeQR} onChange={e => setCurrentConfig({...currentConfig, yapeQR: e.target.value})} />
+                  <input type="text" placeholder="Número" className="w-full p-3 bg-white border border-[#742284]/10 rounded-xl text-xs font-bold" value={currentConfig.yapeNumber || ''} onChange={e => setCurrentConfig({...currentConfig, yapeNumber: e.target.value})} />
+                  <input type="text" placeholder="Titular" className="w-full p-3 bg-white border border-[#742284]/10 rounded-xl text-[9px] font-black uppercase" value={currentConfig.yapeName || ''} onChange={e => setCurrentConfig({...currentConfig, yapeName: e.target.value})} />
                </div>
 
                <div className="p-6 bg-[#00A9E0]/5 rounded-3xl border border-[#00A9E0]/10 space-y-4">
@@ -278,34 +262,13 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
                      <div className="w-8 h-8 bg-[#00A9E0] rounded-lg flex items-center justify-center text-white font-black text-xs">P</div>
                      <span className="text-[10px] font-black uppercase text-[#00A9E0]">Plin</span>
                   </div>
-                  <input type="text" placeholder="Número" className="w-full p-3 bg-white border border-[#00A9E0]/10 rounded-xl text-xs font-bold" value={currentConfig.plinNumber} onChange={e => setCurrentConfig({...currentConfig, plinNumber: e.target.value})} />
-                  <input type="text" placeholder="Titular" className="w-full p-3 bg-white border border-[#00A9E0]/10 rounded-xl text-[9px] font-black uppercase" value={currentConfig.plinName} onChange={e => setCurrentConfig({...currentConfig, plinName: e.target.value})} />
-                  <input type="text" placeholder="URL QR Plin" className="w-full p-3 bg-white border border-[#00A9E0]/10 rounded-xl text-[9px]" value={currentConfig.plinQR} onChange={e => setCurrentConfig({...currentConfig, plinQR: e.target.value})} />
+                  <input type="text" placeholder="Número" className="w-full p-3 bg-white border border-[#00A9E0]/10 rounded-xl text-xs font-bold" value={currentConfig.plinNumber || ''} onChange={e => setCurrentConfig({...currentConfig, plinNumber: e.target.value})} />
+                  <input type="text" placeholder="Titular" className="w-full p-3 bg-white border border-[#00A9E0]/10 rounded-xl text-[9px] font-black uppercase" value={currentConfig.plinName || ''} onChange={e => setCurrentConfig({...currentConfig, plinName: e.target.value})} />
                </div>
             </div>
           </section>
-
-          <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
-            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-              <MapPin className="w-6 h-6 text-blue-500" /> Sedes de Recojo
-            </h3>
-            <div className="space-y-4">
-              {(currentConfig.sedes_recojo || []).map(sede => (
-                <div key={sede.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex gap-4">
-                   <div className="flex-1 space-y-2">
-                     <input type="text" placeholder="NOMBRE SEDE" className="w-full p-2 bg-white border border-slate-100 rounded-lg text-[10px] font-black uppercase tracking-widest outline-none" value={sede.nombre} onChange={e => updateSede(sede.id, 'nombre', e.target.value)} />
-                     <input type="text" placeholder="DIRECCIÓN" className="w-full p-2 bg-white border border-slate-100 rounded-lg text-[10px] font-bold outline-none" value={sede.direccion} onChange={e => updateSede(sede.id, 'direccion', e.target.value)} />
-                   </div>
-                   <button type="button" onClick={() => removeSede(sede.id)} className="p-2 text-red-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
-                </div>
-              ))}
-              <button type="button" onClick={addSede} className="w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-black text-[9px] uppercase tracking-widest hover:border-blue-300 hover:text-blue-500 transition-all flex items-center justify-center gap-2">
-                <Plus className="w-4 h-4"/> Añadir Sede
-              </button>
-            </div>
-          </section>
         </div>
-      </form>
+      </div>
 
       {showSuccess && (
          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[300] bg-slate-900 text-white px-10 py-5 rounded-full shadow-2xl animate-in slide-in-from-top-10 flex items-center gap-4">

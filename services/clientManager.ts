@@ -88,9 +88,8 @@ export const getClientByCode = async (code: string): Promise<ClientConfig | null
 
 export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<{ success: boolean; message?: string }> => {
     /** 
-     * ERROR 'business_type' NOT FOUND:
-     * Si visualiza este error, es porque la tabla 'empresas' no tiene las nuevas columnas.
-     * Ejecute el siguiente SQL en el SQL Editor de Supabase:
+     * ATENCIÓN: SCRIPT DE MIGRACIÓN REQUERIDO
+     * Ejecute esto en el SQL Editor de Supabase para corregir errores de columna:
      * 
      * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS business_type text DEFAULT 'pharmacy';
      * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS facebook_url text;
@@ -100,8 +99,10 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
      * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS slide_images jsonb DEFAULT '[]'::jsonb;
      * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS quality_text text;
      * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS support_text text;
+     * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS categorias_ocultas jsonb DEFAULT '[]'::jsonb;
      * NOTIFY pgrst, 'reload schema';
      */
+    
     const fullPayload: any = {
         codigo_acceso: client.code,
         odoo_url: client.url,
@@ -148,12 +149,11 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         }
         
         if (response.error) {
-            // Manejo específico de columnas faltantes
-            if (response.error.message.includes('column') || response.error.code === '42703') {
-                const missingColumn = response.error.message.match(/'(.*?)'/)?.[1] || 'desconocida';
+            if (response.error.message.includes('column') || response.error.code === '42703' || response.error.message.includes('business_type')) {
+                const col = response.error.message.match(/'(.*?)'/)?.[1] || 'business_type';
                 return { 
                     success: false, 
-                    message: `Error de Esquema: Falta la columna '${missingColumn}'. Por favor ejecute las migraciones SQL en Supabase.` 
+                    message: `⚠️ ERROR DE BASE DE DATOS: Falta la columna '${col}'. Por favor, vaya a Supabase y ejecute el script SQL de actualización que aparece en los comentarios del código.` 
                 };
             }
             throw response.error;
@@ -161,7 +161,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         return { success: true };
     } catch (err: any) {
         console.error('Error saving client:', err);
-        return { success: false, message: err.message || JSON.stringify(err) };
+        return { success: false, message: err.message || "Error desconocido al guardar." };
     }
 };
 
