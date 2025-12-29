@@ -20,7 +20,7 @@ const NEW_FIELDS = [
   'footer_description', 'slide_images', 'quality_text', 'support_text', 
   'categorias_ocultas', 'whatsapp_help_number', 'productos_ocultos',
   'tienda_habilitada', 'tienda_categoria_nombre', 'sedes_recojo', 'campos_medicos_visibles',
-  'footer_logo_url'
+  'footer_logo_url', 'yape_qr', 'plin_qr'
 ];
 
 const mapRowToConfig = (row: any): ClientConfig => ({
@@ -45,8 +45,10 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     hiddenCategories: Array.isArray(row.categorias_ocultas) ? row.categorias_ocultas : [],
     yapeNumber: row.yape_numero || '',
     yapeName: row.yape_nombre || '',
+    yapeQR: row.yape_qr || '',
     plinNumber: row.plin_numero || '',
     plinName: row.plin_nombre || '',
+    plinQR: row.plin_qr || '',
     sedes_recojo: Array.isArray(row.sedes_recojo) ? row.sedes_recojo : [],
     campos_medicos_visibles: Array.isArray(row.campos_medicos_visibles) ? row.campos_medicos_visibles : ["registro", "laboratorio", "principio"],
     footer_description: row.footer_description || '',
@@ -97,14 +99,15 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         color_secundario: client.colorSecundario,
         color_acento: client.colorAcento, 
         tienda_habilitada: client.showStore,
-        // Fix: Use tiendaCategoriaNombre property from ClientConfig interface
         tienda_categoria_nombre: client.tiendaCategoriaNombre,
         productos_ocultos: client.hiddenProducts || [],
         categorias_ocultas: client.hiddenCategories || [],
         yape_numero: client.yapeNumber,
         yape_nombre: client.yapeName,
+        yape_qr: client.yapeQR,
         plin_numero: client.plinNumber,
         plin_nombre: client.plinName,
+        plin_qr: client.plinQR,
         sedes_recojo: client.sedes_recojo || [],
         campos_medicos_visibles: client.campos_medicos_visibles || [],
         footer_description: client.footer_description,
@@ -125,7 +128,6 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
     try {
         let response = await performSave(payload);
         
-        // Loop de limpieza si fallan columnas (Código 42703 o error de columna)
         let safePayload = { ...payload };
         let retryCount = 0;
         
@@ -139,7 +141,6 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
             if (missingCol && safePayload.hasOwnProperty(missingCol)) {
                 delete safePayload[missingCol];
             } else {
-                // Si no se detecta el nombre, quitar todos los nuevos por seguridad
                 NEW_FIELDS.forEach(f => delete safePayload[f]);
             }
             response = await performSave(safePayload);

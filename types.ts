@@ -19,7 +19,7 @@ export interface Producto {
   especie?: string; 
   peso_rango?: string;
   duracion_sesion?: string; 
-  categoria_personalizada?: string; // Nueva propiedad para la vista
+  categoria_personalizada?: string; 
 }
 
 export interface PedidoTienda {
@@ -38,7 +38,7 @@ export interface ProductoExtra {
   empresa_code: string;
   descripcion_lemon?: string;
   instrucciones_lemon?: string;
-  categoria_personalizada?: string; // Campo para categorización propia
+  categoria_personalizada?: string; 
   ficha_tecnica_json?: any;
 }
 

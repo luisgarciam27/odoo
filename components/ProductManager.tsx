@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Search, Package, Save, RefreshCw, Loader2, Edit, X, Pill, Beaker, 
-  CheckCircle2, UploadCloud, Boxes, EyeOff, Eye, Layers, Tag, Info, SearchX
+  Search, Package, Save, RefreshCw, Loader2, Edit, X, CheckCircle2, 
+  UploadCloud, Boxes, EyeOff, Eye, Layers, Tag, Info
 } from 'lucide-react';
 import { Producto, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -17,7 +17,7 @@ interface ProductManagerProps {
 const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpdate }) => {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [odooCategories, setOdooCategories] = useState<{id: number, name: string}[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
@@ -29,42 +29,51 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
   const [hiddenCats, setHiddenCats] = useState<string[]>(config.hiddenCategories || []);
 
   const fetchCatalogData = async () => {
+    if (loading) return;
     setLoading(true);
-    const client = new OdooClient(session.url, session.db, true);
+    const client = new OdooClient(session.url, session.db, session.useProxy);
     try {
       const extrasMap = await getProductExtras(config.code);
+      
       const cats = await client.searchRead(session.uid, session.apiKey, 'product.category', [], ['name'], { order: 'name asc' });
       setOdooCategories(cats.map((c: any) => ({ id: c.id, name: c.name })));
 
-      const fields = ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_512', 'description_sale'];
-      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true], ['active', '=', true]], fields, { limit: 1000, order: 'display_name asc' });
+      let domain: any[] = [['sale_ok', '=', true], ['active', '=', true]];
+      const fields = ['display_name', 'list_price', 'qty_available', 'categ_id', 'image_1920', 'image_512', 'description_sale'];
+      
+      const data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, { limit: 1000, order: 'display_name asc' });
 
-      if (!data || data.length === 0) {
-        data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 500 });
+      if (data) {
+        setProductos(data.map((p: any) => {
+          const extra = extrasMap[p.id];
+          return {
+            id: p.id,
+            nombre: p.display_name,
+            precio: p.list_price || 0,
+            costo: 0,
+            categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
+            stock: p.qty_available || 0,
+            imagen: p.image_512 || p.image_1920 || p.image_128,
+            descripcion_venta: extra?.descripcion_lemon || p.description_sale || '',
+            uso_sugerido: extra?.instrucciones_lemon || '',
+            categoria_personalizada: extra?.categoria_personalizada || '',
+            laboratorio: 'Genérico',
+            registro_sanitario: 'Validado'
+          };
+        }));
       }
-
-      setProductos((data || []).map((p: any) => {
-        const extra = extrasMap[p.id];
-        return {
-          id: p.id,
-          nombre: p.display_name,
-          precio: p.list_price || 0,
-          costo: 0,
-          categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
-          stock: p.qty_available || 0,
-          imagen: p.image_512 || p.image_128,
-          descripcion_venta: extra?.descripcion_lemon || p.description_sale || '',
-          uso_sugerido: extra?.instrucciones_lemon || '',
-          categoria_personalizada: extra?.categoria_personalizada || '',
-          laboratorio: 'Genérico',
-          registro_sanitario: 'Validado'
-        };
-      }));
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch (e) {
+      console.error("Error al cargar catálogo:", e);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { fetchCatalogData(); }, [session, config.code]);
+  useEffect(() => { 
+    if (session && config.code) {
+      fetchCatalogData(); 
+    }
+  }, [session, config.code]);
 
   const customCategoriesUsed = useMemo(() => {
     const set = new Set(productos.map(p => p.categoria_personalizada).filter(Boolean));
@@ -74,7 +83,6 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
   const filteredProducts = useMemo(() => {
     return productos.filter(p => {
         const matchesSearch = p.nombre.toLowerCase().includes(searchTerm.toLowerCase());
-        const prodCat = p.categoria_personalizada || p.categoria || 'Todas';
         const matchesCategory = categoryFilter === 'Todas' || p.categoria === categoryFilter || p.categoria_personalizada === categoryFilter;
         return matchesSearch && matchesCategory;
     });
@@ -124,7 +132,10 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
               <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Mi Catálogo Web</h2>
               <div className="flex gap-4 mt-2">
                  <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest flex items-center gap-2"><RefreshCw className="w-3 h-3"/> Odoo Sync Activo</p>
-                 <p className="text-brand-600 text-[9px] font-black uppercase tracking-widest flex items-center gap-2"><CheckCircle2 className="w-3 h-3"/> {productos.length} Productos Sincronizados</p>
+                 <p className="text-brand-600 text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3"/>} 
+                    {productos.length} Productos Sincronizados
+                 </p>
               </div>
            </div>
         </div>
@@ -152,54 +163,67 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
           <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex flex-col md:flex-row gap-6 items-center">
             <div className="relative flex-1 group">
               <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-              <input type="text" placeholder="Buscar producto en el catálogo..." className="w-full pl-14 pr-6 py-5 bg-white border border-slate-100 rounded-[2rem] outline-none font-bold text-sm shadow-inner" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              <input type="text" placeholder="Buscar producto en el catálogo..." className="w-full pl-14 pr-6 py-5 bg-white border border-slate-100 rounded-[2rem] outline-none font-bold text-sm shadow-inner focus:ring-4 focus:ring-brand-500/10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             </div>
-            <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="w-full md:w-64 p-5 bg-white border border-slate-100 rounded-[2rem] outline-none font-black text-[10px] uppercase tracking-widest shadow-inner">
-               <option value="Todas">Categorías (Odoo/Web)</option>
+            <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="w-full md:w-64 p-5 bg-white border border-slate-100 rounded-[2rem] outline-none font-black text-[10px] uppercase tracking-widest shadow-inner cursor-pointer">
+               <option value="Todas">Todas las Categorías</option>
                {odooCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                {customCategoriesUsed.map(cat => <option key={cat} value={cat}>Web: {cat}</option>)}
             </select>
           </div>
           
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
-                <tr><th className="px-12 py-7">Producto Odoo</th><th className="px-10 py-7">Categoría Actual</th><th className="px-10 py-7 text-right">Precio Público</th><th className="px-12 py-7 text-right">Visibilidad Web</th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filteredProducts.map(p => {
-                  const isHidden = hiddenIds.includes(p.id);
-                  const prodCat = p.categoria_personalizada || p.categoria || 'General';
-                  const isCatHidden = hiddenCats.includes(prodCat);
-                  return (
-                    <tr key={p.id} className={`hover:bg-slate-50/80 transition-colors ${isHidden || isCatHidden ? 'opacity-40 grayscale' : ''}`}>
-                      <td className="px-12 py-6 flex items-center gap-6">
-                        <div className="w-14 h-14 bg-white rounded-2xl overflow-hidden flex items-center justify-center shrink-0 border border-slate-100">{p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-cover"/> : <Package className="w-6 h-6 text-slate-100"/>}</div>
-                        <div><p className="font-black text-[12px] uppercase leading-tight text-slate-900 max-w-[250px] truncate">{p.nombre}</p><p className="text-[9px] text-slate-400 font-black tracking-widest uppercase mt-1">Ref: {p.id}</p></div>
-                      </td>
-                      <td className="px-10 py-6">
-                         <div className="flex flex-col gap-1">
-                            <span className="text-[9px] font-black bg-slate-100 px-4 py-1.5 rounded-full uppercase text-slate-500 w-fit">{prodCat}</span>
-                            {p.categoria_personalizada && <span className="text-[7px] font-black text-brand-600 uppercase ml-2 italic">Web Virtual</span>}
-                         </div>
-                      </td>
-                      <td className="px-10 py-6 text-right font-black text-slate-900 text-sm">S/ {p.precio.toFixed(2)}</td>
-                      <td className="px-12 py-6 text-right flex justify-end items-center gap-4">
-                        <button onClick={() => setEditingProduct(p)} className="p-4 bg-slate-100 text-slate-500 rounded-2xl hover:bg-slate-900 hover:text-white transition-all shadow-sm flex items-center gap-2 group"><Edit className="w-4 h-4"/><span className="hidden group-hover:block text-[9px] font-black uppercase tracking-widest">Ficha</span></button>
-                        <button onClick={() => setHiddenIds(prev => isHidden ? prev.filter(id => id !== p.id) : [...prev, p.id])} className={`px-6 py-4 rounded-2xl font-black text-[9px] uppercase tracking-widest transition-all min-w-[120px] flex items-center justify-center gap-2 ${isHidden ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-brand-50 text-brand-700 border border-brand-100'}`}>
-                           {isHidden ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>} {isHidden ? 'Oculto' : 'Visible'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="overflow-x-auto min-h-[400px]">
+            {loading && productos.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 gap-4 opacity-30">
+                    <RefreshCw className="w-12 h-12 animate-spin" />
+                    <p className="font-black uppercase tracking-widest">Sincronizando inventario...</p>
+                </div>
+            ) : productos.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 gap-4 opacity-30">
+                    <Package className="w-12 h-12" />
+                    <p className="font-black uppercase tracking-widest">No hay productos vinculados</p>
+                    <button onClick={fetchCatalogData} className="px-6 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase">Vincular Odoo Ahora</button>
+                </div>
+            ) : (
+                <table className="w-full text-left">
+                <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
+                    <tr><th className="px-12 py-7">Producto Odoo</th><th className="px-10 py-7">Categoría (Web/Odoo)</th><th className="px-10 py-7 text-right">Precio Público</th><th className="px-12 py-7 text-right">Visibilidad</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                    {filteredProducts.map(p => {
+                    const isHidden = hiddenIds.includes(p.id);
+                    const prodCat = p.categoria_personalizada || p.categoria || 'General';
+                    const isCatHidden = hiddenCats.includes(prodCat);
+                    return (
+                        <tr key={p.id} className={`hover:bg-slate-50/80 transition-colors ${isHidden || isCatHidden ? 'opacity-40 grayscale' : ''}`}>
+                        <td className="px-12 py-6 flex items-center gap-6">
+                            <div className="w-14 h-14 bg-white rounded-2xl overflow-hidden flex items-center justify-center shrink-0 border border-slate-100">{p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-cover"/> : <Package className="w-6 h-6 text-slate-100"/>}</div>
+                            <div><p className="font-black text-[12px] uppercase leading-tight text-slate-900 max-w-[250px] truncate">{p.nombre}</p><p className="text-[9px] text-slate-400 font-black tracking-widest uppercase mt-1">Ref: {p.id}</p></div>
+                        </td>
+                        <td className="px-10 py-6">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-[9px] font-black bg-slate-100 px-4 py-1.5 rounded-full uppercase text-slate-500 w-fit">{prodCat}</span>
+                                {p.categoria_personalizada && <span className="text-[7px] font-black text-brand-600 uppercase ml-2 italic">Web Virtual</span>}
+                            </div>
+                        </td>
+                        <td className="px-10 py-6 text-right font-black text-slate-900 text-sm">S/ {p.precio.toFixed(2)}</td>
+                        <td className="px-12 py-6 text-right flex justify-end items-center gap-4">
+                            <button onClick={() => setEditingProduct(p)} className="p-4 bg-slate-100 text-slate-500 rounded-2xl hover:bg-slate-900 hover:text-white transition-all shadow-sm flex items-center gap-2 group"><Edit className="w-4 h-4"/><span className="hidden group-hover:block text-[9px] font-black uppercase tracking-widest">Ficha</span></button>
+                            <button onClick={() => setHiddenIds(prev => isHidden ? prev.filter(id => id !== p.id) : [...prev, p.id])} className={`px-6 py-4 rounded-2xl font-black text-[9px] uppercase tracking-widest transition-all min-w-[120px] flex items-center justify-center gap-2 ${isHidden ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-brand-50 text-brand-700 border border-brand-100'}`}>
+                            {isHidden ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>} {isHidden ? 'Oculto' : 'Visible'}
+                            </button>
+                        </td>
+                        </tr>
+                    );
+                    })}
+                </tbody>
+                </table>
+            )}
           </div>
         </div>
       ) : (
         <div className="bg-white rounded-[3rem] border border-slate-100 shadow-xl p-10">
-           <div className="flex items-center gap-4 mb-10"><div className="p-4 bg-indigo-50 rounded-2xl"><Layers className="w-6 h-6 text-indigo-600" /></div><div><h3 className="text-xl font-black text-slate-900 uppercase">Menú de Navegación</h3><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Desactiva categorías completas de Odoo para que no se vean en la Web</p></div></div>
+           <div className="flex items-center gap-4 mb-10"><div className="p-4 bg-indigo-50 rounded-2xl"><Layers className="w-6 h-6 text-indigo-600" /></div><div><h3 className="text-xl font-black text-slate-900 uppercase">Menú de Navegación Odoo</h3><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Desactiva categorías completas de Odoo para que no se vean en la Web</p></div></div>
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {odooCategories.map(cat => {
                 const isHidden = hiddenCats.includes(cat.name);
@@ -214,7 +238,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ session, config, onUpda
         </div>
       )}
 
-      {/* MODAL FICHA TÉCNICA (Donde se crean las Categorías Virtuales) */}
+      {/* MODAL FICHA TÉCNICA */}
       {editingProduct && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl animate-in fade-in" onClick={() => setEditingProduct(null)}></div>
