@@ -16,11 +16,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     const [testingClient, setTestingClient] = useState<string | null>(null);
 
     const [currentClient, setCurrentClient] = useState<ClientConfig>({
-        code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: '', isActive: true,
-        nombreComercial: '', logoUrl: '', footerLogoUrl: '', colorPrimario: '#84cc16', colorSecundario: '#1e293b', colorAcento: '#0ea5e9',
-        showStore: true, tiendaCategoriaNombre: 'Catalogo', yapeNumber: '', yapeName: '', plinNumber: '', plinName: '', yapeQR: '', plinQR: '',
-        footer_description: '', facebook_url: '', instagram_url: '', tiktok_url: '', whatsappHelpNumber: '', quality_text: '', support_text: '',
-        businessType: 'pharmacy'
+        code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', isActive: true,
+        businessType: 'pharmacy', colorPrimario: '#84cc16'
     });
     const [originalCode, setOriginalCode] = useState<string | null>(null);
 
@@ -29,16 +26,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         try {
             const data = await getClients();
             setClients(data);
-        } catch (err) {
-            console.error("Error cargando clientes:", err);
-        } finally {
-            setIsLoading(false);
-        }
+        } catch (err) { console.error(err); }
+        finally { setIsLoading(false); }
     };
 
-    useEffect(() => {
-        loadClients();
-    }, []);
+    useEffect(() => { loadClients(); }, []);
 
     const handleSaveClient = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -50,23 +42,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 await loadClients();
                 setIsEditing(false);
                 resetForm();
-            } else {
-                alert(result.message || "Error al guardar.");
-            }
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleDelete = async (code: string) => {
-        if (confirm(`¿Eliminar cliente ${code}?`)) {
-            setIsLoading(true);
-            try {
-                if (await deleteClient(code)) await loadClients();
-            } finally {
-                setIsLoading(false);
-            }
-        }
+            } else { alert(result.message); }
+        } finally { setIsLoading(false); }
     };
 
     const handleEdit = (client: ClientConfig) => {
@@ -77,32 +54,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
     const resetForm = () => {
         setCurrentClient({ 
-            code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', whatsappNumbers: '', isActive: true, 
-            nombreComercial: '', logoUrl: '', footerLogoUrl: '', colorPrimario: '#84cc16', colorSecundario: '#1e293b', colorAcento: '#0ea5e9',
-            showStore: true, tiendaCategoriaNombre: 'Catalogo', yapeNumber: '', yapeName: '', plinNumber: '', plinName: '', yapeQR: '', plinQR: '', 
-            footer_description: '', facebook_url: '', instagram_url: '', tiktok_url: '', whatsappHelpNumber: '', quality_text: '', support_text: '',
-            businessType: 'pharmacy'
+            code: '', url: '', db: '', username: '', apiKey: '', companyFilter: '', isActive: true,
+            businessType: 'pharmacy', colorPrimario: '#84cc16'
         });
         setOriginalCode(null);
-    };
-
-    const copyStoreLink = (code: string) => {
-        const fullUrl = `${window.location.origin}${window.location.pathname}?shop=${code}`;
-        navigator.clipboard.writeText(fullUrl);
-        alert(`Link copiado.`);
-    };
-
-    const handleTestConnection = async (client: ClientConfig) => {
-        setTestingClient(client.code);
-        try {
-            const odoo = new OdooClient(client.url, client.db, true);
-            const uid = await odoo.authenticate(client.username, client.apiKey);
-            alert(`✅ Conexión Exitosa con Odoo.`);
-        } catch (error: any) {
-            alert("❌ Error: " + (error.message || "Odoo no responde."));
-        } finally {
-            setTestingClient(null);
-        }
     };
 
     const BusinessOption = ({ type, label, icon: Icon }: { type: BusinessType, label: string, icon: any }) => (
@@ -129,11 +84,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             <div className="max-w-7xl mx-auto p-6">
                 <div className="flex justify-between items-end mb-8">
                     <div>
-                        <h2 className="text-3xl font-black text-slate-900 uppercase">Clientes</h2>
-                        <p className="text-slate-500 text-sm mt-1">Gestión de marcas e integraciones.</p>
+                        <h2 className="text-3xl font-black text-slate-900 uppercase">Configuración Odoo</h2>
+                        <p className="text-slate-500 text-sm mt-1 font-bold uppercase tracking-widest">Gestión técnica de instancias</p>
                     </div>
-                    <button onClick={() => { resetForm(); setIsEditing(true); }} className="bg-brand-600 text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-xl flex items-center gap-2 hover:bg-brand-700">
-                      <Plus className="w-5 h-5" /> Nueva Empresa
+                    <button onClick={() => { resetForm(); setIsEditing(true); }} className="bg-brand-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center gap-2 hover:bg-brand-700">
+                      <Plus className="w-5 h-5" /> Nueva Conexión
                     </button>
                 </div>
                 
@@ -141,33 +96,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 text-[10px] text-slate-400 uppercase font-black border-b tracking-widest">
                             <tr>
-                                <th className="px-8 py-5">Empresa / Rubro</th>
-                                <th className="px-8 py-5">Tienda</th>
+                                <th className="px-8 py-5">Código</th>
+                                <th className="px-8 py-5">Servidor Odoo</th>
                                 <th className="px-8 py-5 text-right">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-slate-100 font-bold">
                             {clients.map(c => (
-                                <tr key={c.code} className="hover:bg-slate-50">
-                                    <td className="px-8 py-5">
-                                        <div className="font-bold text-slate-900">{c.code}</div>
-                                        <div className="text-[10px] text-brand-600 font-black uppercase tracking-widest mt-1 flex items-center gap-1">
-                                            {c.businessType === 'pharmacy' ? <Pill className="w-2.5 h-2.5" /> : 
-                                             c.businessType === 'veterinary' ? <PawPrint className="w-2.5 h-2.5" /> : 
-                                             c.businessType === 'podiatry' ? <Footprints className="w-2.5 h-2.5" /> : 
-                                             <Briefcase className="w-2.5 h-2.5" />}
-                                            {c.businessType}
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        {c.showStore ? (
-                                            <button onClick={() => copyStoreLink(c.code)} className="text-[9px] font-black bg-brand-100 text-brand-700 px-3 py-1 rounded-full">COPIAR LINK</button>
-                                        ) : <span className="text-slate-300 text-[9px] font-bold">OFF</span>}
-                                    </td>
+                                <tr key={c.code} className="hover:bg-slate-50 transition-colors">
+                                    <td className="px-8 py-5 uppercase">{c.code}</td>
+                                    <td className="px-8 py-5 text-slate-400">{c.url}</td>
                                     <td className="px-8 py-5 flex justify-end gap-2">
-                                        <button onClick={() => handleTestConnection(c)} className="p-2 bg-slate-100 rounded-lg hover:bg-blue-100"><Activity className="w-4 h-4"/></button>
-                                        <button onClick={() => handleEdit(c)} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200"><Edit className="w-4 h-4"/></button>
-                                        <button onClick={() => handleDelete(c.code)} className="p-2 bg-slate-100 rounded-lg hover:bg-red-100"><Trash2 className="w-4 h-4"/></button>
+                                        <button onClick={() => handleEdit(c)} className="p-3 bg-slate-100 rounded-xl hover:bg-brand-500 hover:text-white transition-all"><Edit className="w-4 h-4"/></button>
+                                        <button onClick={() => deleteClient(c.code).then(loadClients)} className="p-3 bg-slate-100 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 className="w-4 h-4"/></button>
                                     </td>
                                 </tr>
                             ))}
@@ -178,46 +119,53 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
             {isEditing && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm overflow-y-auto">
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl relative my-8">
-                        <div className="flex justify-between items-start mb-8">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-xl p-10 shadow-2xl relative">
+                        <div className="flex justify-between items-start mb-8 border-b pb-6">
                             <div>
-                                <h3 className="font-black text-2xl uppercase tracking-tighter">Conexión Odoo Técnico</h3>
-                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Sincronización Lemon BI v2.5</p>
+                                <h3 className="font-black text-2xl uppercase tracking-tighter">Parámetros de Odoo</h3>
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">Sincronización Técnica Cloud</p>
                             </div>
                             <button onClick={() => setIsEditing(false)} className="p-2 hover:bg-slate-100 rounded-full"><X/></button>
                         </div>
                         
-                        <form onSubmit={handleSaveClient} className="space-y-8">
-                            <div className="grid grid-cols-1 gap-8">
-                                <div className="space-y-4">
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Giro de Negocio</label>
-                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                                        <BusinessOption type="pharmacy" label="Farmacia" icon={Pill} />
-                                        <BusinessOption type="veterinary" label="Veterinaria" icon={PawPrint} />
-                                        <BusinessOption type="podiatry" label="Podología" icon={Footprints} />
-                                        <BusinessOption type="general" label="Comercio" icon={Briefcase} />
-                                    </div>
-
-                                    <div className="pt-4 space-y-4">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Parámetros de Servidor</label>
-                                        <input type="text" placeholder="CÓDIGO EMPRESA (ID)" className="w-full p-4 border rounded-2xl font-black uppercase" value={currentClient.code} onChange={e => setCurrentClient({...currentClient, code: e.target.value.toUpperCase()})} required disabled={!!originalCode}/>
-                                        <input type="url" placeholder="URL ODOO (Ej: https://mi-odoo.com)" className="w-full p-4 border rounded-2xl text-sm" value={currentClient.url} onChange={e => setCurrentClient({...currentClient, url: e.target.value})} required/>
-                                        <input type="text" placeholder="BASE DE DATOS" className="w-full p-4 border rounded-2xl text-sm" value={currentClient.db} onChange={e => setCurrentClient({...currentClient, db: e.target.value})} required/>
-                                    </div>
+                        <form onSubmit={handleSaveClient} className="space-y-6">
+                            <div className="space-y-4">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Giro del Cliente</label>
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                                    <BusinessOption type="pharmacy" label="Farmacia" icon={Pill} />
+                                    <BusinessOption type="veterinary" label="Veterinaria" icon={PawPrint} />
+                                    <BusinessOption type="podiatry" label="Podología" icon={Footprints} />
+                                    <BusinessOption type="general" label="Comercio" icon={Briefcase} />
                                 </div>
+                            </div>
 
-                                <div className="space-y-4">
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Integración Técnica</label>
-                                    <input type="text" placeholder="USUARIO / EMAIL" className="w-full p-4 border rounded-2xl text-sm" value={currentClient.username} onChange={e => setCurrentClient({...currentClient, username: e.target.value})} required/>
-                                    <input type="password" placeholder="API KEY (CONTRASEÑA TÉCNICA)" className="w-full p-4 border rounded-2xl font-mono text-sm" value={currentClient.apiKey} onChange={e => setCurrentClient({...currentClient, apiKey: e.target.value})} required/>
-                                    <input type="text" placeholder="FILTRO COMPAÑÍA (Solo si aplica)" className="w-full p-4 border rounded-2xl text-sm uppercase" value={currentClient.companyFilter} onChange={e => setCurrentClient({...currentClient, companyFilter: e.target.value})}/>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Código Identificador</label>
+                                    <input type="text" placeholder="REQUESALUD" className="w-full p-4 border rounded-2xl font-black uppercase text-sm" value={currentClient.code} onChange={e => setCurrentClient({...currentClient, code: e.target.value.toUpperCase()})} required disabled={!!originalCode}/>
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">URL de Instancia</label>
+                                    <input type="url" placeholder="https://miempresa.odoo.com" className="w-full p-4 border rounded-2xl text-sm font-bold" value={currentClient.url} onChange={e => setCurrentClient({...currentClient, url: e.target.value})} required/>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Base de Datos</label>
+                                    <input type="text" placeholder="odoo_db" className="w-full p-4 border rounded-2xl text-sm font-bold" value={currentClient.db} onChange={e => setCurrentClient({...currentClient, db: e.target.value})} required/>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Usuario Técnico</label>
+                                    <input type="text" placeholder="admin@email.com" className="w-full p-4 border rounded-2xl text-sm font-bold" value={currentClient.username} onChange={e => setCurrentClient({...currentClient, username: e.target.value})} required/>
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">API Key (Contraseña)</label>
+                                    <input type="password" placeholder="••••••••" className="w-full p-4 border rounded-2xl font-mono text-sm" value={currentClient.apiKey} onChange={e => setCurrentClient({...currentClient, apiKey: e.target.value})} required/>
                                 </div>
                             </div>
 
                             <div className="pt-6 border-t flex gap-4">
-                                <button type="button" onClick={() => setIsEditing(false)} className="flex-1 p-5 bg-slate-100 rounded-2xl font-black uppercase text-xs tracking-widest">Cancelar</button>
-                                <button type="submit" disabled={isLoading} className="flex-[2] p-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-black transition-all">
-                                    {isLoading ? 'Guardando...' : 'Establecer Conexión'}
+                                <button type="button" onClick={() => setIsEditing(false)} className="flex-1 p-5 bg-slate-100 rounded-2xl font-black uppercase text-xs">Cerrar</button>
+                                <button type="submit" disabled={isLoading} className="flex-[2] p-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">
+                                    {isLoading ? 'Conectando...' : 'Guardar Conexión'}
                                 </button>
                             </div>
                         </form>
