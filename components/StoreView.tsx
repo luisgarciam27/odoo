@@ -31,6 +31,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState<StoreStep>('cart');
+  const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   
   const [currentSlide, setCurrentSlide] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin' | 'efectivo'>('yape');
@@ -55,7 +56,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     return () => clearInterval(timer);
   }, [slideImages]);
 
-  const addToCart = (producto: Producto) => {
+  const addToCart = (producto: Producto, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setCart(prev => {
       const existing = prev.find(item => item.producto.id === producto.id);
       if (existing) {
@@ -160,33 +162,63 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const orderRef = `WEB-${Date.now().toString().slice(-6)}`;
       const client = new OdooClient(session.url, session.db, session.useProxy);
       
+      // 1. Buscar o Crear Partner
       const partnerSearch = await client.searchRead(session.uid, session.apiKey, 'res.partner', [['name', '=', clientData.nombre]], ['id'], { limit: 1 });
       let partnerId = partnerSearch.length > 0 ? partnerSearch[0].id : null;
       
       if (!partnerId) {
           partnerId = await client.create(session.uid, session.apiKey, 'res.partner', {
-              name: clientData.nombre, phone: clientData.telefono, street: clientData.direccion || 'Pedido Web', company_id: session.companyId
+              name: clientData.nombre, 
+              phone: clientData.telefono, 
+              street: clientData.direccion || 'Pedido Web', 
+              company_id: session.companyId
           });
       }
 
+      // 2. Preparar Líneas
       const orderLines = cart.map(item => [0, 0, {
-          product_id: item.producto.id, product_uom_qty: item.cantidad, price_unit: item.producto.precio, product_uom: item.producto.uom_id || 1, name: item.producto.nombre
+          product_id: item.producto.id, 
+          product_uom_qty: item.cantidad, 
+          price_unit: item.producto.precio, 
+          product_uom: item.producto.uom_id || 1, 
+          name: item.producto.nombre
       }]);
 
+      // 3. Crear Sale Order (Presupuesto)
       await client.create(session.uid, session.apiKey, 'sale.order', {
-          partner_id: partnerId, company_id: session.companyId, order_line: orderLines, origin: `TIENDA WEB: ${orderRef}`, state: 'draft' 
+          partner_id: partnerId, 
+          company_id: session.companyId, 
+          order_line: orderLines, 
+          origin: `TIENDA WEB: ${orderRef}`,
+          note: `Método de pago: ${paymentMethod.toUpperCase()} | Entrega: ${deliveryType.toUpperCase()}\nDirección: ${clientData.direccion || 'No especificada'}`,
+          state: 'draft' 
       });
 
+      // 4. Guardar en Supabase para registro de Lemon BI
       await supabase.from('pedidos_tienda').insert([{
-        order_name: orderRef, cliente_nombre: clientData.nombre, monto: cartTotal, voucher_url: voucherImage || '', empresa_code: config.code, estado: 'pendiente'
+        order_name: orderRef, 
+        cliente_nombre: clientData.nombre, 
+        monto: cartTotal, 
+        voucher_url: voucherImage || '', 
+        empresa_code: config.code, 
+        estado: 'pendiente'
       }]);
 
+      // 5. Enviar mensaje de confirmación por WhatsApp
       const message = `*NUEVO PEDIDO - ${config.nombreComercial || config.code}*\n` +
-        `*Referencia:* ${orderRef}\n*Cliente:* ${clientData.nombre}\n*Total:* S/ ${cartTotal.toFixed(2)}\n*Pago:* ${paymentMethod.toUpperCase()}`;
+        `*Referencia:* ${orderRef}\n` +
+        `*Cliente:* ${clientData.nombre}\n` +
+        `*Total:* S/ ${cartTotal.toFixed(2)}\n` +
+        `*Pago:* ${paymentMethod.toUpperCase()}\n` +
+        `*Entrega:* ${deliveryType.toUpperCase()}\n\n` +
+        `_He adjuntado el comprobante en la web._`;
 
       window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
       setCurrentStep('success');
-    } catch (err) { alert("Error al procesar pedido."); }
+    } catch (err: any) { 
+      console.error(err);
+      alert("Error al procesar pedido en Odoo: " + (err.message || "Fallo de conexión")); 
+    }
     finally { setIsOrderLoading(false); }
   };
 
@@ -219,7 +251,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       </header>
 
-      {/* HERO SLIDER (CABECERA) */}
+      {/* HERO SLIDER */}
       {!loading && slideImages.length > 0 && !searchTerm && (
         <section className="w-full h-[250px] md:h-[450px] relative overflow-hidden bg-slate-100 animate-in fade-in duration-1000">
            {slideImages.map((img, idx) => (
@@ -289,7 +321,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
               {filteredProducts.map(p => (
-                <div key={p.id} className="bg-white p-3 md:p-5 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col group hover:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.1)] transition-all duration-500 relative overflow-hidden">
+                <div key={p.id} onClick={() => setSelectedProduct(p)} className="bg-white p-3 md:p-5 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col group hover:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.1)] transition-all duration-500 relative overflow-hidden cursor-pointer">
                   <div className="aspect-square bg-slate-50 rounded-[2rem] mb-4 flex items-center justify-center relative overflow-hidden border border-slate-50">
                     {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-700" alt={p.nombre} /> : <Package className="w-10 h-10 text-slate-200" />}
                     {p.stock <= 0 && <span className="absolute top-3 left-3 bg-white/80 backdrop-blur-md px-3 py-1 rounded-full text-[8px] font-black text-slate-400 uppercase tracking-widest border border-slate-100">Sin Stock</span>}
@@ -299,7 +331,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     <h3 className="text-[11px] md:text-[12px] font-black text-slate-800 uppercase line-clamp-2 leading-tight h-8 mb-4 tracking-tight group-hover:text-brand-600 transition-colors">{p.nombre}</h3>
                     <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between">
                       <span className="text-sm md:text-lg font-black text-slate-900">S/ {p.precio.toFixed(2)}</span>
-                      <button onClick={() => addToCart(p)} className="p-3 bg-slate-900 text-white rounded-2xl shadow-lg hover:bg-brand-500 hover:scale-110 active:scale-95 transition-all">
+                      <button onClick={(e) => addToCart(p, e)} className="p-3 bg-slate-900 text-white rounded-2xl shadow-lg hover:bg-brand-500 hover:scale-110 active:scale-95 transition-all">
                         <Plus className="w-4 h-4"/>
                       </button>
                     </div>
@@ -311,118 +343,121 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* FOOTER PROFESIONAL ANIMADO */}
+      {/* DETALLE DE PRODUCTO (MODAL) */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md animate-in fade-in" onClick={() => setSelectedProduct(null)}></div>
+           <div className="relative bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in duration-300 max-h-[90vh]">
+              <div className="w-full md:w-1/2 bg-slate-50 flex items-center justify-center p-10 relative">
+                 {selectedProduct.imagen ? (
+                   <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="max-w-full max-h-full object-contain mix-blend-multiply" alt={selectedProduct.nombre} />
+                 ) : (
+                   <Package className="w-24 h-24 text-slate-200" />
+                 )}
+                 <button onClick={() => setSelectedProduct(null)} className="absolute top-6 left-6 p-3 bg-white rounded-2xl shadow-lg text-slate-400 hover:text-slate-900 transition-all md:hidden"><X/></button>
+              </div>
+              <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col overflow-y-auto">
+                 <button onClick={() => setSelectedProduct(null)} className="hidden md:flex self-end p-2 text-slate-400 hover:text-slate-900"><X/></button>
+                 <div className="flex-1 mt-4 md:mt-0">
+                    <p className="text-[10px] font-black text-brand-600 uppercase tracking-widest mb-2">{selectedProduct.categoria_personalizada || selectedProduct.categoria}</p>
+                    <h2 className="text-2xl md:text-3xl font-black uppercase text-slate-900 tracking-tighter leading-tight mb-4">{selectedProduct.nombre}</h2>
+                    <p className="text-2xl font-black text-slate-900 mb-8">S/ {selectedProduct.precio.toFixed(2)}</p>
+                    
+                    <div className="space-y-6 mb-10">
+                       {selectedProduct.descripcion_venta && (
+                          <div>
+                             <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Descripción</h4>
+                             <p className="text-xs font-bold text-slate-500 uppercase leading-relaxed">{selectedProduct.descripcion_venta}</p>
+                          </div>
+                       )}
+                       {selectedProduct.uso_sugerido && (
+                          <div>
+                             <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Instrucciones de Uso</h4>
+                             <p className="text-xs font-bold text-slate-500 uppercase leading-relaxed">{selectedProduct.uso_sugerido}</p>
+                          </div>
+                       )}
+                    </div>
+                 </div>
+                 <button onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); }} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-4 hover:bg-brand-500 transition-all shadow-xl mt-6">
+                    <ShoppingCart className="w-5 h-5"/> Agregar al Carrito
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* FOOTER */}
       {!loading && (
         <footer className="bg-slate-900 text-white pt-20 pb-10 px-6 md:px-12 relative overflow-hidden">
-           {/* Decoración de fondo */}
            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-           <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-blue-500/5 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
-
            <div className="max-w-7xl mx-auto relative z-10">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
-                 {/* Col 1: Branding */}
                  <div className="col-span-1 md:col-span-1 space-y-6">
                     <div className="flex items-center gap-3">
-                       <div className="bg-brand-500 p-2.5 rounded-2xl transform rotate-6 shadow-xl shadow-brand-500/20">
+                       <div className="bg-brand-500 p-2.5 rounded-2xl transform rotate-6 shadow-xl">
                           <Pill className="w-6 h-6 text-white" />
                        </div>
                        <h2 className="text-2xl font-black uppercase tracking-tighter">{config.nombreComercial || config.code}</h2>
                     </div>
-                    <p className="text-slate-400 text-[11px] font-bold uppercase leading-relaxed tracking-wider">
-                       {config.footer_description || "Comprometidos con tu bienestar, ofreciendo soluciones de salud y cuidado personal con la garantía de Lemon BI."}
-                    </p>
+                    <p className="text-slate-400 text-[11px] font-bold uppercase leading-relaxed tracking-wider">{config.footer_description || "Comprometidos con tu bienestar."}</p>
                     <div className="flex gap-4">
-                       {config.facebook_url && <a href={config.facebook_url} target="_blank" className="p-3 bg-slate-800 rounded-xl hover:bg-brand-500 hover:scale-110 transition-all text-white"><Facebook className="w-5 h-5"/></a>}
-                       {config.instagram_url && <a href={config.instagram_url} target="_blank" className="p-3 bg-slate-800 rounded-xl hover:bg-pink-500 hover:scale-110 transition-all text-white"><Instagram className="w-5 h-5"/></a>}
-                       {config.tiktok_url && <a href={config.tiktok_url} target="_blank" className="p-3 bg-slate-800 rounded-xl hover:bg-slate-700 hover:scale-110 transition-all text-white"><Smartphone className="w-5 h-5"/></a>}
+                       {config.facebook_url && <a href={config.facebook_url} target="_blank" className="p-3 bg-slate-800 rounded-xl hover:bg-brand-500 transition-all"><Facebook className="w-5 h-5"/></a>}
+                       {config.instagram_url && <a href={config.instagram_url} target="_blank" className="p-3 bg-slate-800 rounded-xl hover:bg-pink-500 transition-all"><Instagram className="w-5 h-5"/></a>}
                     </div>
                  </div>
-
-                 {/* Col 2: Info */}
                  <div className="space-y-6">
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-500">Enlaces Rápidos</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-500">Info</h3>
                     <ul className="space-y-4">
-                       <li><button onClick={onBack} className="text-[11px] font-bold text-slate-400 hover:text-white transition-colors uppercase flex items-center gap-2 group"><ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform"/> Mi Perfil</button></li>
-                       <li><a href="#" className="text-[11px] font-bold text-slate-400 hover:text-white transition-colors uppercase flex items-center gap-2 group"><ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform"/> Términos y Condiciones</a></li>
-                       <li><a href="#" className="text-[11px] font-bold text-slate-400 hover:text-white transition-colors uppercase flex items-center gap-2 group"><ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform"/> Libro de Reclamaciones</a></li>
-                       <li><a href="#" className="text-[11px] font-bold text-slate-400 hover:text-white transition-colors uppercase flex items-center gap-2 group"><ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform"/> Trabaja con nosotros</a></li>
+                       <li><button onClick={onBack} className="text-[11px] font-bold text-slate-400 hover:text-white transition-colors uppercase">Mi Perfil</button></li>
                     </ul>
                  </div>
-
-                 {/* Col 3: Contacto */}
                  <div className="space-y-6">
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-500">Atención al Cliente</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-500">Atención</h3>
                     <div className="space-y-4">
                        <div className="flex items-center gap-4 group">
-                          <div className="p-3 bg-slate-800 rounded-2xl group-hover:bg-brand-500 transition-colors"><MessageCircle className="w-5 h-5 text-white"/></div>
-                          <div><p className="text-[9px] font-black uppercase text-slate-500">WhatsApp</p><p className="text-xs font-black">{config.whatsappHelpNumber || config.whatsappNumbers?.split(',')[0] || 'Consultas Online'}</p></div>
-                       </div>
-                       <div className="flex items-center gap-4 group">
-                          <div className="p-3 bg-slate-800 rounded-2xl group-hover:bg-brand-500 transition-colors"><MapPin className="w-5 h-5 text-white"/></div>
-                          <div><p className="text-[9px] font-black uppercase text-slate-500">Ubicación</p><p className="text-xs font-black">Visítanos en nuestras sedes</p></div>
+                          <div className="p-3 bg-slate-800 rounded-2xl"><MessageCircle className="w-5 h-5 text-white"/></div>
+                          <div><p className="text-[9px] font-black uppercase text-slate-500">WhatsApp</p><p className="text-xs font-black">{config.whatsappHelpNumber || 'Consultas Online'}</p></div>
                        </div>
                     </div>
                  </div>
-
-                 {/* Col 4: Trust */}
                  <div className="space-y-6">
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-500">Garantía de Confianza</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-500">Garantía</h3>
                     <div className="bg-slate-800/50 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
-                       <div className="flex items-center gap-3">
-                          <ShieldCheck className="w-5 h-5 text-brand-500" />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Productos Originales</span>
-                       </div>
-                       <div className="flex items-center gap-3">
-                          <CreditCard className="w-5 h-5 text-brand-500" />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Pagos 100% Seguros</span>
-                       </div>
-                       <div className="flex items-center gap-3">
-                          <Truck className="w-5 h-5 text-brand-500" />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Delivery a Todo el País</span>
-                       </div>
+                       <div className="flex items-center gap-3"><ShieldCheck className="w-5 h-5 text-brand-500"/><span className="text-[10px] font-black uppercase tracking-widest">Pago Seguro</span></div>
+                       <div className="flex items-center gap-3"><Clock className="w-5 h-5 text-brand-500"/><span className="text-[10px] font-black uppercase tracking-widest">Entrega Veloz</span></div>
                     </div>
                  </div>
               </div>
-
-              {/* Bottom Footer */}
               <div className="pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
-                 <div className="flex items-center gap-3 opacity-30">
-                    <Citrus className="w-5 h-5 text-brand-500" />
-                    <p className="text-[10px] font-black uppercase tracking-widest">Powered by Lemon BI & Gaor System</p>
-                 </div>
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">&copy; 2025 {config.nombreComercial}. Todos los derechos reservados.</p>
-                 <div className="flex items-center gap-6">
-                    <img src="https://logodownload.org/wp-content/uploads/2014/07/visa-logo-1.png" className="h-4 opacity-30 grayscale hover:grayscale-0 transition-all cursor-pointer" alt="Visa" />
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" className="h-6 opacity-30 grayscale hover:grayscale-0 transition-all cursor-pointer" alt="Mastercard" />
-                 </div>
+                 <div className="flex items-center gap-3 opacity-30"><Citrus className="w-5 h-5 text-brand-500"/><p className="text-[10px] font-black uppercase tracking-widest">Powered by Lemon BI & Gaor System</p></div>
+                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">&copy; 2025 Todos los derechos reservados.</p>
               </div>
            </div>
         </footer>
       )}
 
-      {/* DRAWER CARRITO */}
+      {/* DRAWER CARRITO Y FLUJO DE COMPRA */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[120] flex justify-end">
            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsCartOpen(false)}></div>
            <div className="relative bg-white w-full max-w-lg h-full shadow-2xl flex flex-col p-6 overflow-y-auto animate-in slide-in-from-right duration-300">
               <div className="flex justify-between items-center mb-10">
                  <div>
-                    <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900">Mi Carrito</h2>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">({cart.length}) productos seleccionados</p>
+                    <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900">{currentStep === 'cart' ? 'Mi Carrito' : 'Finalizar Pedido'}</h2>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{cart.length} items seleccionados</p>
                  </div>
                  <button onClick={() => setIsCartOpen(false)} className="p-3.5 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"><X/></button>
               </div>
 
               {currentStep === 'cart' && (
-                 <div className="space-y-4 flex-1">
+                 <div className="space-y-4 flex-1 flex flex-col">
                     {cart.length === 0 ? (
                        <div className="py-20 text-center opacity-20 flex flex-col items-center gap-6">
-                          <ShoppingCart className="w-16 h-16"/>
-                          <p className="font-black uppercase tracking-widest text-[10px]">Tu carrito está vacío</p>
+                          <ShoppingCart className="w-16 h-16"/><p className="font-black uppercase tracking-widest text-[10px]">Tu carrito está vacío</p>
                        </div>
                     ) : (
                       <>
-                        <div className="space-y-4">
+                        <div className="space-y-4 overflow-y-auto flex-1">
                           {cart.map(i => (
                              <div key={i.producto.id} className="flex gap-4 items-center bg-slate-50 p-5 rounded-[2rem] border border-slate-100 shadow-sm">
                                 <div className="w-14 h-14 bg-white rounded-2xl overflow-hidden flex items-center justify-center shrink-0 border border-slate-50">
@@ -440,9 +475,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                              </div>
                           ))}
                         </div>
-                        <div className="mt-auto pt-8 space-y-4">
+                        <div className="pt-8 space-y-4 mt-auto">
                            <div className="flex justify-between items-center px-4">
-                              <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total estimado</span>
+                              <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total a pagar</span>
                               <span className="text-3xl font-black text-slate-900 tracking-tighter">S/ {cartTotal.toFixed(2)}</span>
                            </div>
                            <button onClick={() => setCurrentStep('details')} className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black uppercase text-xs tracking-widest hover:bg-brand-500 transition-all shadow-xl">Continuar Pedido</button>
@@ -454,17 +489,25 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
               {currentStep === 'details' && (
                  <div className="space-y-6 animate-in slide-in-from-bottom-4">
-                    <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Información de Envío</h2>
-                    <input type="text" placeholder="Tu Nombre Completo" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold shadow-inner text-sm" value={clientData.nombre} onChange={e => setClientData({...clientData, nombre: e.target.value})} />
-                    <input type="tel" placeholder="Número de WhatsApp" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold shadow-inner text-sm" value={clientData.telefono} onChange={e => setClientData({...clientData, telefono: e.target.value})} />
-                    <div className="grid grid-cols-2 gap-3">
-                       <button onClick={() => setDeliveryType('recojo')} className={`p-5 rounded-2xl border-2 font-black uppercase text-[10px] transition-all ${deliveryType === 'recojo' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>Recojo Sede</button>
-                       <button onClick={() => setDeliveryType('delivery')} className={`p-5 rounded-2xl border-2 font-black uppercase text-[10px] transition-all ${deliveryType === 'delivery' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>Delivery</button>
+                    <div className="space-y-4">
+                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Tus Datos</label>
+                       <input type="text" placeholder="Nombre completo" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold shadow-inner text-sm" value={clientData.nombre} onChange={e => setClientData({...clientData, nombre: e.target.value})} />
+                       <input type="tel" placeholder="Número de WhatsApp" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold shadow-inner text-sm" value={clientData.telefono} onChange={e => setClientData({...clientData, telefono: e.target.value})} />
+                    </div>
+                    <div className="space-y-4">
+                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Método de Entrega</label>
+                       <div className="grid grid-cols-2 gap-3">
+                          <button onClick={() => setDeliveryType('recojo')} className={`p-5 rounded-2xl border-2 font-black uppercase text-[10px] transition-all ${deliveryType === 'recojo' ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>Recojo Sede</button>
+                          <button onClick={() => setDeliveryType('delivery')} className={`p-5 rounded-2xl border-2 font-black uppercase text-[10px] transition-all ${deliveryType === 'delivery' ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>Delivery</button>
+                       </div>
                     </div>
                     {deliveryType === 'delivery' && (
-                       <textarea placeholder="Dirección exacta para la entrega..." className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold h-32 shadow-inner text-sm" value={clientData.direccion} onChange={e => setClientData({...clientData, direccion: e.target.value})} />
+                       <div className="space-y-4">
+                          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Dirección de Envío</label>
+                          <textarea placeholder="Ej: Av. Principal 123, Dpto 401..." className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold h-32 shadow-inner text-sm" value={clientData.direccion} onChange={e => setClientData({...clientData, direccion: e.target.value})} />
+                       </div>
                     )}
-                    <div className="flex gap-4">
+                    <div className="flex gap-4 pt-6">
                        <button onClick={() => setCurrentStep('cart')} className="flex-1 py-5 bg-slate-100 rounded-2xl font-black uppercase text-[10px] tracking-widest">Atrás</button>
                        <button onClick={() => setCurrentStep('payment')} disabled={!clientData.nombre || !clientData.telefono} className="flex-[2.5] py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest disabled:opacity-50 shadow-xl">Siguiente</button>
                     </div>
@@ -473,7 +516,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
               {currentStep === 'payment' && (
                  <div className="space-y-6 animate-in slide-in-from-bottom-4 text-center">
-                    <h2 className="text-3xl font-black text-slate-900 tracking-tighter">S/ {cartTotal.toFixed(2)}</h2>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Total: S/ {cartTotal.toFixed(2)}</h2>
                     <div className="flex gap-3">
                        <button onClick={() => setPaymentMethod('yape')} className={`flex-1 p-5 rounded-2xl border-2 font-black uppercase text-[10px] transition-all ${paymentMethod === 'yape' ? 'border-purple-600 bg-purple-50 text-purple-600' : 'bg-slate-50 border-slate-100'}`}>Yape</button>
                        <button onClick={() => setPaymentMethod('plin')} className={`flex-1 p-5 rounded-2xl border-2 font-black uppercase text-[10px] transition-all ${paymentMethod === 'plin' ? 'border-blue-600 bg-blue-50 text-blue-600' : 'bg-slate-50 border-slate-100'}`}>Plin</button>
@@ -491,7 +534,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     </div>
                     <div className="flex gap-4 pt-4">
                        <button onClick={() => setCurrentStep('details')} className="flex-1 py-5 bg-slate-100 rounded-2xl font-black uppercase text-[10px]">Atrás</button>
-                       <button onClick={() => setCurrentStep('voucher')} className="flex-[2.5] py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl">Ya pagué, subir voucher</button>
+                       <button onClick={() => setCurrentStep('voucher')} className="flex-[2.5] py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl">Subir Pago</button>
                     </div>
                  </div>
               )}
@@ -508,7 +551,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                        ) : (
                           <label className="cursor-pointer flex flex-col items-center text-slate-300 group-hover:text-brand-500 transition-colors">
                              <Camera className="w-20 h-20 mb-4 animate-bounce"/>
-                             <p className="text-[10px] font-black uppercase tracking-widest">Toca para Seleccionar Imagen</p>
+                             <p className="text-[10px] font-black uppercase tracking-widest">Seleccionar Foto del Pago</p>
                              <input type="file" className="hidden" accept="image/*" onChange={handleVoucherUpload} />
                           </label>
                        )}
@@ -524,12 +567,12 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
               {currentStep === 'success' && (
                  <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8 p-6">
-                    <div className="w-32 h-32 bg-brand-500 text-white rounded-full flex items-center justify-center shadow-[0_25px_60px_-15px_rgba(132,204,22,0.5)] animate-in zoom-in duration-700"><CheckCircle2 className="w-16 h-16"/></div>
+                    <div className="w-32 h-32 bg-brand-500 text-white rounded-full flex items-center justify-center shadow-2xl animate-in zoom-in duration-700"><CheckCircle2 className="w-16 h-16"/></div>
                     <div className="space-y-4">
-                       <h3 className="text-4xl font-black uppercase tracking-tighter text-slate-900">¡TODO LISTO!</h3>
-                       <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">Tu orden ha sido registrada en nuestro sistema Odoo. En breve nos comunicaremos contigo vía WhatsApp para confirmar el despacho.</p>
+                       <h3 className="text-4xl font-black uppercase tracking-tighter text-slate-900">¡EXITO!</h3>
+                       <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">Tu orden ha sido procesada. En unos segundos se abrirá WhatsApp para enviar tu confirmación.</p>
                     </div>
-                    <button onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); setVoucherImage(null); }} className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl hover:bg-slate-800 transition-all">Regresar a la Tienda</button>
+                    <button onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); setVoucherImage(null); }} className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl hover:bg-slate-800 transition-all">Seguir Comprando</button>
                  </div>
               )}
            </div>
