@@ -5,7 +5,7 @@ import {
   Wallet, X, Facebook, Instagram, MessageCircle,
   RefreshCw, Share2, QrCode, Upload, Smartphone,
   ImageIcon, Paintbrush, Citrus, Layers, User, Link as LinkIcon, 
-  ExternalLink, Globe, ShoppingCart
+  ExternalLink, Globe, ShoppingCart, MonitorPlay
 } from 'lucide-react';
 import { ClientConfig, SedeStore } from '../types';
 import { saveClient } from '../services/clientManager';
@@ -25,7 +25,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-          alert("La imagen es muy pesada (máx 2MB).");
+          alert("La imagen es muy pesada (máx 2MB). Redúcela antes de subirla.");
           return;
       }
       const reader = new FileReader();
@@ -43,6 +43,16 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
     }
   };
 
+  const addSlide = () => {
+    const slides = [...(currentConfig.slide_images || []), ''];
+    setCurrentConfig({ ...currentConfig, slide_images: slides });
+  };
+
+  const removeSlide = (index: number) => {
+    const slides = (currentConfig.slide_images || []).filter((_, i) => i !== index);
+    setCurrentConfig({ ...currentConfig, slide_images: slides });
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -52,7 +62,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     } else {
-      alert(result.message || "Error al guardar");
+      alert(result.message || "Error al guardar. Verifica las columnas en Supabase.");
     }
     setIsSaving(false);
   };
@@ -79,22 +89,60 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
            </div>
            <div>
               <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none">Configurar Tienda</h2>
-              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Personalización Visual y Logística</p>
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Identidad y Gestión Logística</p>
            </div>
         </div>
         <button 
           onClick={handleSave} 
           disabled={isSaving} 
-          className="px-12 py-6 text-white rounded-[2.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl flex items-center gap-4 transition-all hover:scale-105 active:scale-95" 
+          className="px-12 py-6 text-white rounded-[2.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl flex items-center gap-4 transition-all hover:scale-105 active:scale-95 shadow-brand-500/30" 
           style={{backgroundColor: brandColor}}
         >
           {isSaving ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />} Guardar Cambios
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+      {/* GESTOR DE DIAPOSITIVAS (SLIDER) */}
+      <section className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-100">
+        <div className="flex justify-between items-center mb-10">
+           <h3 className="text-2xl font-black text-slate-800 flex items-center gap-5 uppercase tracking-tighter">
+             <MonitorPlay className="w-8 h-8 text-blue-500"/> Carrusel de Imágenes (Slides)
+           </h3>
+           <button onClick={addSlide} className="px-6 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg">
+             <Plus className="w-4 h-4"/> Añadir Slide
+           </button>
+        </div>
         
-        {/* COLUMNA IZQUIERDA: DISEÑO Y PAGOS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+           {(currentConfig.slide_images || []).map((img, idx) => (
+              <div key={idx} className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 space-y-4 group relative">
+                 <div className="aspect-[16/9] bg-white rounded-2xl overflow-hidden border border-slate-100 flex items-center justify-center relative shadow-inner">
+                    {img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-10 h-10 text-slate-200" />}
+                    <label className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-all">
+                       <Upload className="text-white w-8 h-8"/>
+                       <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload('slide')(e, idx)} />
+                    </label>
+                 </div>
+                 <div className="flex gap-2">
+                    <input type="text" placeholder="URL de imagen" className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-[10px] font-bold outline-none" value={img} onChange={(e) => {
+                       const slides = [...(currentConfig.slide_images || [])];
+                       slides[idx] = e.target.value;
+                       setCurrentConfig({...currentConfig, slide_images: slides});
+                    }} />
+                    <button onClick={() => removeSlide(idx)} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 className="w-4 h-4"/></button>
+                 </div>
+              </div>
+           ))}
+           {(currentConfig.slide_images || []).length === 0 && (
+              <div className="col-span-full py-16 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[3rem] text-center flex flex-col items-center gap-4">
+                 <MonitorPlay className="w-12 h-12 text-slate-200" />
+                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No hay imágenes en el carrusel</p>
+              </div>
+           )}
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-8 space-y-10">
           
           {/* SEDES DE RECOJO */}
@@ -109,66 +157,41 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
              </div>
              
              <div className="space-y-6">
-                {(currentConfig.sedes_recojo || []).length === 0 ? (
-                   <div className="py-12 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200 text-center flex flex-col items-center gap-3">
-                      <MapPin className="w-12 h-12 text-slate-200" />
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No has configurado locales de recojo</p>
-                   </div>
-                ) : (
-                   currentConfig.sedes_recojo?.map((sede, idx) => (
-                      <div key={sede.id} className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 group">
-                         <div className="flex justify-between items-start mb-6">
-                            <span className="text-[10px] font-black text-brand-600 uppercase tracking-widest">Sede #{idx + 1}</span>
-                            <button onClick={() => removeSede(sede.id)} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 className="w-4 h-4"/></button>
-                         </div>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <input 
-                               type="text" 
-                               placeholder="NOMBRE DEL LOCAL (EJ: SUCURSAL NORTE)" 
-                               className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold uppercase outline-none focus:ring-2 focus:ring-brand-500/10"
-                               value={sede.nombre}
-                               onChange={e => {
-                                  const sedes = [...(currentConfig.sedes_recojo || [])];
-                                  sedes[idx].nombre = e.target.value;
-                                  setCurrentConfig({...currentConfig, sedes_recojo: sedes});
-                               }}
-                            />
-                            <input 
-                               type="text" 
-                               placeholder="DIRECCIÓN FÍSICA" 
-                               className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold uppercase outline-none focus:ring-2 focus:ring-brand-500/10"
-                               value={sede.direccion}
-                               onChange={e => {
-                                  const sedes = [...(currentConfig.sedes_recojo || [])];
-                                  sedes[idx].direccion = e.target.value;
-                                  setCurrentConfig({...currentConfig, sedes_recojo: sedes});
-                               }}
-                            />
-                            <div className="md:col-span-2 relative">
-                               <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300"/>
-                               <input 
-                                  type="text" 
-                                  placeholder="LINK DE GOOGLE MAPS" 
-                                  className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold outline-none focus:ring-2 focus:ring-brand-500/10"
-                                  value={sede.googleMapsUrl || ''}
-                                  onChange={e => {
-                                     const sedes = [...(currentConfig.sedes_recojo || [])];
-                                     sedes[idx].googleMapsUrl = e.target.value;
-                                     setCurrentConfig({...currentConfig, sedes_recojo: sedes});
-                                  }}
-                               />
-                            </div>
+                {(currentConfig.sedes_recojo || []).map((sede, idx) => (
+                   <div key={sede.id} className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 group">
+                      <div className="flex justify-between items-start mb-6">
+                         <span className="text-[10px] font-black text-brand-600 uppercase tracking-widest">Sede #{idx + 1}</span>
+                         <button onClick={() => removeSede(sede.id)} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 className="w-4 h-4"/></button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <input type="text" placeholder="NOMBRE DEL LOCAL" className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold uppercase" value={sede.nombre} onChange={e => {
+                            const sedes = [...(currentConfig.sedes_recojo || [])];
+                            sedes[idx].nombre = e.target.value;
+                            setCurrentConfig({...currentConfig, sedes_recojo: sedes});
+                         }} />
+                         <input type="text" placeholder="DIRECCIÓN FÍSICA" className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold uppercase" value={sede.direccion} onChange={e => {
+                            const sedes = [...(currentConfig.sedes_recojo || [])];
+                            sedes[idx].direccion = e.target.value;
+                            setCurrentConfig({...currentConfig, sedes_recojo: sedes});
+                         }} />
+                         <div className="md:col-span-2 relative">
+                            <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300"/>
+                            <input type="text" placeholder="LINK DE GOOGLE MAPS" className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold" value={sede.googleMapsUrl || ''} onChange={e => {
+                               const sedes = [...(currentConfig.sedes_recojo || [])];
+                               sedes[idx].googleMapsUrl = e.target.value;
+                               setCurrentConfig({...currentConfig, sedes_recojo: sedes});
+                            }} />
                          </div>
                       </div>
-                   ))
-                )}
+                   </div>
+                ))}
              </div>
           </section>
 
           {/* LOGOS E IDENTIDAD */}
           <section className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-100">
             <h3 className="text-2xl font-black text-slate-800 flex items-center gap-5 uppercase tracking-tighter mb-12">
-              <ImageIcon className="w-8 h-8 text-brand-500"/> Logotipos y Colores
+              <ImageIcon className="w-8 h-8 text-brand-500"/> Logotipos e Identidad
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                <div className="space-y-6">
@@ -185,7 +208,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                   </div>
                </div>
                <div className="space-y-6">
-                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4">Logo Footer</label>
+                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4 text-brand-600">Logo del Footer (Pie de Página)</label>
                   <div className="aspect-[3/1] bg-slate-50 rounded-[2.5rem] border border-dashed border-slate-200 flex items-center justify-center p-8">
                      {currentConfig.footerLogoUrl ? <img src={currentConfig.footerLogoUrl} className="max-h-full object-contain" /> : <Citrus className="w-12 h-12 text-slate-200" />}
                   </div>
@@ -210,54 +233,12 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                </div>
             </div>
           </section>
-
-          {/* PAGOS QR */}
-          <section className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-100 space-y-12">
-             <h3 className="text-2xl font-black text-slate-800 flex items-center gap-5 uppercase tracking-tighter">
-                <Wallet className="w-8 h-8 text-purple-600"/> Pasarelas de Pago
-             </h3>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                <div className="space-y-6">
-                   <div className="flex items-center gap-4 p-4 bg-purple-50 rounded-2xl border border-purple-100">
-                      <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center text-white font-black text-lg">Y</div>
-                      <p className="text-[11px] font-black uppercase text-purple-900">Configuración Yape</p>
-                   </div>
-                   <input type="text" placeholder="TITULAR YAPE" className="w-full p-4 border rounded-xl text-xs font-bold uppercase" value={currentConfig.yapeName || ''} onChange={e => setCurrentConfig({...currentConfig, yapeName: e.target.value})} />
-                   <input type="tel" placeholder="NÚMERO YAPE" className="w-full p-4 border rounded-xl text-xs font-bold" value={currentConfig.yapeNumber || ''} onChange={e => setCurrentConfig({...currentConfig, yapeNumber: e.target.value})} />
-                   <div className="relative aspect-square bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 flex items-center justify-center p-4 overflow-hidden group">
-                      {currentConfig.yapeQR ? <img src={currentConfig.yapeQR} className="max-h-full" /> : <QrCode className="w-12 h-12 text-slate-200"/>}
-                      <label className="absolute inset-0 bg-purple-600/90 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all">
-                        <Upload className="text-white w-8 h-8 mb-2 animate-bounce"/>
-                        <span className="text-[10px] font-black text-white uppercase">Cargar QR</span>
-                        <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload('yapeQR')} />
-                      </label>
-                   </div>
-                </div>
-                <div className="space-y-6">
-                   <div className="flex items-center gap-4 p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                      <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-lg">P</div>
-                      <p className="text-[11px] font-black uppercase text-blue-900">Configuración Plin</p>
-                   </div>
-                   <input type="text" placeholder="TITULAR PLIN" className="w-full p-4 border rounded-xl text-xs font-bold uppercase" value={currentConfig.plinName || ''} onChange={e => setCurrentConfig({...currentConfig, plinName: e.target.value})} />
-                   <input type="tel" placeholder="NÚMERO PLIN" className="w-full p-4 border rounded-xl text-xs font-bold" value={currentConfig.plinNumber || ''} onChange={e => setCurrentConfig({...currentConfig, plinNumber: e.target.value})} />
-                   <div className="relative aspect-square bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 flex items-center justify-center p-4 overflow-hidden group">
-                      {currentConfig.plinQR ? <img src={currentConfig.plinQR} className="max-h-full" /> : <QrCode className="w-12 h-12 text-slate-200"/>}
-                      <label className="absolute inset-0 bg-blue-600/90 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all">
-                        <Upload className="text-white w-8 h-8 mb-2 animate-bounce"/>
-                        <span className="text-[10px] font-black text-white uppercase">Cargar QR</span>
-                        <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload('plinQR')} />
-                      </label>
-                   </div>
-                </div>
-             </div>
-          </section>
         </div>
 
-        {/* COLUMNA DERECHA: CONTACTO */}
         <div className="lg:col-span-4 space-y-10">
            <section className="bg-white p-10 rounded-[4rem] shadow-xl border border-slate-100 space-y-8">
              <h3 className="text-xl font-black text-slate-800 flex items-center gap-4 uppercase tracking-tighter">
-               <Share2 className="w-7 h-7 text-blue-500"/> Redes y Enlaces
+               <Share2 className="w-7 h-7 text-blue-500"/> Redes y Contacto
              </h3>
              <div className="space-y-6">
                 <div className="relative">
@@ -271,14 +252,14 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                 
                 <div className="pt-8 border-t border-slate-100 space-y-6">
                    <div>
-                      <label className="block text-[10px] font-black text-brand-600 uppercase tracking-widest mb-2 ml-4">WhatsApp para Recibir Pedidos</label>
+                      <label className="block text-[10px] font-black text-brand-600 uppercase tracking-widest mb-2 ml-4">WhatsApp Ventas (Recibe Pedidos)</label>
                       <div className="relative">
                          <ShoppingCart className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-500"/>
                          <input type="text" placeholder="CELULAR PARA VENTAS" className="w-full pl-14 pr-5 py-5 bg-brand-50 border border-brand-100 rounded-[1.5rem] text-[11px] font-bold outline-none" value={currentConfig.whatsappNumbers || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappNumbers: e.target.value})} />
                       </div>
                    </div>
                    <div>
-                      <label className="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 ml-4">WhatsApp de Ayuda (Footer)</label>
+                      <label className="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 ml-4">WhatsApp Ayuda (Botón Footer)</label>
                       <div className="relative">
                          <MessageCircle className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500"/>
                          <input type="text" placeholder="CELULAR DE SOPORTE" className="w-full pl-14 pr-5 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] text-[11px] font-bold outline-none" value={currentConfig.whatsappHelpNumber || ''} onChange={e => setCurrentConfig({...currentConfig, whatsappHelpNumber: e.target.value})} />
@@ -303,7 +284,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
       {showSuccess && (
          <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[300] bg-slate-900 text-white px-12 py-6 rounded-full shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-12">
             <CheckCircle2 className="w-6 h-6 text-brand-400"/>
-            <span className="text-[10px] font-black uppercase tracking-widest">¡Configuración Guardada!</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">¡Tienda Actualizada!</span>
          </div>
       )}
     </div>

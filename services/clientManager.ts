@@ -14,15 +14,6 @@ export const changeAdminPassword = (newPassword: string) => {
     localStorage.setItem(ADMIN_PWD_KEY, newPassword);
 };
 
-// Columnas nuevas que podrían no existir en instalaciones antiguas
-const NEW_FIELDS = [
-  'business_type', 'facebook_url', 'instagram_url', 'tiktok_url', 
-  'footer_description', 'slide_images', 'quality_text', 'support_text', 
-  'categorias_ocultas', 'whatsapp_help_number', 'productos_ocultos',
-  'tienda_habilitada', 'tienda_categoria_nombre', 'sedes_recojo', 'campos_medicos_visibles',
-  'footer_logo_url', 'yape_qr', 'plin_qr', 'custom_categories'
-];
-
 const mapRowToConfig = (row: any): ClientConfig => ({
     code: row.codigo_acceso,
     url: row.odoo_url || '',
@@ -35,7 +26,7 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     isActive: row.estado ?? true,
     nombreComercial: row.nombre_comercial || row.codigo_acceso,
     logoUrl: row.logo_url || '',
-    footerLogoUrl: row.footer_logo_url || '',
+    footerLogoUrl: row.footer_logo_url || '', // Verificado
     colorPrimario: row.color_primario || '#84cc16',
     colorSecundario: row.color_secundario || '#1e293b',
     colorAcento: row.color_acento || '#0ea5e9',
@@ -56,7 +47,7 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     facebook_url: row.facebook_url || '',
     instagram_url: row.instagram_url || '',
     tiktok_url: row.tiktok_url || '',
-    slide_images: Array.isArray(row.slide_images) ? row.slide_images : [],
+    slide_images: Array.isArray(row.slide_images) ? row.slide_images : [], // Verificado como JSONB
     quality_text: row.quality_text || '',
     support_text: row.support_text || '',
     businessType: row.business_type || 'pharmacy'
@@ -83,7 +74,7 @@ export const getClientByCode = async (code: string): Promise<ClientConfig | null
 };
 
 export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<{ success: boolean; message?: string }> => {
-    let payload: any = {
+    const payload: any = {
         codigo_acceso: client.code,
         odoo_url: client.url,
         odoo_db: client.db,
@@ -95,7 +86,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         estado: client.isActive,
         nombre_comercial: client.nombreComercial,
         logo_url: client.logoUrl,
-        footer_logo_url: client.footerLogoUrl,
+        footer_logo_url: client.footerLogoUrl, // Verificado
         color_primario: client.colorPrimario, 
         color_secundario: client.colorSecundario,
         color_acento: client.colorAcento, 
@@ -116,44 +107,21 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         facebook_url: client.facebook_url,
         instagram_url: client.instagram_url,
         tiktok_url: client.tiktok_url,
-        slide_images: client.slide_images || [],
+        slide_images: client.slide_images || [], // Verificado
         quality_text: client.quality_text,
         support_text: client.support_text,
         business_type: client.businessType
     };
 
-    const performSave = async (data: any) => {
-        if (isNew) return await supabase.from('empresas').insert([data]);
-        return await supabase.from('empresas').update(data).eq('codigo_acceso', client.code);
-    };
-
     try {
-        let response = await performSave(payload);
-        
-        let safePayload = { ...payload };
-        let retryCount = 0;
-        
-        while (response.error && (response.error.code === '42703' || response.error.message.includes('column')) && retryCount < 20) {
-            retryCount++;
-            const errorMsg = response.error.message;
-            const match = errorMsg.match(/column "?([^" ]+)"? does not exist/i);
-            const missingColFull = match ? match[1] : null;
-            const missingCol = missingColFull?.includes('.') ? missingColFull.split('.').pop() : missingColFull;
+        const { error } = isNew 
+          ? await supabase.from('empresas').insert([payload])
+          : await supabase.from('empresas').update(payload).eq('codigo_acceso', client.code);
 
-            if (missingCol && safePayload.hasOwnProperty(missingCol)) {
-                delete safePayload[missingCol];
-            } else {
-                NEW_FIELDS.forEach(f => delete safePayload[f]);
-            }
-            response = await performSave(safePayload);
-        }
-
-        if (response.error) throw response.error;
-        return { 
-            success: true, 
-            message: retryCount > 0 ? "Guardado en modo compatibilidad. Algunas funciones de marca requieren actualizar el esquema SQL." : undefined 
-        };
+        if (error) throw error;
+        return { success: true };
     } catch (err: any) {
+        console.error("Save Error:", err);
         return { success: false, message: err.message };
     }
 };
