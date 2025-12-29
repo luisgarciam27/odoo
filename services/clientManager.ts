@@ -14,6 +14,13 @@ export const changeAdminPassword = (newPassword: string) => {
     localStorage.setItem(ADMIN_PWD_KEY, newPassword);
 };
 
+// Columnas introducidas en las últimas versiones que podrían no existir en instalaciones viejas
+const NEW_COLUMNS = [
+  'business_type', 'facebook_url', 'instagram_url', 'tiktok_url', 
+  'footer_description', 'slide_images', 'quality_text', 'support_text', 
+  'categorias_ocultas', 'whatsapp_help_number'
+];
+
 const mapRowToConfig = (row: any): ClientConfig => ({
     code: row.codigo_acceso,
     url: row.odoo_url || '',
@@ -58,14 +65,9 @@ export const getClients = async (): Promise<ClientConfig[]> => {
             .select('*')
             .order('created_at', { ascending: false });
 
-        if (error) {
-            console.error('Error fetching clients:', error);
-            return [];
-        }
-
+        if (error) return [];
         return (data || []).map(mapRowToConfig);
     } catch (err) {
-        console.error('Critical error in getClients:', err);
         return [];
     }
 };
@@ -81,29 +83,12 @@ export const getClientByCode = async (code: string): Promise<ClientConfig | null
         if (error || !data) return null;
         return mapRowToConfig(data);
     } catch (err) {
-        console.error('Error in getClientByCode:', err);
         return null;
     }
 };
 
 export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<{ success: boolean; message?: string }> => {
-    /** 
-     * ATENCIÓN: SCRIPT DE MIGRACIÓN REQUERIDO
-     * Ejecute esto en el SQL Editor de Supabase para corregir errores de columna:
-     * 
-     * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS business_type text DEFAULT 'pharmacy';
-     * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS facebook_url text;
-     * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS instagram_url text;
-     * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS tiktok_url text;
-     * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS footer_description text;
-     * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS slide_images jsonb DEFAULT '[]'::jsonb;
-     * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS quality_text text;
-     * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS support_text text;
-     * ALTER TABLE empresas ADD COLUMN IF NOT EXISTS categorias_ocultas jsonb DEFAULT '[]'::jsonb;
-     * NOTIFY pgrst, 'reload schema';
-     */
-    
-    const fullPayload: any = {
+    let payload: any = {
         codigo_acceso: client.code,
         odoo_url: client.url,
         odoo_db: client.db,
@@ -140,28 +125,44 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         business_type: client.businessType
     };
 
+    const performSave = async (data: any) => {
+        if (isNew) return await supabase.from('empresas').insert([data]);
+        return await supabase.from('empresas').update(data).eq('codigo_acceso', client.code);
+    };
+
     try {
-        let response;
-        if (isNew) {
-            response = await supabase.from('empresas').insert([fullPayload]);
-        } else {
-            response = await supabase.from('empresas').update(fullPayload).eq('codigo_acceso', client.code);
-        }
+        let response = await performSave(payload);
         
-        if (response.error) {
-            if (response.error.message.includes('column') || response.error.code === '42703' || response.error.message.includes('business_type')) {
-                const col = response.error.message.match(/'(.*?)'/)?.[1] || 'business_type';
+        // Si hay error de columna inexistente (42703), intentamos limpiar el payload y re-intentar
+        if (response.error && (response.error.code === '42703' || response.error.message.includes('column'))) {
+            console.warn("Detectadas columnas faltantes en Supabase. Aplicando guardado en modo compatibilidad...");
+            
+            // Extraer el nombre de la columna que causó el error
+            const match = response.error.message.match(/"(.*?)"/);
+            const missingCol = match ? match[1] : null;
+
+            // Si sabemos qué columna falla, la quitamos. Si no, quitamos todas las "nuevas" por seguridad
+            const safePayload = { ...payload };
+            if (missingCol) {
+                delete safePayload[missingCol];
+            } else {
+                NEW_COLUMNS.forEach(col => delete safePayload[col]);
+            }
+
+            response = await performSave(safePayload);
+            
+            if (!response.error) {
                 return { 
-                    success: false, 
-                    message: `⚠️ ERROR DE BASE DE DATOS: Falta la columna '${col}'. Por favor, vaya a Supabase y ejecute el script SQL de actualización que aparece en los comentarios del código.` 
+                    success: true, 
+                    message: "Guardado exitoso (Modo Compatibilidad). Algunas funciones avanzadas requieren actualizar el esquema SQL en Supabase." 
                 };
             }
-            throw response.error;
         }
+
+        if (response.error) throw response.error;
         return { success: true };
     } catch (err: any) {
-        console.error('Error saving client:', err);
-        return { success: false, message: err.message || "Error desconocido al guardar." };
+        return { success: false, message: err.message };
     }
 };
 
@@ -197,6 +198,5 @@ export const getProductExtras = async (empresaCode: string): Promise<Record<numb
 
 export const deleteClient = async (code: string): Promise<boolean> => {
     const { error } = await supabase.from('empresas').delete().eq('codigo_acceso', code);
-    if (error) return false;
-    return true;
+    return !error;
 };

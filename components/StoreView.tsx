@@ -108,17 +108,36 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     const client = new OdooClient(session.url, session.db, true);
     try {
       const extras = await getProductExtras(config.code);
+      
+      // DOMINIO MEJORADO: Incluye productos de la empresa O productos globales (company_id = false)
       const domain: any[] = [['sale_ok', '=', true]];
       if (session.companyId) {
+          domain.push('|');
           domain.push(['company_id', '=', session.companyId]);
+          domain.push(['company_id', '=', false]);
       }
 
       const data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'], { limit: 1000, order: 'display_name asc' });
       
-      setProductos(data.map((p: any) => {
+      if (!data || data.length === 0) {
+          console.warn("Odoo no devolvió productos con el filtro de empresa. Intentando búsqueda global...");
+          // Intento fallback sin restricción de empresa
+          const globalData = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'], { limit: 500 });
+          setProductos(mapOdooToProducts(globalData, extras));
+      } else {
+          setProductos(mapOdooToProducts(data, extras));
+      }
+    } catch (e) { 
+      console.error("Error cargando productos de Odoo:", e); 
+    } finally { 
+      setLoading(false); 
+    }
+  };
+
+  const mapOdooToProducts = (data: any[], extras: any) => {
+    return data.map((p: any) => {
         const extra = extras[p.id];
         const parsed = parseOdooDescription(p.description_sale);
-
         return {
           id: p.id,
           nombre: p.display_name,
@@ -135,19 +154,15 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           peso_rango: parsed.peso,
           registro_sanitario: parsed.registro || 'S/N'
         };
-      }));
-    } catch (e) { 
-      console.error("Error cargando productos de Odoo:", e); 
-    } finally { 
-      setLoading(false); 
-    }
-  };
+    });
+  }
 
   useEffect(() => { fetchProducts(); }, [session, config.code]);
 
   const availableCategories = useMemo(() => {
-    const hidden = config.hiddenCategories || [];
     const allCats = Array.from(new Set(productos.map(p => p.categoria || 'General')));
+    // Si no hay categorías configuradas como ocultas, mostramos todas
+    const hidden = config.hiddenCategories || [];
     return ['Todas', ...allCats.filter(cat => !hidden.includes(cat))].sort();
   }, [productos, config.hiddenCategories]);
 
@@ -427,7 +442,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* Modal Detalle (Sin cambios mayores, solo optimización visual) */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-md animate-in fade-in" onClick={() => setSelectedProduct(null)}></div>
@@ -538,7 +552,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       )}
 
-      {/* Carrito y pasos finales omitidos por brevedad pero funcionales */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in" onClick={() => setIsCartOpen(false)}></div>
@@ -552,7 +565,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/20">
-               {/* Lógica de carrito ya existente... */}
                {currentStep === 'cart' && (
                 <div className="space-y-4">
                   {cart.length === 0 ? (
@@ -578,9 +590,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                   ))}
                 </div>
               )}
-              {/* Otros pasos (details, payment) omitidos para concentrar el fix en la visibilidad del catálogo */}
             </div>
-            {/* Pie de carrito omitido pero intacto en el funcionamiento real */}
           </div>
         </div>
       )}
