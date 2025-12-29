@@ -17,6 +17,9 @@ import { OdooClient } from '../services/odoo';
 import { getProductExtras } from '../services/clientManager';
 import { supabase } from '../services/supabaseClient';
 
+// URL DE TU WEBHOOK DE n8n (Cámbiala por la tuya de Producción)
+const N8N_WEBHOOK_URL = 'https://n8n.tu-dominio.com/webhook/lemon-order-webhook';
+
 interface StoreViewProps {
   session: OdooSession;
   config: ClientConfig;
@@ -117,6 +120,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const handleVoucherUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) { alert("Imagen demasiado grande (máx 5MB)"); return; }
       const reader = new FileReader();
       reader.onloadend = () => setVoucherImage(reader.result as string);
       reader.readAsDataURL(file);
@@ -187,15 +191,14 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         voucher_url: voucherImage,
         empresa_code: config.code, 
         dueno_wa: config.whatsappNumbers || config.whatsappHelpNumber || '51975615244',
-        // Información SaaS para Evolution API
         evolution_instance: config.evolution_instance || 'lemonbi',
         evolution_apikey: config.evolution_apikey || 'SAAS_TOKEN',
         estado: 'pendiente',
         metadata: {
           telefono: clientData.telefono,
           entrega: deliveryType,
-          sede: selectedSede?.nombre,
-          direccion: clientData.direccion,
+          sede: selectedSede?.nombre || '',
+          direccion: clientData.direccion || '',
           metodo_pago: paymentMethod,
           carrito: cart.map(i => `${i.cantidad}x ${i.producto.nombre}`)
         }
@@ -204,17 +207,19 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       // 1. Guardar en Supabase para registro permanente
       await supabase.from('pedidos_tienda').insert([payload]);
 
-      // 2. Disparar Webhook a n8n para respuesta inmediata
-      const n8nWebhookUrl = 'https://n8n.tu-dominio.com/webhook/lemon-order-webhook';
+      // 2. Disparar Webhook a n8n
       try {
-        await fetch(n8nWebhookUrl, {
+        const n8nResponse = await fetch(N8N_WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-      } catch(e) { console.error("Webhook n8n fallido"); }
+        if (!n8nResponse.ok) console.warn("n8n respondió con error:", n8nResponse.status);
+      } catch(e) { 
+        console.error("Error crítico al contactar n8n:", e);
+      }
 
-      // 3. Odoo Silencioso
+      // 3. Odoo Silencioso (Opcional, no detiene el proceso)
       try {
         const client = new OdooClient(session.url, session.db, session.useProxy);
         await client.createSaleOrder(
@@ -229,7 +234,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           cart.map(i => ({ productId: i.producto.id, qty: i.cantidad, price: i.producto.precio })),
           session.companyId || 1
         );
-      } catch (err) { console.warn("Fallo Odoo"); }
+      } catch (err) { console.warn("Odoo Sync Falló"); }
 
       // 4. WhatsApp Backup (User-initiated)
       let locationText = '';
@@ -247,7 +252,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       setCurrentStep('success');
     } catch (err: any) { 
-      alert("Error al procesar pedido."); 
+      console.error("Error en handleFinishOrder:", err);
+      alert("Error al procesar pedido. Por favor intente de nuevo."); 
       setCurrentStep('voucher');
     } finally { 
       setIsOrderLoading(false); 
