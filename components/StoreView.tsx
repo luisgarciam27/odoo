@@ -25,13 +25,12 @@ type StoreStep = 'cart' | 'details' | 'payment' | 'voucher' | 'processing' | 'su
 const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState<StoreStep>('cart');
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
-  const [activeSlide, setActiveSlide] = useState(0);
-  const [selectedCategory, setSelectedCategory] = useState('Todas');
   
   const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin' | 'efectivo'>('yape');
   const [deliveryType, setDeliveryType] = useState<'recojo' | 'delivery'>('recojo');
@@ -40,14 +39,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [isOrderLoading, setIsOrderLoading] = useState(false);
 
   const brandColor = config?.colorPrimario || '#84cc16'; 
-  const colorA = config?.colorAcento || '#0ea5e9';
 
-  // Fix: Calculate total amount of the cart
   const cartTotal = useMemo(() => {
     return cart.reduce((total, item) => total + item.producto.precio * item.cantidad, 0);
   }, [cart]);
 
-  // Fix: Function to add products to the cart
   const addToCart = (producto: Producto) => {
     setCart(prev => {
       const existing = prev.find(item => item.producto.id === producto.id);
@@ -58,7 +54,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     });
   };
 
-  // Fix: Function to update product quantity in the cart
   const updateCartQuantity = (id: number, delta: number) => {
     setCart(prev => {
       return prev.map(item => {
@@ -71,14 +66,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     });
   };
 
-  // Fix: Handle voucher image upload
   const handleVoucherUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setVoucherImage(reader.result as string);
-      };
+      reader.onloadend = () => setVoucherImage(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
@@ -86,16 +78,33 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const fetchProducts = async () => {
     if (!session) return;
     setLoading(true);
+    setErrorMsg(null);
     const client = new OdooClient(session.url, session.db, session.useProxy);
+    
+    // Configuraciones de campos en cascada para Odoo 14-17
+    const fieldSets = [
+      ['display_name', 'list_price', 'categ_id', 'image_128', 'qty_available', 'uom_id', 'description_sale'],
+      ['display_name', 'list_price', 'categ_id', 'image_medium', 'qty_available'],
+      ['display_name', 'list_price', 'categ_id', 'image_small'],
+      ['display_name', 'list_price']
+    ];
+
     try {
       const extrasMap = await getProductExtras(config.code);
-      // Incluimos 'uom_id' para Odoo 14
-      const fields = ['display_name', 'list_price', 'categ_id', 'image_128', 'image_1920', 'description_sale', 'qty_available', 'uom_id'];
-      const domain: any[] = [['sale_ok', '=', true], ['active', '=', true]];
+      let data = null;
       
-      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, { limit: 1000 });
+      // Intento en cascada
+      for (const fields of fieldSets) {
+        try {
+          console.log(`Intentando cargar con ${fields.length} campos...`);
+          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true], ['active', '=', true]], fields, { limit: 500 });
+          if (data && Array.isArray(data)) break;
+        } catch (e) {
+          console.warn(`Error con campos ${fields.join(',')}. Probando fallback...`);
+        }
+      }
       
-      if (data) {
+      if (data && Array.isArray(data)) {
         setProductos(data.map((p: any) => {
           const extra = extrasMap[p.id];
           return {
@@ -104,16 +113,22 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
             precio: p.list_price || 0,
             categoria: Array.isArray(p.categ_id) ? p.categ_id[1] : 'General',
             stock: p.qty_available || 0,
-            imagen: p.image_128 || p.image_1920,
+            imagen: p.image_128 || p.image_medium || p.image_small || p.image_1920,
             descripcion_venta: extra?.descripcion_lemon || p.description_sale || '',
             uso_sugerido: extra?.instrucciones_lemon || '',
             categoria_personalizada: extra?.categoria_personalizada || '',
             uom_id: Array.isArray(p.uom_id) ? p.uom_id[0] : (typeof p.uom_id === 'number' ? p.uom_id : 1)
           };
         }));
+      } else {
+        setErrorMsg("No se recibieron productos del servidor.");
       }
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch (e: any) { 
+      console.error(e);
+      setErrorMsg(`Error de conexión: ${e.message || 'Odoo no responde'}`);
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   useEffect(() => { fetchProducts(); }, [session, config.code]);
@@ -125,60 +140,31 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     try {
       const waNumber = config.whatsappNumbers?.split(',')[0].trim() || '51975615244';
       const orderRef = `WEB-${Date.now().toString().slice(-6)}`;
+      const client = new OdooClient(session.url, session.db, session.useProxy);
+      
+      const partnerSearch = await client.searchRead(session.uid, session.apiKey, 'res.partner', [['name', '=', clientData.nombre]], ['id'], { limit: 1 });
+      let partnerId = partnerSearch.length > 0 ? partnerSearch[0].id : null;
+      
+      if (!partnerId) {
+          partnerId = await client.create(session.uid, session.apiKey, 'res.partner', {
+              name: clientData.nombre, phone: clientData.telefono, street: clientData.direccion || 'Pedido Web', company_id: session.companyId
+          });
+      }
 
-      // 1. CREAR PEDIDO EN ODOO (sale.order)
-      try {
-        const client = new OdooClient(session.url, session.db, session.useProxy);
-        
-        // Buscar o crear partner
-        const partnerSearch = await client.searchRead(session.uid, session.apiKey, 'res.partner', [['name', '=', clientData.nombre]], ['id'], { limit: 1 });
-        let partnerId = partnerSearch.length > 0 ? partnerSearch[0].id : null;
-        
-        if (!partnerId) {
-            partnerId = await client.create(session.uid, session.apiKey, 'res.partner', {
-                name: clientData.nombre,
-                phone: clientData.telefono,
-                street: clientData.direccion || 'Pedido Web',
-                company_id: session.companyId
-            });
-        }
-
-        // Líneas de pedido - Odoo 14 a veces requiere product_uom explícito
-        const orderLines = cart.map(item => [0, 0, {
-            product_id: item.producto.id,
-            product_uom_qty: item.cantidad,
-            price_unit: item.producto.precio,
-            product_uom: item.producto.uom_id || 1, // Crucial para Odoo 14
-            name: item.producto.nombre
-        }]);
-
-        await client.create(session.uid, session.apiKey, 'sale.order', {
-            partner_id: partnerId,
-            company_id: session.companyId,
-            order_line: orderLines,
-            origin: `WEB LEMON: ${orderRef}`,
-            note: `Pedido WEB. Pago: ${paymentMethod.toUpperCase()}. Cliente: ${clientData.nombre}.`,
-            state: 'draft' 
-        });
-      } catch (e) { console.error("Odoo Sync Fail:", e); }
-
-      // 2. Supabase
-      await supabase.from('pedidos_tienda').insert([{
-        order_name: orderRef,
-        cliente_nombre: clientData.nombre,
-        monto: cartTotal,
-        voucher_url: voucherImage || '',
-        empresa_code: config.code,
-        estado: 'pendiente'
+      const orderLines = cart.map(item => [0, 0, {
+          product_id: item.producto.id, product_uom_qty: item.cantidad, price_unit: item.producto.precio, product_uom: item.producto.uom_id || 1, name: item.producto.nombre
       }]);
 
-      // 3. WhatsApp
+      await client.create(session.uid, session.apiKey, 'sale.order', {
+          partner_id: partnerId, company_id: session.companyId, order_line: orderLines, origin: `WEB LEMON: ${orderRef}`, note: `Pago: ${paymentMethod.toUpperCase()}`, state: 'draft' 
+      });
+
+      await supabase.from('pedidos_tienda').insert([{
+        order_name: orderRef, cliente_nombre: clientData.nombre, monto: cartTotal, voucher_url: voucherImage || '', empresa_code: config.code, estado: 'pendiente'
+      }]);
+
       const message = `*NUEVO PEDIDO - ${config.nombreComercial || config.code}*\n` +
-        `*Referencia:* ${orderRef}\n\n` +
-        `*Cliente:* ${clientData.nombre}\n` +
-        `*Total:* S/ ${cartTotal.toFixed(2)}\n` +
-        `*Pago:* ${paymentMethod.toUpperCase()}\n\n` +
-        `_Voucher adjunto en Lemon BI._`;
+        `*Referencia:* ${orderRef}\n*Cliente:* ${clientData.nombre}\n*Total:* S/ ${cartTotal.toFixed(2)}\n*Pago:* ${paymentMethod.toUpperCase()}`;
 
       window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
       setCurrentStep('success');
@@ -186,85 +172,141 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     finally { setIsOrderLoading(false); }
   };
 
-  const renderQR = (url: string | undefined) => {
-    if (!url) return null;
-    const finalUrl = url.startsWith('data:') ? url : `data:image/png;base64,${url}`;
-    return <img src={finalUrl} className="max-w-full max-h-full object-contain rounded-2xl" alt="QR de Pago" />;
-  };
+  const filteredProducts = useMemo(() => {
+    return productos.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [productos, searchTerm]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
-      {/* HEADER simplificado para brevedad */}
+      
+      {/* HEADER */}
       <header className="bg-white/95 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm p-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
            <div className="flex items-center gap-3">
-             {onBack && <button onClick={onBack} className="p-2 text-slate-400"><ArrowLeft/></button>}
-             <h1 className="font-black text-slate-900 uppercase text-sm">{config.nombreComercial || config.code}</h1>
+             {onBack && <button onClick={onBack} className="p-2 text-slate-400 hover:text-slate-900 transition-all"><ArrowLeft/></button>}
+             <h1 className="font-black text-slate-900 uppercase text-[12px] md:text-sm tracking-tighter">{config.nombreComercial || config.code}</h1>
            </div>
-           <button onClick={() => { setIsCartOpen(true); setCurrentStep('cart'); }} className="relative p-3 bg-slate-900 text-white rounded-xl">
+           
+           <div className="flex-1 max-w-sm hidden sm:block">
+              <div className="relative">
+                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300"/>
+                 <input type="text" placeholder="Buscar productos..." className="w-full pl-10 pr-4 py-2 bg-slate-50 rounded-xl text-xs font-bold outline-none border border-slate-100" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              </div>
+           </div>
+
+           <button onClick={() => { setIsCartOpen(true); setCurrentStep('cart'); }} className="relative p-3 bg-slate-900 text-white rounded-xl shadow-lg transition-transform active:scale-95">
              <ShoppingCart className="w-5 h-5" />
-             {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-[10px] w-5 h-5 rounded-full flex items-center justify-center">{cart.length}</span>}
+             {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-brand-500 text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-black border-2 border-white">{cart.length}</span>}
            </button>
         </div>
       </header>
 
-      {/* Grid de productos */}
-      <main className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        {loading ? <Loader2 className="animate-spin mx-auto col-span-full"/> : productos.map(p => (
-           <div key={p.id} onClick={() => setSelectedProduct(p)} className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm cursor-pointer">
-              <div className="aspect-square bg-slate-50 rounded-2xl mb-3 flex items-center justify-center">
-                 {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-contain" /> : <Package className="text-slate-200" />}
+      {/* CONTENIDO */}
+      <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-40 gap-4">
+             <Loader2 className="w-10 h-10 animate-spin text-brand-500" />
+             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 animate-pulse">Sincronizando con {session.db}...</p>
+          </div>
+        ) : errorMsg ? (
+          <div className="py-40 text-center flex flex-col items-center gap-6 max-w-md mx-auto">
+             <AlertCircle className="w-16 h-16 text-red-300" />
+             <div className="space-y-2">
+                <p className="text-sm font-black uppercase text-slate-800">Error de Conexión</p>
+                <p className="text-xs text-slate-400 font-medium leading-relaxed">{errorMsg}</p>
+             </div>
+             <button onClick={fetchProducts} className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2"><RefreshCw className="w-4 h-4"/> Reintentar</button>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="py-40 text-center flex flex-col items-center gap-6 opacity-40">
+             <SearchX className="w-20 h-20 text-slate-200" />
+             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">No se encontraron productos disponibles</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6 animate-in fade-in duration-500">
+            {filteredProducts.map(p => (
+              <div key={p.id} className="bg-white p-3 md:p-4 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col group hover:shadow-xl transition-all">
+                <div className="aspect-square bg-slate-50 rounded-2xl mb-3 flex items-center justify-center relative overflow-hidden">
+                  {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-contain" /> : <Package className="w-8 h-8 text-slate-200" />}
+                </div>
+                <div className="flex-1 space-y-1">
+                  <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">{p.categoria}</p>
+                  <h3 className="text-[10px] md:text-[11px] font-black text-slate-800 uppercase line-clamp-2 leading-tight h-8 mb-4">{p.nombre}</h3>
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-50">
+                    <span className="text-sm font-black text-slate-900">S/ {p.precio.toFixed(2)}</span>
+                    <button onClick={() => addToCart(p)} className="p-2 bg-slate-900 text-white rounded-lg shadow-md hover:scale-110 active:scale-95 transition-all"><Plus className="w-4 h-4"/></button>
+                  </div>
+                </div>
               </div>
-              <p className="text-[10px] font-black uppercase truncate">{p.nombre}</p>
-              <p className="font-black mt-1">S/ {p.precio.toFixed(2)}</p>
-              <button onClick={(e) => { e.stopPropagation(); addToCart(p); }} className="mt-2 w-full py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase">Agregar</button>
-           </div>
-        ))}
+            ))}
+          </div>
+        )}
       </main>
 
       {/* DRAWER CARRITO */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[120] flex justify-end">
-           <div className="absolute inset-0 bg-slate-900/60" onClick={() => setIsCartOpen(false)}></div>
-           <div className="relative bg-white w-full max-w-lg h-full shadow-2xl flex flex-col p-6 overflow-y-auto">
+           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsCartOpen(false)}></div>
+           <div className="relative bg-white w-full max-w-lg h-full shadow-2xl flex flex-col p-6 overflow-y-auto animate-in slide-in-from-right duration-300">
+              <div className="flex justify-between items-center mb-8">
+                 <h2 className="text-xl font-black uppercase tracking-tighter">Tu Compra</h2>
+                 <button onClick={() => setIsCartOpen(false)} className="p-2 bg-slate-50 rounded-xl"><X/></button>
+              </div>
+
               {currentStep === 'cart' && (
                  <div className="space-y-4 flex-1">
-                    <h2 className="text-xl font-black uppercase">Carrito</h2>
-                    {cart.map(i => (
-                       <div key={i.producto.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
-                          <span className="text-[10px] font-black uppercase flex-1">{i.producto.nombre}</span>
-                          <span className="font-black mx-4">S/ {i.producto.precio.toFixed(2)}</span>
-                          <button onClick={() => updateCartQuantity(i.producto.id, -1)} className="p-1"><Minus className="w-4 h-4"/></button>
-                          <span className="mx-2 font-bold">{i.cantidad}</span>
-                          <button onClick={() => updateCartQuantity(i.producto.id, 1)} className="p-1"><Plus className="w-4 h-4"/></button>
+                    {cart.length === 0 ? (
+                       <div className="py-20 text-center opacity-30 flex flex-col items-center gap-6"><ShoppingCart className="w-16 h-16"/><p className="font-black uppercase tracking-widest">Carrito vacío</p></div>
+                    ) : cart.map(i => (
+                       <div key={i.producto.id} className="flex gap-3 items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                          <div className="w-12 h-12 bg-white rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+                             {i.producto.imagen ? <img src={`data:image/png;base64,${i.producto.imagen}`} className="w-full h-full object-contain" /> : <Package className="w-6 h-6 text-slate-200"/>}
+                          </div>
+                          <div className="flex-1">
+                             <p className="text-[9px] font-black uppercase truncate">{i.producto.nombre}</p>
+                             <p className="font-black text-xs">S/ {i.producto.precio.toFixed(2)}</p>
+                          </div>
+                          <div className="flex items-center gap-2 bg-white p-1 rounded-lg">
+                             <button onClick={() => updateCartQuantity(i.producto.id, -1)} className="p-1"><Minus className="w-3.5 h-3.5"/></button>
+                             <span className="text-xs font-black w-4 text-center">{i.cantidad}</span>
+                             <button onClick={() => updateCartQuantity(i.producto.id, 1)} className="p-1"><Plus className="w-3.5 h-3.5"/></button>
+                          </div>
                        </div>
                     ))}
-                    <button onClick={() => setCurrentStep('details')} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase">Continuar</button>
+                    <button onClick={() => setCurrentStep('details')} disabled={cart.length === 0} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest mt-auto">Continuar</button>
                  </div>
               )}
 
               {currentStep === 'details' && (
-                 <div className="space-y-4">
-                    <h2 className="text-xl font-black uppercase">Tus Datos</h2>
-                    <input type="text" placeholder="Nombre" className="w-full p-4 bg-slate-50 rounded-xl" value={clientData.nombre} onChange={e => setClientData({...clientData, nombre: e.target.value})} />
-                    <input type="tel" placeholder="WhatsApp" className="w-full p-4 bg-slate-50 rounded-xl" value={clientData.telefono} onChange={e => setClientData({...clientData, telefono: e.target.value})} />
-                    <button onClick={() => setCurrentStep('payment')} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase">Ir a Pagar</button>
+                 <div className="space-y-6">
+                    <h2 className="text-lg font-black uppercase">Tus Datos</h2>
+                    <input type="text" placeholder="Nombre completo" className="w-full p-4 bg-slate-50 rounded-xl outline-none font-bold shadow-inner" value={clientData.nombre} onChange={e => setClientData({...clientData, nombre: e.target.value})} />
+                    <input type="tel" placeholder="WhatsApp / Celular" className="w-full p-4 bg-slate-50 rounded-xl outline-none font-bold shadow-inner" value={clientData.telefono} onChange={e => setClientData({...clientData, telefono: e.target.value})} />
+                    <div className="grid grid-cols-2 gap-2">
+                       <button onClick={() => setDeliveryType('recojo')} className={`p-4 rounded-xl border-2 font-black uppercase text-[10px] ${deliveryType === 'recojo' ? 'bg-slate-900 text-white' : 'bg-slate-50'}`}>Recojo Sede</button>
+                       <button onClick={() => setDeliveryType('delivery')} className={`p-4 rounded-xl border-2 font-black uppercase text-[10px] ${deliveryType === 'delivery' ? 'bg-slate-900 text-white' : 'bg-slate-50'}`}>Delivery</button>
+                    </div>
+                    {deliveryType === 'delivery' && (
+                       <textarea placeholder="Dirección exacta..." className="w-full p-4 bg-slate-50 rounded-xl outline-none font-bold h-24 shadow-inner" value={clientData.direccion} onChange={e => setClientData({...clientData, direccion: e.target.value})} />
+                    )}
+                    <button onClick={() => setCurrentStep('payment')} disabled={!clientData.nombre || !clientData.telefono} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase disabled:opacity-50">Siguiente</button>
                  </div>
               )}
 
               {currentStep === 'payment' && (
                  <div className="space-y-6">
-                    <h2 className="text-xl font-black uppercase">Pagar S/ {cartTotal.toFixed(2)}</h2>
+                    <h2 className="text-lg font-black uppercase text-center">Total: S/ {cartTotal.toFixed(2)}</h2>
                     <div className="flex gap-2">
-                       <button onClick={() => setPaymentMethod('yape')} className={`flex-1 p-4 rounded-xl border-2 ${paymentMethod === 'yape' ? 'border-purple-600 bg-purple-50' : ''}`}>Yape</button>
-                       <button onClick={() => setPaymentMethod('plin')} className={`flex-1 p-4 rounded-xl border-2 ${paymentMethod === 'plin' ? 'border-blue-600 bg-blue-50' : ''}`}>Plin</button>
+                       <button onClick={() => setPaymentMethod('yape')} className={`flex-1 p-4 rounded-xl border-2 font-black uppercase text-[10px] ${paymentMethod === 'yape' ? 'border-purple-600 bg-purple-50' : 'bg-slate-50'}`}>Yape</button>
+                       <button onClick={() => setPaymentMethod('plin')} className={`flex-1 p-4 rounded-xl border-2 font-black uppercase text-[10px] ${paymentMethod === 'plin' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50'}`}>Plin</button>
                     </div>
-                    <div className="aspect-square bg-slate-900 rounded-[2.5rem] flex items-center justify-center p-8">
-                       {renderQR(paymentMethod === 'yape' ? config.yapeQR : config.plinQR) || <QrCode className="text-white w-20 h-20 opacity-20"/>}
+                    <div className="aspect-square bg-slate-900 rounded-[2.5rem] flex items-center justify-center p-8 shadow-xl">
+                       {paymentMethod === 'yape' ? (config.yapeQR && <img src={config.yapeQR.startsWith('data:') ? config.yapeQR : `data:image/png;base64,${config.yapeQR}`} className="max-w-full max-h-full rounded-2xl" />) : (config.plinQR && <img src={config.plinQR.startsWith('data:') ? config.plinQR : `data:image/png;base64,${config.plinQR}`} className="max-w-full max-h-full rounded-2xl" />)}
+                       {!config.yapeQR && !config.plinQR && <QrCode className="text-white w-20 h-20 opacity-20"/>}
                     </div>
                     <div className="text-center">
-                       <p className="text-2xl font-black text-slate-900">{paymentMethod === 'yape' ? config.yapeNumber : config.plinNumber}</p>
-                       <p className="text-xs uppercase font-bold text-slate-400">{paymentMethod === 'yape' ? config.yapeName : config.plinName}</p>
+                       <p className="text-2xl font-black text-slate-900 tracking-widest">{paymentMethod === 'yape' ? (config.yapeNumber || '975615244') : (config.plinNumber || '975615244')}</p>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{paymentMethod === 'yape' ? (config.yapeName || 'LEMON BI') : (config.plinName || 'LEMON BI')}</p>
                     </div>
                     <button onClick={() => setCurrentStep('voucher')} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase">Ya pagué, subir voucher</button>
                  </div>
@@ -272,33 +314,33 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
               {currentStep === 'voucher' && (
                  <div className="space-y-6">
-                    <h2 className="text-xl font-black uppercase">Cargar Voucher</h2>
-                    <div className="border-4 border-dashed rounded-[2.5rem] aspect-[3/4] flex flex-col items-center justify-center p-4 relative overflow-hidden bg-slate-50">
+                    <h2 className="text-lg font-black uppercase text-center">Subir Comprobante</h2>
+                    <div className="border-4 border-dashed rounded-[2.5rem] aspect-[3/4] flex flex-col items-center justify-center p-4 bg-slate-50 relative overflow-hidden">
                        {voucherImage ? (
                           <>
                              <img src={voucherImage} className="w-full h-full object-cover" />
                              <button onClick={() => setVoucherImage(null)} className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-xl"><Trash2/></button>
                           </>
                        ) : (
-                          <label className="cursor-pointer flex flex-col items-center">
-                             <Camera className="w-12 h-12 text-slate-300 mb-2"/>
-                             <p className="text-[10px] font-black uppercase">Toca para subir foto</p>
+                          <label className="cursor-pointer flex flex-col items-center text-slate-400">
+                             <Camera className="w-12 h-12 mb-2"/>
+                             <p className="text-[10px] font-black uppercase">Seleccionar Imagen</p>
                              <input type="file" className="hidden" accept="image/*" onChange={handleVoucherUpload} />
                           </label>
                        )}
                     </div>
-                    <button onClick={handleFinishOrder} disabled={!voucherImage || isOrderLoading} className="w-full py-4 bg-green-600 text-white rounded-2xl font-black uppercase disabled:bg-slate-300">
-                       {isOrderLoading ? <Loader2 className="animate-spin mx-auto"/> : "Finalizar Pedido"}
+                    <button onClick={handleFinishOrder} disabled={!voucherImage || isOrderLoading} className="w-full py-4 bg-brand-500 text-white rounded-2xl font-black uppercase disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg shadow-brand-200">
+                       {isOrderLoading ? <Loader2 className="animate-spin w-5 h-5"/> : <CheckCircle2 className="w-5 h-5"/>} FINALIZAR PEDIDO
                     </button>
                  </div>
               )}
 
               {currentStep === 'success' && (
-                 <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
-                    <CheckCircle2 className="text-green-500 w-20 h-20" />
-                    <h3 className="text-2xl font-black uppercase">¡Recibido!</h3>
-                    <p className="text-xs font-bold text-slate-400 uppercase">Validaremos tu pago y te contactaremos.</p>
-                    <button onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); }} className="w-full py-4 bg-slate-900 text-white rounded-2xl uppercase font-black">Cerrar</button>
+                 <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+                    <div className="w-24 h-24 bg-brand-500 text-white rounded-full flex items-center justify-center shadow-2xl animate-in zoom-in duration-500"><CheckCircle2 className="w-12 h-12"/></div>
+                    <h3 className="text-3xl font-black uppercase tracking-tighter">¡Pedido Enviado!</h3>
+                    <p className="text-sm font-bold text-slate-400 leading-relaxed uppercase">Tu orden ha sido registrada. Pronto nos pondremos en contacto contigo.</p>
+                    <button onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); }} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase">Cerrar y Regresar</button>
                  </div>
               )}
            </div>
