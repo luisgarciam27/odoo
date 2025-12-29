@@ -10,7 +10,6 @@ import ProductManager from './components/ProductManager';
 import { OdooSession, ClientConfig } from './types';
 import { getClientByCode } from './services/clientManager';
 import { OdooClient } from './services/odoo';
-// Import Loader2 icon from lucide-react
 import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -22,7 +21,6 @@ const App: React.FC = () => {
   const [isStoreMode, setIsStoreMode] = useState(false);
   const [isStoreLoading, setIsStoreLoading] = useState(false);
 
-  // Verificar modo tienda por URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const shopCode = params.get('shop');
@@ -113,7 +111,7 @@ const App: React.FC = () => {
         ) : currentView === 'product-manager' && odooSession && clientConfig ? (
            <ProductManager session={odooSession} config={clientConfig} onUpdate={setClientConfig} />
         ) : currentView === 'store-config' && clientConfig ? (
-           <StoreSettings config={clientConfig} onUpdate={setClientConfig} />
+           <StoreSettings config={clientConfig} onUpdate={setClientConfig} session={odooSession} />
         ) : (
           <Dashboard session={odooSession} view={currentView} />
         )}

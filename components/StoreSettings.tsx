@@ -1,22 +1,53 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Palette, ImageIcon, Save, CheckCircle2, RotateCcw, MapPin, Plus, Trash2, 
   Sparkles, Pill, Briefcase, PawPrint, Footprints, Wallet, QrCode, Phone, 
-  User, X, Globe, Share2, Info, ShieldCheck, Music2
+  User, X, Globe, Share2, Info, ShieldCheck, Music2, Layers, EyeOff, Eye,
+  RefreshCw, ChevronRight, Tag
 } from 'lucide-react';
-import { ClientConfig, SedeStore, BusinessType } from '../types';
+import { ClientConfig, SedeStore, BusinessType, OdooSession } from '../types';
 import { saveClient } from '../services/clientManager';
+import { OdooClient } from '../services/odoo';
 
 interface StoreSettingsProps {
   config: ClientConfig;
   onUpdate: (newConfig: ClientConfig) => void;
+  session?: OdooSession | null; // Añadimos la sesión para consultar Odoo
 }
 
-const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
+const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session }) => {
   const [currentConfig, setCurrentConfig] = useState<ClientConfig>(config);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [odooCategories, setOdooCategories] = useState<{id: number, name: string}[]>([]);
+  const [isLoadingCats, setIsLoadingCats] = useState(false);
+
+  // Cargar categorías de Odoo si hay sesión
+  const fetchOdooCategories = async () => {
+    if (!session) return;
+    setIsLoadingCats(true);
+    try {
+      const client = new OdooClient(session.url, session.db, true);
+      const cats = await client.searchRead(
+        session.uid, 
+        session.apiKey, 
+        'product.category', 
+        [], 
+        ['name'], 
+        { order: 'name asc' }
+      );
+      setOdooCategories(cats.map((c: any) => ({ id: c.id, name: c.name })));
+    } catch (e) {
+      console.error("Error al traer categorías", e);
+    } finally {
+      setIsLoadingCats(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOdooCategories();
+  }, [session]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +59,15 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
       setTimeout(() => setShowSuccess(false), 3000);
     }
     setIsSaving(false);
+  };
+
+  const toggleCategoryVisibility = (catName: string) => {
+    const hidden = currentConfig.hiddenCategories || [];
+    if (hidden.includes(catName)) {
+      setCurrentConfig({...currentConfig, hiddenCategories: hidden.filter(c => c !== catName)});
+    } else {
+      setCurrentConfig({...currentConfig, hiddenCategories: [...hidden, catName]});
+    }
   };
 
   const addSede = () => {
@@ -118,6 +158,45 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
         <div className="space-y-8">
           <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
+              <Layers className="w-6 h-6 text-brand-500" /> Categorías de la Tienda
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sincronizado con Odoo</p>
+                <button type="button" onClick={fetchOdooCategories} className="p-2 text-brand-600 hover:bg-brand-50 rounded-lg">
+                  <RefreshCw className={`w-4 h-4 ${isLoadingCats ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              <div className="max-h-64 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                {odooCategories.length === 0 && !isLoadingCats && (
+                  <div className="text-center py-6 opacity-40">
+                    <Tag className="w-8 h-8 mx-auto mb-2" />
+                    <p className="text-[9px] font-black uppercase">No se encontraron categorías</p>
+                  </div>
+                )}
+                {odooCategories.map(cat => {
+                  const isHidden = (currentConfig.hiddenCategories || []).includes(cat.name);
+                  return (
+                    <div key={cat.id} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${isHidden ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 shadow-sm'}`}>
+                      <span className={`text-[11px] font-bold uppercase ${isHidden ? 'text-slate-400' : 'text-slate-800'}`}>{cat.name}</span>
+                      <button 
+                        type="button"
+                        onClick={() => toggleCategoryVisibility(cat.name)}
+                        className={`p-2 rounded-lg transition-all ${isHidden ? 'bg-slate-200 text-slate-500' : 'bg-brand-100 text-brand-600'}`}
+                      >
+                        {isHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[8px] text-slate-400 uppercase font-bold italic leading-tight">Mapea las categorías que deseas que el cliente final pueda ver en la barra de navegación de la tienda.</p>
+            </div>
+          </section>
+
+          <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
               <Phone className="w-6 h-6 text-emerald-500" /> Canales y Redes
             </h3>
             <div className="space-y-4">
@@ -140,27 +219,6 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
               </div>
             </div>
           </section>
-
-          <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
-            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-              <ImageIcon className="w-6 h-6 text-indigo-500" /> Banner Tienda (Diapositivas)
-            </h3>
-            <div className="space-y-4">
-               {[0, 1, 2].map(i => (
-                 <div key={i} className="space-y-2">
-                   <label className="text-[9px] font-black text-slate-400 uppercase">Imagen Slide {i + 1}</label>
-                   <input 
-                    type="text" 
-                    placeholder="URL de la imagen..." 
-                    className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold" 
-                    value={currentConfig.slide_images?.[i] || ''} 
-                    onChange={e => updateSlide(i, e.target.value)} 
-                   />
-                 </div>
-               ))}
-               <p className="text-[8px] text-slate-400 uppercase font-bold italic">Se recomiendan imágenes de 1200x400px.</p>
-            </div>
-          </section>
         </div>
 
         <div className="space-y-8">
@@ -179,21 +237,22 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
 
           <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-              <MapPin className="w-6 h-6 text-blue-500" /> Sedes
+              <ImageIcon className="w-6 h-6 text-pink-500" /> Banner Tienda (Slider)
             </h3>
             <div className="space-y-4">
-              {(currentConfig.sedes_recojo || []).map(sede => (
-                <div key={sede.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex gap-4">
-                   <div className="flex-1 space-y-2">
-                     <input type="text" placeholder="NOMBRE SEDE" className="w-full p-2 bg-white border border-slate-100 rounded-lg text-[10px] font-black uppercase tracking-widest outline-none" value={sede.nombre} onChange={e => updateSede(sede.id, 'nombre', e.target.value)} />
-                     <input type="text" placeholder="DIRECCIÓN" className="w-full p-2 bg-white border border-slate-100 rounded-lg text-[10px] font-bold outline-none" value={sede.direccion} onChange={e => updateSede(sede.id, 'direccion', e.target.value)} />
-                   </div>
-                   <button type="button" onClick={() => removeSede(sede.id)} className="p-2 text-red-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
-                </div>
-              ))}
-              <button type="button" onClick={addSede} className="w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-black text-[9px] uppercase tracking-widest hover:border-blue-300 hover:text-blue-500 transition-all flex items-center justify-center gap-2">
-                <Plus className="w-4 h-4"/> Añadir Sede
-              </button>
+               {[0, 1, 2].map(i => (
+                 <div key={i} className="space-y-2">
+                   <label className="text-[9px] font-black text-slate-400 uppercase">Imagen Slide {i + 1}</label>
+                   <input 
+                    type="text" 
+                    placeholder="URL de la imagen..." 
+                    className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold" 
+                    value={currentConfig.slide_images?.[i] || ''} 
+                    onChange={e => updateSlide(i, e.target.value)} 
+                   />
+                 </div>
+               ))}
+               <p className="text-[8px] text-slate-400 uppercase font-bold italic">Se recomiendan imágenes horizontales.</p>
             </div>
           </section>
         </div>
@@ -223,6 +282,26 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                   <input type="text" placeholder="Titular" className="w-full p-3 bg-white border border-[#00A9E0]/10 rounded-xl text-[9px] font-black uppercase" value={currentConfig.plinName} onChange={e => setCurrentConfig({...currentConfig, plinName: e.target.value})} />
                   <input type="text" placeholder="URL QR Plin" className="w-full p-3 bg-white border border-[#00A9E0]/10 rounded-xl text-[9px]" value={currentConfig.plinQR} onChange={e => setCurrentConfig({...currentConfig, plinQR: e.target.value})} />
                </div>
+            </div>
+          </section>
+
+          <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
+              <MapPin className="w-6 h-6 text-blue-500" /> Sedes de Recojo
+            </h3>
+            <div className="space-y-4">
+              {(currentConfig.sedes_recojo || []).map(sede => (
+                <div key={sede.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex gap-4">
+                   <div className="flex-1 space-y-2">
+                     <input type="text" placeholder="NOMBRE SEDE" className="w-full p-2 bg-white border border-slate-100 rounded-lg text-[10px] font-black uppercase tracking-widest outline-none" value={sede.nombre} onChange={e => updateSede(sede.id, 'nombre', e.target.value)} />
+                     <input type="text" placeholder="DIRECCIÓN" className="w-full p-2 bg-white border border-slate-100 rounded-lg text-[10px] font-bold outline-none" value={sede.direccion} onChange={e => updateSede(sede.id, 'direccion', e.target.value)} />
+                   </div>
+                   <button type="button" onClick={() => removeSede(sede.id)} className="p-2 text-red-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                </div>
+              ))}
+              <button type="button" onClick={addSede} className="w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-black text-[9px] uppercase tracking-widest hover:border-blue-300 hover:text-blue-500 transition-all flex items-center justify-center gap-2">
+                <Plus className="w-4 h-4"/> Añadir Sede
+              </button>
             </div>
           </section>
         </div>

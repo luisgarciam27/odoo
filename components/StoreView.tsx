@@ -8,7 +8,7 @@ import {
   Stethoscope, Footprints, PawPrint, Calendar, Wallet, CheckCircle2, Camera, ChevronRight,
   Loader2, BadgeCheck, Send, UserCheck, Sparkles, Zap, Award, HeartHandshake, ShieldAlert,
   RefreshCw, Trash2, CreditCard, Building2, Smartphone, CheckCircle, QrCode, Music2, Upload, Briefcase,
-  Dog, Cat, Syringe
+  Dog, Cat, Syringe, Tag, Layers
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -34,6 +34,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'info' | 'tech' | 'usage'>('info');
   const [activeSlide, setActiveSlide] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState('Todas');
   
   const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin' | 'efectivo'>('yape');
   const [deliveryType, setDeliveryType] = useState<'recojo' | 'delivery'>('recojo');
@@ -45,7 +46,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const colorA = config?.colorAcento || '#0ea5e9';
   const bizType = config?.businessType || 'pharmacy';
 
-  // Helper para extraer info de la descripción de Odoo
   const parseOdooDescription = (rawText: string = "") => {
     const lines = rawText.split('\n');
     let marca = "";
@@ -71,7 +71,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
     return {
       marca: marca || "Premium",
-      especie: especie || "Caninos / Felinos",
+      especie: especie || "General",
       peso: peso,
       registro: registro,
       cleanDesc: descripcionLimpiaLines.join(' ')
@@ -108,7 +108,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     const client = new OdooClient(session.url, session.db, true);
     try {
       const extras = await getProductExtras(config.code);
-      const domain: any[] = [['sale_ok', '=', true], ['company_id', '=', session.companyId]];
+      const domain: any[] = [['sale_ok', '=', true]];
+      if (session.companyId) {
+          domain.push(['company_id', '=', session.companyId]);
+      }
+
       const data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'], { limit: 1000 });
       
       setProductos(data.map((p: any) => {
@@ -125,22 +129,42 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           descripcion_raw: p.description_sale,
           descripcion_venta: extra?.descripcion_lemon || parsed.cleanDesc || p.description_sale || '',
           uso_sugerido: extra?.instrucciones_lemon || '',
-          laboratorio: parsed.marca, // Usamos la marca extraída como laboratorio/marca principal
+          laboratorio: parsed.marca,
           marca: parsed.marca,
           especie: parsed.especie,
           peso_rango: parsed.peso,
           registro_sanitario: parsed.registro || 'Validado Odoo'
         };
       }));
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+    } catch (e) { 
+      console.error("Error cargando productos de Odoo:", e); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   useEffect(() => { fetchProducts(); }, [session, config.code]);
 
+  // Obtener categorías únicas de los productos (filtrando las ocultas por config)
+  const availableCategories = useMemo(() => {
+    const hidden = config.hiddenCategories || [];
+    const allCats = Array.from(new Set(productos.map(p => p.categoria || 'General')));
+    return ['Todas', ...allCats.filter(cat => !hidden.includes(cat))];
+  }, [productos, config.hiddenCategories]);
+
   const filteredProducts = useMemo(() => {
-    const hidden = config.hiddenProducts || [];
-    return productos.filter(p => !hidden.includes(p.id) && (searchTerm === '' || p.nombre.toLowerCase().includes(searchTerm.toLowerCase())));
-  }, [productos, searchTerm, config.hiddenProducts]);
+    const hiddenIds = config.hiddenProducts || [];
+    const hiddenCats = config.hiddenCategories || [];
+
+    return productos.filter(p => {
+        const isHiddenById = hiddenIds.includes(p.id);
+        const isHiddenByCat = hiddenCats.includes(p.categoria || 'General');
+        const matchesSearch = searchTerm === '' || p.nombre.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCat = selectedCategory === 'Todas' || p.categoria === selectedCategory;
+        
+        return !isHiddenById && !isHiddenByCat && matchesSearch && matchesCat;
+    });
+  }, [productos, searchTerm, selectedCategory, config.hiddenProducts, config.hiddenCategories]);
 
   const addToCart = (p: Producto, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -270,10 +294,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   };
 
   const bizIcons = {
-    pharmacy: { main: Pill, ficha: ClipboardCheck, tag: 'FARMACÉUTICO', label: 'Farmacia', spec: Stethoscope },
-    veterinary: { main: PawPrint, ficha: PawPrint, tag: 'VETERINARIO', label: 'Veterinaria', spec: Dog },
-    podiatry: { main: Footprints, ficha: Footprints, tag: 'PODOLOGÍA', label: 'Podología', spec: Footprints },
-    general: { main: Briefcase, ficha: Info, tag: 'PRODUCTO', label: 'Comercio', spec: Briefcase }
+    pharmacy: { main: Pill, ficha: ClipboardCheck, tag: 'FARMACÉUTICO', label: 'Farmacia', spec: Stethoscope, catIcon: Beaker },
+    veterinary: { main: PawPrint, ficha: PawPrint, tag: 'VETERINARIO', label: 'Veterinaria', spec: Dog, catIcon: PawPrint },
+    podiatry: { main: Footprints, ficha: Footprints, tag: 'PODOLOGÍA', label: 'Podología', spec: Footprints, catIcon: Footprints },
+    general: { main: Briefcase, ficha: Info, tag: 'PRODUCTO', label: 'Comercio', spec: Briefcase, catIcon: Package }
   }[bizType];
 
   return (
@@ -332,9 +356,32 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       </div>
 
+      {/* BARRA DE CATEGORÍAS */}
+      <div className="w-full mt-8 px-4 md:px-10 overflow-x-auto no-scrollbar scroll-smooth">
+         <div className="max-w-7xl mx-auto flex items-center gap-4 min-w-max pb-4">
+            {availableCategories.map(cat => (
+              <button 
+                key={cat} 
+                onClick={() => setSelectedCategory(cat)}
+                className={`flex items-center gap-3 px-6 py-4 rounded-[1.8rem] transition-all duration-300 border-2 font-black uppercase text-[10px] tracking-widest whitespace-nowrap shadow-sm hover:shadow-md ${
+                  selectedCategory === cat 
+                    ? 'bg-slate-900 text-white border-slate-900 scale-105' 
+                    : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'
+                }`}
+              >
+                {cat === 'Todas' ? <Layers className="w-4 h-4"/> : <bizIcons.catIcon className="w-4 h-4"/>}
+                {cat}
+              </button>
+            ))}
+         </div>
+      </div>
+
       <main className="flex-1 max-w-7xl mx-auto w-full p-6 md:p-10">
         <div className="flex items-center justify-between mb-10 pb-4 border-b border-slate-100">
-           <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-slate-900">Catálogo de Productos</h2>
+           <div>
+              <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-slate-900">{selectedCategory === 'Todas' ? 'Todo el Catálogo' : selectedCategory}</h2>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Sincronizado con Odoo v17</p>
+           </div>
            <div className="flex items-center gap-3 text-slate-400">
               <span className="text-[10px] font-black uppercase tracking-widest">{filteredProducts.length} Items</span>
            </div>
@@ -343,6 +390,12 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 md:gap-8">
             {[1,2,3,4,5,6,7,8].map(i => <div key={i} className="bg-white rounded-[2.5rem] aspect-[3/4] animate-pulse border border-slate-100"></div>)}
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="py-32 text-center flex flex-col items-center gap-6 opacity-30">
+            <Package className="w-24 h-24" />
+            <h3 className="text-xl font-black uppercase tracking-[0.2em]">No se encontraron productos</h3>
+            <p className="text-xs font-bold uppercase">Intenta con otra categoría o término de búsqueda.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 md:gap-10">
@@ -445,17 +498,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                           <p className="text-xs font-black text-slate-900 uppercase">{selectedProduct.marca || 'Oficial'}</p>
                         </div>
                         <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-1">
-                          <p className="text-[9px] font-black text-slate-400 uppercase">Especie Destino</p>
-                          <p className="text-xs font-black text-slate-900 uppercase flex items-center gap-2">
-                             {bizType === 'veterinary' && <Dog className="w-3 h-3 text-brand-600"/>}
-                             {selectedProduct.especie}
-                          </p>
-                        </div>
-                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-1">
-                          <p className="text-[9px] font-black text-slate-400 uppercase">Peso / Rango</p>
-                          <p className="text-xs font-black text-slate-900 uppercase">{selectedProduct.peso_rango || 'N/A'}</p>
-                        </div>
-                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-1">
                           <p className="text-[9px] font-black text-slate-400 uppercase">Certificación</p>
                           <p className="text-xs font-black text-slate-900 uppercase truncate">{selectedProduct.registro_sanitario}</p>
                         </div>
@@ -538,7 +580,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               {currentStep === 'details' && (
                 <div className="space-y-6 animate-in fade-in">
                    <div className="space-y-4">
-                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Información de Contacto</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Información de Contacto</label>
                       <input type="text" placeholder="NOMBRE COMPLETO" className="w-full p-4 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-brand-500 shadow-inner" value={clientData.nombre} onChange={e => setClientData({...clientData, nombre: e.target.value})} />
                       <input type="tel" placeholder="TELÉFONO / WHATSAPP" className="w-full p-4 bg-white border border-slate-200 rounded-2xl text-[11px] font-black outline-none focus:ring-2 focus:ring-brand-500 shadow-inner" value={clientData.telefono} onChange={e => setClientData({...clientData, telefono: e.target.value})} />
                    </div>
