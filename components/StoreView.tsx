@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, 
@@ -8,7 +7,7 @@ import {
   Stethoscope, Footprints, PawPrint, Calendar, Wallet, CheckCircle2, Camera, ChevronRight,
   Loader2, BadgeCheck, Send, UserCheck, Sparkles, Zap, Award, HeartHandshake, ShieldAlert,
   RefreshCw, Trash2, CreditCard, Building2, Smartphone, CheckCircle, QrCode, Music2, Upload, Briefcase,
-  Dog, Cat, Syringe, Tag, Layers, SearchX, Wand2, Boxes, Phone
+  Dog, Cat, Syringe, Tag, Layers, SearchX, Wand2, Boxes, Phone, ShoppingBag
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -37,6 +36,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin' | 'efectivo'>('yape');
   const [deliveryType, setDeliveryType] = useState<'recojo' | 'delivery'>('recojo');
   const [clientData, setClientData] = useState({ nombre: '', telefono: '', direccion: '', sede: '' });
+  const [isOrderLoading, setIsOrderLoading] = useState(false);
 
   const brandColor = config?.colorPrimario || '#84cc16'; 
   const colorA = config?.colorAcento || '#0ea5e9';
@@ -79,10 +79,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     setLoading(true);
     const client = new OdooClient(session.url, session.db, true);
     try {
-      const extras = await getProductExtras(config.code);
+      const extrasMap = await getProductExtras(config.code);
       const fields = ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'];
       
-      // ULTRA-RESILIENT FETCH STRATEGY (Odoo 14-17 Compatibility)
       const domain: any[] = [['sale_ok', '=', true]];
       if (session.companyId) {
           domain.push(['company_id', 'in', [false, session.companyId]]);
@@ -90,26 +89,18 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       let data = [];
       try {
-        // Attempt 1: Default search read
         data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, { limit: 1000 });
       } catch (e) {
-        console.debug("Attempt 1 failed (company filter), trying global fetch...");
-        // Attempt 2: Global search without company filter
         data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 1000 });
       }
 
-      // Attempt 3: If no variants found, try product templates
       if (!data || data.length === 0) {
-        try {
-          data = await client.searchRead(session.uid, session.apiKey, 'product.template', [['sale_ok', '=', true]], fields, { limit: 500 });
-        } catch (e) {
-          console.debug("Attempt 3 (template) failed.");
-        }
+        data = await client.searchRead(session.uid, session.apiKey, 'product.template', [['sale_ok', '=', true]], fields, { limit: 500 });
       }
 
       if (data && data.length > 0) {
         setProductos(data.map((p: any) => {
-          const extra = extras[p.id];
+          const extra = extrasMap[p.id];
           const parsed = parseOdooDescription(p.description_sale);
           return {
             id: p.id,
@@ -129,7 +120,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         setProductos([]);
       }
     } catch (e) { 
-      console.error("Critical Odoo Sync Error:", e); 
       setProductos([]);
     } finally { 
       setLoading(false); 
@@ -166,6 +156,34 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     setCurrentStep('cart');
   };
 
+  const updateCartQuantity = (id: number, delta: number) => {
+    setCart(prev => prev.map(item => item.producto.id === id ? { ...item, cantidad: Math.max(0, item.cantidad + delta) } : item).filter(item => item.cantidad > 0));
+  };
+
+  const cartTotal = cart.reduce((sum, item) => sum + (item.producto.precio * item.cantidad), 0);
+
+  const handleFinishOrder = async () => {
+    setIsOrderLoading(true);
+    // Simulación de envío de pedido por WhatsApp
+    const message = `*NUEVO PEDIDO - ${config.nombreComercial || config.code}*\n\n` +
+      `*Cliente:* ${clientData.nombre}\n` +
+      `*Teléfono:* ${clientData.telefono}\n` +
+      `*Tipo:* ${deliveryType === 'recojo' ? 'Recojo en Sede (' + clientData.sede + ')' : 'Delivery'}\n` +
+      `*Dirección:* ${deliveryType === 'delivery' ? clientData.direccion : 'N/A'}\n` +
+      `*Pago:* ${paymentMethod.toUpperCase()}\n\n` +
+      `*PRODUCTOS:*\n` +
+      cart.map(i => `• ${i.cantidad}x ${i.producto.nombre} - S/ ${(i.producto.precio * i.cantidad).toFixed(2)}`).join('\n') +
+      `\n\n*TOTAL: S/ ${cartTotal.toFixed(2)}*`;
+
+    const waNumber = config.whatsappNumbers?.split(',')[0].trim() || '51975615244';
+    const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
+    
+    // Aquí podrías guardar en Supabase si fuera necesario
+    window.open(waUrl, '_blank');
+    setCurrentStep('success');
+    setIsOrderLoading(false);
+  };
+
   const bizIcons = {
     pharmacy: { main: Pill, label: 'Farmacia', catIcon: Beaker },
     veterinary: { main: PawPrint, label: 'Veterinaria', catIcon: PawPrint },
@@ -174,8 +192,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   }[bizType];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
       
+      {/* Header */}
       <header className="bg-white/95 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -194,11 +213,12 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           </div>
           <button onClick={() => { setIsCartOpen(true); setCurrentStep('cart'); }} className="relative p-4 bg-slate-900 text-white rounded-[1.5rem] shadow-xl hover:scale-105 active:scale-95 transition-all">
             <ShoppingCart className="w-5 h-5" />
-            {cart.length > 0 && <span className="absolute -top-1 -right-1 text-white text-[9px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white animate-pulse" style={{backgroundColor: colorA}}>{cart.length}</span>}
+            {cart.length > 0 && <span className="absolute -top-1 -right-1 text-white text-[9px] font-black w-7 h-7 rounded-full flex items-center justify-center border-2 border-white animate-pulse" style={{backgroundColor: colorA}}>{cart.length}</span>}
           </button>
         </div>
       </header>
 
+      {/* Hero / Slides */}
       <div className="px-6 pt-6">
         <div className="max-w-7xl mx-auto overflow-hidden rounded-[3rem] shadow-2xl relative h-[220px] md:h-[450px]">
           {slides.map((slide: any, idx) => (
@@ -217,6 +237,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         </div>
       </div>
 
+      {/* Categorías */}
       <div className="w-full mt-10 px-6 overflow-x-auto no-scrollbar scroll-smooth">
          <div className="max-w-7xl mx-auto flex items-center gap-4 min-w-max pb-4">
             {availableCategories.map(cat => (
@@ -227,6 +248,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
          </div>
       </div>
 
+      {/* Listado de Productos */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-8 md:p-12">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-6">
@@ -263,6 +285,208 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
+      {/* Modal Detalle de Producto */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 md:p-12">
+           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl animate-in fade-in" onClick={() => setSelectedProduct(null)}></div>
+           <div className="relative bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in duration-300">
+              <div className="w-full md:w-1/2 h-64 md:h-auto bg-slate-50 relative overflow-hidden">
+                 {selectedProduct.imagen ? <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="w-full h-full object-cover" /> : <Package className="w-24 h-24 text-slate-200 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>}
+                 <button onClick={() => setSelectedProduct(null)} className="absolute top-6 left-6 p-4 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-2xl text-white transition-all"><ArrowLeft className="w-6 h-6"/></button>
+              </div>
+              <div className="flex-1 p-8 md:p-14 flex flex-col justify-between overflow-y-auto max-h-[70vh] md:max-h-none">
+                 <div className="space-y-8">
+                    <div className="flex justify-between items-start">
+                       <div>
+                          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-600 mb-2 block">{selectedProduct.categoria}</span>
+                          <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter leading-none">{selectedProduct.nombre}</h2>
+                       </div>
+                       <div className="text-right">
+                          <p className="text-4xl font-black text-slate-900">S/ {selectedProduct.precio.toFixed(2)}</p>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Precio Online</p>
+                       </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Marca / Lab</p><p className="font-bold text-slate-700">{selectedProduct.marca || 'Genérico'}</p></div>
+                       <div className="p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Reg. Sanitario</p><p className="font-bold text-slate-700">{selectedProduct.registro_sanitario || 'S/N'}</p></div>
+                    </div>
+
+                    <div className="space-y-4">
+                       <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-3"><Info className="w-4 h-4 text-brand-500" /> Descripción del Producto</h4>
+                       <p className="text-sm font-bold text-slate-600 leading-relaxed uppercase">{selectedProduct.descripcion_venta || 'Información detallada no disponible en este momento.'}</p>
+                    </div>
+
+                    {selectedProduct.uso_sugerido && (
+                       <div className="p-8 bg-brand-50 rounded-[2rem] border border-brand-100 space-y-3">
+                          <h4 className="text-[10px] font-black text-brand-700 uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-4 h-4" /> Uso Sugerido</h4>
+                          <p className="text-xs font-black text-brand-900 leading-relaxed uppercase">{selectedProduct.uso_sugerido}</p>
+                       </div>
+                    )}
+                 </div>
+
+                 <div className="mt-12 pt-10 border-t border-slate-100">
+                    <button onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); }} className="w-full py-6 text-white rounded-[2rem] font-black uppercase text-sm tracking-[0.2em] shadow-2xl flex items-center justify-center gap-4 transition-all hover:scale-105 active:scale-95" style={{backgroundColor: brandColor}}>
+                       <ShoppingCart className="w-6 h-6" /> Agregar a mi pedido
+                    </button>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Drawer Carrito / Checkout */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-[120] flex justify-end">
+           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setIsCartOpen(false)}></div>
+           <div className="relative bg-white w-full max-w-md h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-500">
+              
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                 <div className="flex items-center gap-4">
+                    <div className="p-3 bg-slate-900 text-white rounded-2xl"><ShoppingCart className="w-6 h-6"/></div>
+                    <div><h3 className="font-black text-xl uppercase tracking-tighter">Mi Pedido</h3><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{cart.length} Artículos</p></div>
+                 </div>
+                 <button onClick={() => setIsCartOpen(false)} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-all"><X className="w-6 h-6"/></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-8 space-y-6">
+                 {currentStep === 'cart' ? (
+                    cart.length === 0 ? (
+                       <div className="h-full flex flex-col items-center justify-center text-center space-y-6 opacity-30 py-20">
+                          <ShoppingBag className="w-20 h-20 text-slate-200" />
+                          <div className="space-y-2">
+                             <h4 className="font-black text-lg uppercase">Carrito Vacío</h4>
+                             <p className="text-xs font-bold uppercase">Agrega productos para continuar</p>
+                          </div>
+                          <button onClick={() => setIsCartOpen(false)} className="px-10 py-5 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest">Explorar Catálogo</button>
+                       </div>
+                    ) : (
+                       <div className="space-y-4">
+                          {cart.map(item => (
+                             <div key={item.producto.id} className="flex gap-4 p-4 bg-slate-50 rounded-[1.5rem] border border-slate-100">
+                                <div className="w-16 h-16 bg-white rounded-xl overflow-hidden shrink-0 border border-slate-200">{item.producto.imagen ? <img src={`data:image/png;base64,${item.producto.imagen}`} className="w-full h-full object-cover" /> : <Package className="w-6 h-6 text-slate-100" />}</div>
+                                <div className="flex-1 min-w-0">
+                                   <p className="font-black text-xs uppercase text-slate-800 truncate">{item.producto.nombre}</p>
+                                   <p className="text-[10px] font-black text-brand-600 mt-1">S/ {item.producto.precio.toFixed(2)}</p>
+                                   <div className="flex items-center gap-3 mt-3">
+                                      <button onClick={() => updateCartQuantity(item.producto.id, -1)} className="p-1.5 bg-white rounded-lg border border-slate-200 text-slate-400 hover:text-red-500"><Minus className="w-3.5 h-3.5"/></button>
+                                      <span className="font-black text-xs w-6 text-center">{item.cantidad}</span>
+                                      <button onClick={() => updateCartQuantity(item.producto.id, 1)} className="p-1.5 bg-white rounded-lg border border-slate-200 text-slate-400 hover:text-brand-600"><Plus className="w-3.5 h-3.5"/></button>
+                                   </div>
+                                </div>
+                                <button onClick={() => updateCartQuantity(item.producto.id, -item.cantidad)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                             </div>
+                          ))}
+                       </div>
+                    )
+                 ) : currentStep === 'details' ? (
+                    <div className="space-y-8">
+                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Datos de Entrega</h4>
+                       <div className="space-y-4">
+                          <input type="text" placeholder="Nombre Completo" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black uppercase outline-none focus:bg-white" value={clientData.nombre} onChange={e => setClientData({...clientData, nombre: e.target.value})} />
+                          <input type="tel" placeholder="WhatsApp / Celular" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black outline-none focus:bg-white" value={clientData.telefono} onChange={e => setClientData({...clientData, telefono: e.target.value})} />
+                          
+                          <div className="grid grid-cols-2 gap-2">
+                             <button onClick={() => setDeliveryType('recojo')} className={`p-4 rounded-2xl font-black text-[9px] uppercase border-2 flex flex-col items-center gap-2 transition-all ${deliveryType === 'recojo' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 bg-slate-50 text-slate-400'}`}><MapPin className="w-4 h-4"/> Recojo</button>
+                             <button onClick={() => setDeliveryType('delivery')} className={`p-4 rounded-2xl font-black text-[9px] uppercase border-2 flex flex-col items-center gap-2 transition-all ${deliveryType === 'delivery' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 bg-slate-50 text-slate-400'}`}><Truck className="w-4 h-4"/> Delivery</button>
+                          </div>
+
+                          {deliveryType === 'recojo' ? (
+                             <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black uppercase outline-none" value={clientData.sede} onChange={e => setClientData({...clientData, sede: e.target.value})}>
+                                <option value="">Selecciona Sede de Recojo</option>
+                                {(config.sedes_recojo || []).map(s => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
+                                <option value="Principal">Sede Principal</option>
+                             </select>
+                          ) : (
+                             <textarea placeholder="Dirección Exacta / Referencia" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black uppercase h-24 outline-none focus:bg-white" value={clientData.direccion} onChange={e => setClientData({...clientData, direccion: e.target.value})} />
+                          )}
+                       </div>
+                    </div>
+                 ) : currentStep === 'payment' ? (
+                    <div className="space-y-8">
+                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Finalizar Pago</h4>
+                       <div className="space-y-6">
+                          <div className="p-8 bg-slate-900 text-white rounded-[2rem] text-center space-y-2">
+                             <p className="text-[10px] font-black uppercase tracking-widest opacity-50">Monto Final</p>
+                             <h3 className="text-4xl font-black">S/ {cartTotal.toFixed(2)}</h3>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                             <button onClick={() => setPaymentMethod('yape')} className={`p-6 rounded-[1.5rem] border-2 transition-all flex flex-col items-center gap-2 ${paymentMethod === 'yape' ? 'border-[#742284] bg-[#742284]/5 text-[#742284]' : 'border-slate-100 opacity-60'}`}>
+                                <div className="w-10 h-10 bg-[#742284] rounded-xl flex items-center justify-center text-white font-black">Y</div>
+                                <span className="text-[10px] font-black uppercase">Yape</span>
+                             </button>
+                             <button onClick={() => setPaymentMethod('plin')} className={`p-6 rounded-[1.5rem] border-2 transition-all flex flex-col items-center gap-2 ${paymentMethod === 'plin' ? 'border-[#00A9E0] bg-[#00A9E0]/5 text-[#00A9E0]' : 'border-slate-100 opacity-60'}`}>
+                                <div className="w-10 h-10 bg-[#00A9E0] rounded-xl flex items-center justify-center text-white font-black">P</div>
+                                <span className="text-[10px] font-black uppercase">Plin</span>
+                             </button>
+                          </div>
+
+                          <div className="p-8 border-2 border-dashed border-slate-200 rounded-[2rem] space-y-4">
+                             <div className="flex justify-center mb-4"><div className="w-48 h-48 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-300 font-black text-[10px] uppercase text-center p-6 border border-slate-200">Aquí se mostrará el QR de {paymentMethod.toUpperCase()}</div></div>
+                             <div className="text-center space-y-1">
+                                <p className="text-[10px] font-black text-slate-400 uppercase">A nombre de:</p>
+                                <p className="font-black text-slate-800 uppercase text-xs">{paymentMethod === 'yape' ? config.yapeName || 'ADMINISTRADOR' : config.plinName || 'ADMINISTRADOR'}</p>
+                                <p className="font-black text-brand-600 text-lg">{paymentMethod === 'yape' ? config.yapeNumber || '9XX XXX XXX' : config.plinNumber || '9XX XXX XXX'}</p>
+                             </div>
+                          </div>
+                          
+                          <p className="text-[9px] font-bold text-slate-400 text-center uppercase leading-relaxed italic px-6">Al dar click en finalizar, se te redirigirá a WhatsApp para enviar el voucher y confirmar tu pedido.</p>
+                       </div>
+                    </div>
+                 ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-center space-y-8 animate-in zoom-in">
+                       <div className="w-24 h-24 bg-brand-500 text-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-brand-200"><CheckCircle2 className="w-12 h-12 animate-bounce"/></div>
+                       <div className="space-y-2">
+                          <h4 className="text-2xl font-black uppercase tracking-tighter">¡Pedido Generado!</h4>
+                          <p className="text-xs font-bold text-slate-400 uppercase max-w-[250px] mx-auto">Tu comprobante está listo. Envía el mensaje de WhatsApp para que el establecimiento procese tu compra.</p>
+                       </div>
+                       <button onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); }} className="px-10 py-5 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all hover:scale-105 active:scale-95">Regresar a la Tienda</button>
+                    </div>
+                 )}
+              </div>
+
+              {currentStep !== 'success' && cart.length > 0 && (
+                 <div className="p-8 border-t border-slate-100 space-y-6">
+                    <div className="flex justify-between items-end">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subtotal del Pedido</p>
+                       <p className="text-2xl font-black text-slate-900">S/ {cartTotal.toFixed(2)}</p>
+                    </div>
+
+                    <div className="flex gap-2">
+                       {currentStep !== 'cart' && <button onClick={() => setCurrentStep(currentStep === 'payment' ? 'details' : 'cart')} className="p-5 bg-slate-100 rounded-2xl text-slate-500 hover:bg-slate-200"><ArrowLeft className="w-5 h-5"/></button>}
+                       <button 
+                         onClick={() => {
+                            if (currentStep === 'cart') setCurrentStep('details');
+                            else if (currentStep === 'details') {
+                               if (!clientData.nombre || !clientData.telefono || (deliveryType === 'recojo' && !clientData.sede) || (deliveryType === 'delivery' && !clientData.direccion)) {
+                                  alert("Por favor completa todos tus datos.");
+                                  return;
+                               }
+                               setCurrentStep('payment');
+                            }
+                            else if (currentStep === 'payment') handleFinishOrder();
+                         }} 
+                         disabled={isOrderLoading}
+                         className="flex-1 py-5 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-95" 
+                         style={{backgroundColor: brandColor}}
+                       >
+                          {isOrderLoading ? <Loader2 className="animate-spin w-5 h-5"/> : (
+                             <>
+                               {currentStep === 'cart' ? 'Continuar con Pedido' : currentStep === 'details' ? 'Elegir Pago' : 'Confirmar en WhatsApp'} 
+                               <ChevronRight className="w-5 h-5" />
+                             </>
+                          )}
+                       </button>
+                    </div>
+                 </div>
+              )}
+
+           </div>
+        </div>
+      )}
+
+      {/* Footer */}
       <footer className="mt-auto py-24 relative overflow-hidden" style={{backgroundColor: brandColor}}>
         <div className="absolute inset-0 bg-black/20"></div>
         <div className="max-w-7xl mx-auto px-10 flex flex-col md:flex-row justify-between items-center gap-16 relative z-10 text-white">
