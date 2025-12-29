@@ -97,6 +97,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         color_secundario: client.colorSecundario,
         color_acento: client.colorAcento, 
         tienda_habilitada: client.showStore,
+        // Fix: Use tiendaCategoriaNombre property from ClientConfig interface
         tienda_categoria_nombre: client.tiendaCategoriaNombre,
         productos_ocultos: client.hiddenProducts || [],
         categorias_ocultas: client.hiddenCategories || [],
@@ -162,7 +163,8 @@ export const saveProductExtra = async (extra: ProductoExtra) => {
         odoo_id: extra.odoo_id, 
         empresa_code: extra.empresa_code, 
         descripcion_lemon: extra.descripcion_lemon,
-        instrucciones_lemon: extra.instrucciones_lemon
+        instrucciones_lemon: extra.instrucciones_lemon,
+        categoria_personalizada: extra.categoria_personalizada
       }
     ], { onConflict: 'odoo_id,empresa_code' });
   return { success: !error, error };

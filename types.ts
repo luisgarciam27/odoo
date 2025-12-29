@@ -7,8 +7,8 @@ export interface Producto {
   categoria?: string;
   stock?: number;
   imagen?: string; 
-  descripcion_venta?: string; // Descripción limpia
-  descripcion_raw?: string;   // Texto original de Odoo
+  descripcion_venta?: string; 
+  descripcion_raw?: string;   
   registro_sanitario?: string;
   laboratorio?: string;
   marca?: string;
@@ -19,6 +19,7 @@ export interface Producto {
   especie?: string; 
   peso_rango?: string;
   duracion_sesion?: string; 
+  categoria_personalizada?: string; // Nueva propiedad para la vista
 }
 
 export interface PedidoTienda {
@@ -37,6 +38,7 @@ export interface ProductoExtra {
   empresa_code: string;
   descripcion_lemon?: string;
   instrucciones_lemon?: string;
+  categoria_personalizada?: string; // Campo para categorización propia
   ficha_tecnica_json?: any;
 }
 
