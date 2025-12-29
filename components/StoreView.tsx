@@ -26,6 +26,7 @@ type StoreStep = 'cart' | 'details' | 'payment' | 'processing' | 'success';
 const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -102,35 +103,37 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     }
   }, [slides.length]);
 
-  const fetchProducts = async () => {
+  /**
+   * Carga de productos con "Fuerza Bruta" para Odoo 14 y 17.
+   * Si no hay resultados, elimina progresivamente todos los filtros.
+   */
+  const fetchProducts = async (forceGlobal = false) => {
     if (!session) return;
     setLoading(true);
+    if (forceGlobal) setIsRetrying(true);
+    
     const client = new OdooClient(session.url, session.db, true);
     try {
       const extras = await getProductExtras(config.code);
+      const fields = ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'];
       
-      // ESTRATEGIA MULTI-INTENTO PARA ODOO 14/17
-      // 1. Intentar con filtro de empresa y activo (Estándar)
-      let domain: any[] = [['sale_ok', '=', true], ['active', '=', true]];
-      if (session.companyId) {
-          domain.push('|');
-          domain.push(['company_id', '=', session.companyId]);
-          domain.push(['company_id', '=', false]);
+      let data = [];
+
+      if (!forceGlobal) {
+        // Intento 1: Filtro estándar (Sale_ok + Active + Company)
+        let domain: any[] = [['sale_ok', '=', true], ['active', '=', true]];
+        if (session.companyId) {
+            domain.push('|');
+            domain.push(['company_id', '=', session.companyId]);
+            domain.push(['company_id', '=', false]);
+        }
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, { limit: 1000, order: 'display_name asc' });
       }
 
-      const fields = ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'];
-      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, fields, { limit: 1000, order: 'display_name asc' });
-      
-      // 2. Si falló, intentar búsqueda global (Sin filtro de empresa)
-      if (!data || data.length === 0) {
-          console.warn("[LemonBI] Intento 1 sin resultados. Probando búsqueda global...");
-          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 500 });
-      }
-      
-      // 3. Si falló el global, intentar con Odoo 14 legacy fields si es necesario (qty_available a veces no está en search_read simple)
-      if (!data || data.length === 0) {
-          console.warn("[LemonBI] Intento 2 sin resultados. Probando búsqueda mínima...");
-          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], ['display_name', 'list_price', 'categ_id', 'image_128'], { limit: 300 });
+      // Intento 2: Si está vacío o es forzado, quitamos TODA restricción excepto 'sale_ok'
+      if (!data || data.length === 0 || forceGlobal) {
+        console.warn("[LemonBI] Aplicando Búsqueda de Catálogo Global Total...");
+        data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], fields, { limit: 800 });
       }
 
       setProductos((data || []).map((p: any) => {
@@ -154,9 +157,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         };
       }));
     } catch (e) { 
-      console.error("Error sincronización Odoo:", e); 
+      console.error("Error crítico Odoo:", e); 
     } finally { 
       setLoading(false); 
+      setIsRetrying(false);
     }
   };
 
@@ -352,9 +356,16 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           <div className="py-24 text-center flex flex-col items-center gap-8 animate-in fade-in zoom-in">
              <div className="w-32 h-32 bg-slate-50 rounded-full flex items-center justify-center border-4 border-dashed border-slate-100"><SearchX className="w-12 h-12 text-slate-200" /></div>
              <div className="space-y-4 max-w-sm">
-                <h3 className="text-xl font-black uppercase tracking-widest text-slate-400">No hay productos visibles</h3>
-                <p className="text-[10px] font-bold text-slate-400 leading-relaxed uppercase tracking-widest px-8">Asegúrate de que los productos tengan marcada la opción "Puede ser Vendido" en Odoo.</p>
-                <button onClick={fetchProducts} className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[9px] tracking-widest flex items-center gap-3 mx-auto shadow-xl hover:scale-105 transition-all"><RefreshCw className="w-4 h-4" /> Reintentar Carga</button>
+                <h3 className="text-xl font-black uppercase tracking-widest text-slate-400">Sin Productos Visibles</h3>
+                <p className="text-[10px] font-bold text-slate-400 leading-relaxed uppercase tracking-widest px-8">La búsqueda inicial no arrojó resultados para esta sucursal.</p>
+                <button 
+                  onClick={() => fetchProducts(true)} 
+                  disabled={isRetrying}
+                  className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[9px] tracking-widest flex items-center gap-3 mx-auto shadow-xl hover:scale-105 transition-all"
+                >
+                  {isRetrying ? <Loader2 className="w-4 h-4 animate-spin"/> : <Wand2 className="w-4 h-4" />}
+                  Búsqueda Global (Odoo 14/17)
+                </button>
              </div>
           </div>
         ) : (
