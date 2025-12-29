@@ -246,6 +246,25 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col relative overflow-x-hidden selection:bg-brand-100">
       
+      <style>{`
+        @keyframes kenburns {
+          from { transform: scale(1); }
+          to { transform: scale(1.15); }
+        }
+        @keyframes floating-blob {
+          0% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+          100% { transform: translate(0, 0) scale(1); }
+        }
+        .animate-kenburns {
+          animation: kenburns 12s linear infinite alternate;
+        }
+        .animate-blob {
+          animation: floating-blob 10s infinite ease-in-out;
+        }
+      `}</style>
+
       <div className="bg-slate-900 text-white py-2 z-[70] relative hidden md:block overflow-hidden h-9">
          <div className="max-w-7xl mx-auto flex justify-center items-center h-full">
             {tickerMessages.map((msg, i) => (
@@ -311,17 +330,23 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       <div className="h-[76px] md:h-[110px]"></div>
 
-      {/* SECCIÓN DEL SLIDER PRINCIPAL - MEJORADO */}
+      {/* SECCIÓN DEL SLIDER PRINCIPAL - MEJORADO CON KEN BURNS Y ALEGRÍA */}
       {!loading && slideImages.length > 0 && !searchTerm && (
-        <section className="w-full aspect-[21/9] md:aspect-[3/1] max-h-[600px] relative overflow-hidden bg-slate-100 z-10">
+        <section className="w-full aspect-[21/9] md:aspect-[3/1] max-h-[600px] relative overflow-hidden bg-white z-10 group">
+           {/* Decoración alegre de fondo */}
+           <div className="absolute top-10 left-10 w-32 h-32 bg-brand-200/40 blur-3xl rounded-full animate-blob"></div>
+           <div className="absolute bottom-20 right-20 w-48 h-48 bg-blue-200/30 blur-3xl rounded-full animate-blob [animation-delay:2s]"></div>
+
            {slideImages.map((img, idx) => (
              <div 
                key={idx} 
-               className={`absolute inset-0 transition-all duration-1000 cubic-bezier(0.4, 0, 0.2, 1) transform ${idx === currentSlide ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'}`}
+               className={`absolute inset-0 transition-all duration-[1200ms] cubic-bezier(0.34, 1.56, 0.64, 1) transform ${idx === currentSlide ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none'}`}
              >
-                <img src={img} className="w-full h-full object-cover" alt={`Slide ${idx}`} />
-                {/* Overlay muy sutil para mejorar contraste de flechas sin ensuciar la imagen */}
-                <div className="absolute inset-0 bg-black/5"></div>
+                <div className="w-full h-full overflow-hidden">
+                   <img src={img} className={`w-full h-full object-cover ${idx === currentSlide ? 'animate-kenburns' : ''}`} alt={`Slide ${idx}`} />
+                </div>
+                {/* Overlay muy sutil para mejorar contraste sin tapar la alegría de la imagen */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent"></div>
              </div>
            ))}
            
@@ -329,20 +354,24 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
              <>
                 <button 
                   onClick={() => setCurrentSlide(prev => (prev - 1 + slideImages.length) % slideImages.length)} 
-                  className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 p-3 md:p-5 bg-white/20 backdrop-blur-md text-white rounded-full border border-white/30 hover:bg-white/40 transition-all z-20 group shadow-2xl"
+                  className="absolute left-6 top-1/2 -translate-y-1/2 p-4 bg-white/40 backdrop-blur-xl text-slate-800 rounded-full border border-white/60 hover:bg-brand-500 hover:text-white hover:scale-110 transition-all z-20 shadow-2xl opacity-0 group-hover:opacity-100"
                 >
-                   <ChevronLeft className="w-5 h-5 md:w-8 md:h-8 group-hover:-translate-x-1 transition-transform"/>
+                   <ChevronLeft className="w-6 h-6"/>
                 </button>
                 <button 
                   onClick={() => setCurrentSlide(prev => (prev + 1) % slideImages.length)} 
-                  className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 p-3 md:p-5 bg-white/20 backdrop-blur-md text-white rounded-full border border-white/30 hover:bg-white/40 transition-all z-20 group shadow-2xl"
+                  className="absolute right-6 top-1/2 -translate-y-1/2 p-4 bg-white/40 backdrop-blur-xl text-slate-800 rounded-full border border-white/60 hover:bg-brand-500 hover:text-white hover:scale-110 transition-all z-20 shadow-2xl opacity-0 group-hover:opacity-100"
                 >
-                   <ChevronRight className="w-5 h-5 md:w-8 md:h-8 group-hover:translate-x-1 transition-transform"/>
+                   <ChevronRight className="w-6 h-6"/>
                 </button>
                 
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-3 z-20">
                     {slideImages.map((_, i) => (
-                        <button key={i} onClick={() => setCurrentSlide(i)} className={`h-1 rounded-full transition-all duration-500 ${i === currentSlide ? 'w-10 bg-brand-500' : 'w-3 bg-white/50'}`}></button>
+                        <button 
+                          key={i} 
+                          onClick={() => setCurrentSlide(i)} 
+                          className={`h-2 rounded-full transition-all duration-700 cubic-bezier(0.34, 1.56, 0.64, 1) ${i === currentSlide ? 'w-16 bg-brand-500 shadow-lg scale-110' : 'w-3 bg-white/80 hover:bg-white'}`}
+                        ></button>
                     ))}
                 </div>
              </>
