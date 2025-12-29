@@ -35,12 +35,12 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose, init
   };
 
   const handleReset = () => {
-    if(confirm('¿Restaurar configuración por defecto?')) {
+    if(confirm('¿Restaurar configuración de FARMARAPI S.A.C. por defecto?')) {
         setConfig({
-            url: 'https://igp.facturaclic.pe/',
-            db: 'vida_master',
-            username: 'soporte@facturaclic.pe',
-            apiKey: '7a823daf061832dd8f01876a714da94f7e9c9355'
+            url: 'https://baltodano.facturaclic.pe/',
+            db: 'baltodano_master',
+            username: 'luis@gaorsystem.com',
+            apiKey: '73ecb4af72c84b7dddf3f64b58c2c2ccd00a7411'
         });
     }
   };
@@ -153,7 +153,7 @@ const OdooConfigModal: React.FC<OdooConfigModalProps> = ({ isOpen, onClose, init
                 type="button"
                 className="px-4 py-2.5 border border-slate-200 text-slate-500 font-bold rounded-xl hover:bg-slate-50 transition-colors text-xs uppercase tracking-wide flex items-center gap-2"
                 onClick={handleReset}
-                title="Restaurar valores por defecto"
+                title="Restaurar valores de Farmarapi"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
