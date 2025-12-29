@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShoppingCart, Package, Search, X, Image as ImageIcon, ArrowLeft, 
@@ -7,9 +8,9 @@ import {
   Stethoscope, Footprints, PawPrint, Calendar, Wallet, CheckCircle2, Camera, ChevronRight,
   Loader2, BadgeCheck, Send, UserCheck, Sparkles, Zap, Award, HeartHandshake, ShieldAlert,
   RefreshCw, Trash2, CreditCard, Building2, Smartphone, CheckCircle, QrCode, Music2, Upload, Briefcase,
-  Dog, Cat, Syringe, Tag, Layers, SearchX, Wand2, Boxes, Phone, ShoppingBag
+  Dog, Cat, Syringe, Tag, Layers, SearchX, Wand2, Boxes, Phone, ShoppingBag, ExternalLink, Navigation
 } from 'lucide-react';
-import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
+import { Producto, CartItem, OdooSession, ClientConfig, SedeStore } from '../types';
 import { OdooClient } from '../services/odoo';
 import { getProductExtras } from '../services/clientManager';
 import { supabase } from '../services/supabaseClient';
@@ -35,8 +36,9 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   
   const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin' | 'efectivo'>('yape');
   const [deliveryType, setDeliveryType] = useState<'recojo' | 'delivery'>('recojo');
-  const [clientData, setClientData] = useState({ nombre: '', telefono: '', direccion: '', sede: '' });
+  const [clientData, setClientData] = useState({ nombre: '', telefono: '', direccion: '', sedeId: '' });
   const [isOrderLoading, setIsOrderLoading] = useState(false);
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
 
   const brandColor = config?.colorPrimario || '#84cc16'; 
   const colorA = config?.colorAcento || '#0ea5e9';
@@ -162,14 +164,38 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
   const cartTotal = cart.reduce((sum, item) => sum + (item.producto.precio * item.cantidad), 0);
 
+  const getCurrentLocation = () => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+        alert("Ubicación capturada correctamente.");
+      }, (error) => {
+        alert("No se pudo obtener la ubicación. Por favor, asegúrate de dar permisos.");
+      });
+    } else {
+      alert("Geolocalización no disponible en este navegador.");
+    }
+  };
+
   const handleFinishOrder = async () => {
     setIsOrderLoading(true);
-    // Simulación de envío de pedido por WhatsApp
+    
+    const selectedSede = (config.sedes_recojo || []).find(s => s.id === clientData.sedeId);
+    const sedeName = selectedSede ? selectedSede.nombre : 'Sede Principal';
+    
+    let locationText = '';
+    if (deliveryType === 'delivery' && userLocation) {
+      locationText = `\n📍 *Ubicación Exacta:* https://www.google.com/maps?q=${userLocation.lat},${userLocation.lng}`;
+    }
+
     const message = `*NUEVO PEDIDO - ${config.nombreComercial || config.code}*\n\n` +
       `*Cliente:* ${clientData.nombre}\n` +
       `*Teléfono:* ${clientData.telefono}\n` +
-      `*Tipo:* ${deliveryType === 'recojo' ? 'Recojo en Sede (' + clientData.sede + ')' : 'Delivery'}\n` +
-      `*Dirección:* ${deliveryType === 'delivery' ? clientData.direccion : 'N/A'}\n` +
+      `*Tipo:* ${deliveryType === 'recojo' ? 'Recojo en Sede (' + sedeName + ')' : 'Delivery'}\n` +
+      `*Dirección:* ${deliveryType === 'delivery' ? clientData.direccion : 'N/A'}${locationText}\n` +
       `*Pago:* ${paymentMethod.toUpperCase()}\n\n` +
       `*PRODUCTOS:*\n` +
       cart.map(i => `• ${i.cantidad}x ${i.producto.nombre} - S/ ${(i.producto.precio * i.cantidad).toFixed(2)}`).join('\n') +
@@ -178,7 +204,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     const waNumber = config.whatsappNumbers?.split(',')[0].trim() || '51975615244';
     const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
     
-    // Aquí podrías guardar en Supabase si fuera necesario
     window.open(waUrl, '_blank');
     setCurrentStep('success');
     setIsOrderLoading(false);
@@ -190,6 +215,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     podiatry: { main: Footprints, label: 'Podología', catIcon: Footprints },
     general: { main: Briefcase, label: 'Comercio', catIcon: Package }
   }[bizType];
+
+  const selectedSede = useMemo(() => 
+    (config.sedes_recojo || []).find(s => s.id === clientData.sedeId)
+  , [config.sedes_recojo, clientData.sedeId]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
@@ -392,13 +421,40 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                           </div>
 
                           {deliveryType === 'recojo' ? (
-                             <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black uppercase outline-none" value={clientData.sede} onChange={e => setClientData({...clientData, sede: e.target.value})}>
-                                <option value="">Selecciona Sede de Recojo</option>
-                                {(config.sedes_recojo || []).map(s => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
-                                <option value="Principal">Sede Principal</option>
-                             </select>
+                             <div className="space-y-4">
+                               <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black uppercase outline-none" value={clientData.sedeId} onChange={e => setClientData({...clientData, sedeId: e.target.value})}>
+                                  <option value="">Selecciona Sede de Recojo</option>
+                                  {(config.sedes_recojo || []).map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                               </select>
+                               {selectedSede && (
+                                 <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-top-2">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Dirección de Sede:</p>
+                                    <p className="text-xs font-bold text-slate-800 uppercase mb-3">{selectedSede.direccion}</p>
+                                    <a 
+                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedSede.direccion)}`} 
+                                      target="_blank" 
+                                      rel="noreferrer"
+                                      className="flex items-center gap-2 text-brand-600 font-black text-[10px] uppercase hover:underline"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5"/> Ver en Google Maps
+                                    </a>
+                                 </div>
+                               )}
+                             </div>
                           ) : (
-                             <textarea placeholder="Dirección Exacta / Referencia" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black uppercase h-24 outline-none focus:bg-white" value={clientData.direccion} onChange={e => setClientData({...clientData, direccion: e.target.value})} />
+                             <div className="space-y-4">
+                                <textarea placeholder="Dirección Exacta / Referencia" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black uppercase h-24 outline-none focus:bg-white" value={clientData.direccion} onChange={e => setClientData({...clientData, direccion: e.target.value})} />
+                                <button 
+                                  onClick={getCurrentLocation}
+                                  className={`w-full p-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 border-2 transition-all ${userLocation ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-brand-200'}`}
+                                >
+                                  {userLocation ? <CheckCircle className="w-4 h-4"/> : <Navigation className="w-4 h-4"/>}
+                                  {userLocation ? 'Ubicación Capturada' : 'Marcar mi Ubicación Actual'}
+                                </button>
+                                {userLocation && (
+                                  <p className="text-[9px] font-black text-brand-600 uppercase text-center animate-pulse">✓ Coordenadas listas para el delivery</p>
+                                )}
+                             </div>
                           )}
                        </div>
                     </div>
@@ -422,9 +478,13 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                              </button>
                           </div>
 
-                          <div className="p-8 border-2 border-dashed border-slate-200 rounded-[2rem] space-y-4">
-                             <div className="flex justify-center mb-4"><div className="w-48 h-48 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-300 font-black text-[10px] uppercase text-center p-6 border border-slate-200">Aquí se mostrará el QR de {paymentMethod.toUpperCase()}</div></div>
-                             <div className="text-center space-y-1">
+                          <div className="p-8 border-2 border-dashed border-slate-200 rounded-[2rem] space-y-4 text-center">
+                             {paymentMethod === 'yape' ? (
+                                config.yapeQR ? <img src={config.yapeQR} className="w-48 h-48 mx-auto rounded-2xl shadow-sm border" /> : <div className="w-48 h-48 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-300 font-black text-[10px] uppercase text-center p-6 border border-slate-200 mx-auto">Código QR Yape</div>
+                             ) : (
+                                config.plinQR ? <img src={config.plinQR} className="w-48 h-48 mx-auto rounded-2xl shadow-sm border" /> : <div className="w-48 h-48 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-300 font-black text-[10px] uppercase text-center p-6 border border-slate-200 mx-auto">Código QR Plin</div>
+                             )}
+                             <div className="space-y-1">
                                 <p className="text-[10px] font-black text-slate-400 uppercase">A nombre de:</p>
                                 <p className="font-black text-slate-800 uppercase text-xs">{paymentMethod === 'yape' ? config.yapeName || 'ADMINISTRADOR' : config.plinName || 'ADMINISTRADOR'}</p>
                                 <p className="font-black text-brand-600 text-lg">{paymentMethod === 'yape' ? config.yapeNumber || '9XX XXX XXX' : config.plinNumber || '9XX XXX XXX'}</p>
@@ -459,7 +519,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                          onClick={() => {
                             if (currentStep === 'cart') setCurrentStep('details');
                             else if (currentStep === 'details') {
-                               if (!clientData.nombre || !clientData.telefono || (deliveryType === 'recojo' && !clientData.sede) || (deliveryType === 'delivery' && !clientData.direccion)) {
+                               if (!clientData.nombre || !clientData.telefono || (deliveryType === 'recojo' && !clientData.sedeId) || (deliveryType === 'delivery' && !clientData.direccion)) {
                                   alert("Por favor completa todos tus datos.");
                                   return;
                                }

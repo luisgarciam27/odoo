@@ -2,6 +2,7 @@
   "name": "Lemon BI - Odoo Analytics & Store",
   "description": "Dashboard de analítica y tienda online integrada con Odoo v17",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "geolocation"
   ]
 }
