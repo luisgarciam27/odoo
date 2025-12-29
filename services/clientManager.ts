@@ -14,11 +14,12 @@ export const changeAdminPassword = (newPassword: string) => {
     localStorage.setItem(ADMIN_PWD_KEY, newPassword);
 };
 
-// Columnas introducidas en las últimas versiones que podrían no existir en instalaciones viejas
-const NEW_COLUMNS = [
+// Columnas introducidas recientemente. Si faltan en el DB, el sistema las omitirá para salvar el registro.
+const VOLATILE_COLUMNS = [
   'business_type', 'facebook_url', 'instagram_url', 'tiktok_url', 
   'footer_description', 'slide_images', 'quality_text', 'support_text', 
-  'categorias_ocultas', 'whatsapp_help_number'
+  'categorias_ocultas', 'whatsapp_help_number', 'productos_ocultos',
+  'tienda_habilitada', 'tienda_categoria_nombre', 'sedes_recojo', 'campos_medicos_visibles'
 ];
 
 const mapRowToConfig = (row: any): ClientConfig => ({
@@ -87,6 +88,10 @@ export const getClientByCode = async (code: string): Promise<ClientConfig | null
     }
 };
 
+/**
+ * Guarda el cliente con una estrategia de "limpieza de payload".
+ * Si detecta que faltan columnas en la tabla, las elimina del envío y reintenta.
+ */
 export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<{ success: boolean; message?: string }> => {
     let payload: any = {
         codigo_acceso: client.code,
@@ -125,36 +130,37 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         business_type: client.businessType
     };
 
-    const performSave = async (data: any) => {
+    const attemptSave = async (data: any): Promise<any> => {
         if (isNew) return await supabase.from('empresas').insert([data]);
         return await supabase.from('empresas').update(data).eq('codigo_acceso', client.code);
     };
 
     try {
-        let response = await performSave(payload);
+        let response = await attemptSave(payload);
         
-        // Si hay error de columna inexistente (42703), intentamos limpiar el payload y re-intentar
-        if (response.error && (response.error.code === '42703' || response.error.message.includes('column'))) {
-            console.warn("Detectadas columnas faltantes en Supabase. Aplicando guardado en modo compatibilidad...");
-            
-            // Extraer el nombre de la columna que causó el error
-            const match = response.error.message.match(/"(.*?)"/);
-            const missingCol = match ? match[1] : null;
+        // Si hay error de columna inexistente (código 42703)
+        let attempts = 0;
+        while (response.error && (response.error.code === '42703' || response.error.message.includes('column')) && attempts < 10) {
+            attempts++;
+            const errorMsg = response.error.message;
+            // PostgREST suele reportar "column empresas.business_type does not exist" o similar
+            const match = errorMsg.match(/column "?([^" ]+)"? does not exist/i);
+            const missingColFull = match ? match[1] : null;
+            const missingCol = missingColFull?.includes('.') ? missingColFull.split('.').pop() : missingColFull;
 
-            // Si sabemos qué columna falla, la quitamos. Si no, quitamos todas las "nuevas" por seguridad
-            const safePayload = { ...payload };
-            if (missingCol) {
-                delete safePayload[missingCol];
+            if (missingCol && payload.hasOwnProperty(missingCol)) {
+                console.warn(`[LemonBI] Omitiendo columna inexistente: ${missingCol}`);
+                delete payload[missingCol];
             } else {
-                NEW_COLUMNS.forEach(col => delete safePayload[col]);
+                // Si no podemos determinar la columna, quitamos todas las opcionales conocidas de una vez
+                VOLATILE_COLUMNS.forEach(col => delete payload[col]);
             }
-
-            response = await performSave(safePayload);
             
+            response = await attemptSave(payload);
             if (!response.error) {
                 return { 
                     success: true, 
-                    message: "Guardado exitoso (Modo Compatibilidad). Algunas funciones avanzadas requieren actualizar el esquema SQL en Supabase." 
+                    message: "¡Guardado exitoso! (Modo Compatibilidad activado por falta de columnas en Supabase)." 
                 };
             }
         }
@@ -162,7 +168,8 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         if (response.error) throw response.error;
         return { success: true };
     } catch (err: any) {
-        return { success: false, message: err.message };
+        console.error("Critical failure in saveClient:", err);
+        return { success: false, message: `Error en la base de datos: ${err.message}. Asegúrese de ejecutar el script SQL de reparación en Supabase.` };
     }
 };
 

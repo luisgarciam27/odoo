@@ -8,7 +8,7 @@ import {
   Stethoscope, Footprints, PawPrint, Calendar, Wallet, CheckCircle2, Camera, ChevronRight,
   Loader2, BadgeCheck, Send, UserCheck, Sparkles, Zap, Award, HeartHandshake, ShieldAlert,
   RefreshCw, Trash2, CreditCard, Building2, Smartphone, CheckCircle, QrCode, Music2, Upload, Briefcase,
-  Dog, Cat, Syringe, Tag, Layers, SearchX
+  Dog, Cat, Syringe, Tag, Layers, SearchX, Wand2
 } from 'lucide-react';
 import { Producto, CartItem, OdooSession, ClientConfig } from '../types';
 import { OdooClient } from '../services/odoo';
@@ -26,6 +26,7 @@ type StoreStep = 'cart' | 'details' | 'payment' | 'processing' | 'success';
 const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -102,40 +103,8 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     }
   }, [slides.length]);
 
-  const fetchProducts = async () => {
-    if (!session) return;
-    setLoading(true);
-    const client = new OdooClient(session.url, session.db, true);
-    try {
-      const extras = await getProductExtras(config.code);
-      
-      // DOMINIO MEJORADO: Incluye productos de la empresa O productos globales (company_id = false)
-      const domain: any[] = [['sale_ok', '=', true]];
-      if (session.companyId) {
-          domain.push('|');
-          domain.push(['company_id', '=', session.companyId]);
-          domain.push(['company_id', '=', false]);
-      }
-
-      const data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain, ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'], { limit: 1000, order: 'display_name asc' });
-      
-      if (!data || data.length === 0) {
-          console.warn("Odoo no devolvió productos con el filtro de empresa. Intentando búsqueda global...");
-          // Intento fallback sin restricción de empresa
-          const globalData = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'], { limit: 500 });
-          setProductos(mapOdooToProducts(globalData, extras));
-      } else {
-          setProductos(mapOdooToProducts(data, extras));
-      }
-    } catch (e) { 
-      console.error("Error cargando productos de Odoo:", e); 
-    } finally { 
-      setLoading(false); 
-    }
-  };
-
   const mapOdooToProducts = (data: any[], extras: any) => {
-    return data.map((p: any) => {
+    return (data || []).map((p: any) => {
         const extra = extras[p.id];
         const parsed = parseOdooDescription(p.description_sale);
         return {
@@ -157,13 +126,57 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     });
   }
 
+  /**
+   * Carga de productos con estrategia de búsqueda escalonada.
+   */
+  const fetchProducts = async (isManualRetry = false) => {
+    if (!session) return;
+    setLoading(true);
+    if (isManualRetry) setIsRetrying(true);
+    
+    const client = new OdooClient(session.url, session.db, true);
+    try {
+      const extras = await getProductExtras(config.code);
+      
+      // Intento 1: Filtrado por Empresa Actual + Globales (Estrategia Recomendada)
+      const domain1: any[] = [['sale_ok', '=', true]];
+      if (session.companyId) {
+          domain1.push('|');
+          domain1.push(['company_id', '=', session.companyId]);
+          domain1.push(['company_id', '=', false]);
+      }
+
+      let data = await client.searchRead(session.uid, session.apiKey, 'product.product', domain1, ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'], { limit: 1000, order: 'display_name asc' });
+      
+      // Intento 2: Si el Intento 1 falló, buscar productos SIN empresa asignada (Globales puros)
+      if (!data || data.length === 0) {
+          console.warn("[LemonBI] Intento 1 sin resultados. Probando búsqueda de productos globales...");
+          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true], ['company_id', '=', false]], ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'], { limit: 500 });
+      }
+
+      // Intento 3: Si sigue vacío o es reintento manual, quitar TODA restricción de empresa
+      if ((!data || data.length === 0) || isManualRetry) {
+          console.warn("[LemonBI] Escalando a búsqueda total sin restricciones de empresa.");
+          data = await client.searchRead(session.uid, session.apiKey, 'product.product', [['sale_ok', '=', true]], ['display_name', 'list_price', 'categ_id', 'image_128', 'description_sale', 'qty_available'], { limit: 800 });
+      }
+
+      setProductos(mapOdooToProducts(data, extras));
+    } catch (e) { 
+      console.error("Error cargando productos de Odoo:", e); 
+    } finally { 
+      setLoading(false); 
+      setIsRetrying(false);
+    }
+  };
+
   useEffect(() => { fetchProducts(); }, [session, config.code]);
 
   const availableCategories = useMemo(() => {
     const allCats = Array.from(new Set(productos.map(p => p.categoria || 'General')));
-    // Si no hay categorías configuradas como ocultas, mostramos todas
     const hidden = config.hiddenCategories || [];
-    return ['Todas', ...allCats.filter(cat => !hidden.includes(cat))].sort();
+    // Si no hay categorías configuradas, mostramos todas por defecto para evitar pantalla vacía
+    const catsToShow = allCats.filter(cat => !hidden.includes(cat));
+    return ['Todas', ...(catsToShow.length > 0 ? catsToShow : allCats)].sort();
   }, [productos, config.hiddenCategories]);
 
   const filteredProducts = useMemo(() => {
@@ -410,9 +423,16 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                 <SearchX className="w-12 h-12 text-slate-200" />
              </div>
              <div className="space-y-4 max-w-sm">
-                <h3 className="text-xl font-black uppercase tracking-[0.2em] text-slate-400">Sin resultados visibles</h3>
-                <p className="text-[10px] font-bold text-slate-400 leading-relaxed uppercase tracking-widest px-8">Asegúrese de haber habilitado las categorías en la configuración y que los productos tengan 'Puede ser Vendido' activo en Odoo.</p>
-                <button onClick={fetchProducts} className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[9px] tracking-widest hover:scale-105 transition-all shadow-xl flex items-center gap-3 mx-auto mt-4"><RefreshCw className="w-3.5 h-3.5" /> Reintentar Carga</button>
+                <h3 className="text-xl font-black uppercase tracking-[0.2em] text-slate-400">Catálogo Vacío</h3>
+                <p className="text-[10px] font-bold text-slate-400 leading-relaxed uppercase tracking-widest px-8">No se encontraron productos con los filtros actuales. Intenta un reintento inteligente.</p>
+                <button 
+                  onClick={() => fetchProducts(true)} 
+                  disabled={isRetrying}
+                  className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[9px] tracking-widest hover:scale-105 transition-all shadow-xl flex items-center gap-3 mx-auto mt-4"
+                >
+                  {isRetrying ? <Loader2 className="w-4 h-4 animate-spin"/> : <Wand2 className="w-4 h-4" />}
+                  Búsqueda Inteligente (Ignorar Filtros)
+                </button>
              </div>
           </div>
         ) : (
