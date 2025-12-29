@@ -32,6 +32,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState<StoreStep>('cart');
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
+  const [cartAnimate, setCartAnimate] = useState(false);
   
   const [currentSlide, setCurrentSlide] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin' | 'efectivo'>('yape');
@@ -47,6 +48,10 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
     return cart.reduce((total, item) => total + item.producto.precio * item.cantidad, 0);
   }, [cart]);
 
+  const totalItems = useMemo(() => {
+    return cart.reduce((sum, item) => sum + item.cantidad, 0);
+  }, [cart]);
+
   // Auto-play slider
   useEffect(() => {
     if (slideImages.length <= 1) return;
@@ -58,6 +63,11 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
   const addToCart = (producto: Producto, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    
+    // Feedback visual del carrito
+    setCartAnimate(true);
+    setTimeout(() => setCartAnimate(false), 500);
+
     setCart(prev => {
       const existing = prev.find(item => item.producto.id === producto.id);
       if (existing) {
@@ -162,7 +172,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       const orderRef = `WEB-${Date.now().toString().slice(-6)}`;
       const client = new OdooClient(session.url, session.db, session.useProxy);
       
-      // 1. Buscar o Crear Partner
       const partnerSearch = await client.searchRead(session.uid, session.apiKey, 'res.partner', [['name', '=', clientData.nombre]], ['id'], { limit: 1 });
       let partnerId = partnerSearch.length > 0 ? partnerSearch[0].id : null;
       
@@ -175,7 +184,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           });
       }
 
-      // 2. Preparar Líneas
       const orderLines = cart.map(item => [0, 0, {
           product_id: item.producto.id, 
           product_uom_qty: item.cantidad, 
@@ -184,7 +192,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           name: item.producto.nombre
       }]);
 
-      // 3. Crear Sale Order (Presupuesto)
       await client.create(session.uid, session.apiKey, 'sale.order', {
           partner_id: partnerId, 
           company_id: session.companyId, 
@@ -194,7 +201,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
           state: 'draft' 
       });
 
-      // 4. Guardar en Supabase para registro de Lemon BI
       await supabase.from('pedidos_tienda').insert([{
         order_name: orderRef, 
         cliente_nombre: clientData.nombre, 
@@ -204,7 +210,6 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         estado: 'pendiente'
       }]);
 
-      // 5. Enviar mensaje de confirmación por WhatsApp
       const message = `*NUEVO PEDIDO - ${config.nombreComercial || config.code}*\n` +
         `*Referencia:* ${orderRef}\n` +
         `*Cliente:* ${clientData.nombre}\n` +
@@ -246,10 +251,29 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
            <button onClick={() => { setIsCartOpen(true); setCurrentStep('cart'); }} className="relative p-3.5 bg-slate-900 text-white rounded-2xl shadow-xl transition-all active:scale-90 hover:shadow-slate-300">
              <ShoppingCart className="w-5 h-5" />
-             {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-brand-500 text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-black border-2 border-white animate-bounce shadow-sm">{cart.length}</span>}
+             {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-brand-500 text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-black border-2 border-white animate-bounce shadow-sm">{totalItems}</span>}
            </button>
         </div>
       </header>
+
+      {/* CARRITO FLOTANTE (FAB) INTERACTIVO */}
+      {totalItems > 0 && (
+         <button 
+           onClick={() => { setIsCartOpen(true); setCurrentStep('cart'); }}
+           className={`fixed bottom-8 right-8 z-[100] p-6 bg-slate-900 text-white rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.3)] border-4 border-white backdrop-blur-md hover:scale-110 active:scale-95 transition-all duration-300 ${cartAnimate ? 'animate-bounce' : ''}`}
+         >
+            <div className="relative">
+               <ShoppingCart className="w-8 h-8" />
+               <span className="absolute -top-3 -right-3 bg-brand-500 text-white text-[12px] font-black w-7 h-7 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-lg">
+                  {totalItems}
+               </span>
+            </div>
+            {/* Pequeño indicador de total flotante */}
+            <div className="absolute -left-20 top-1/2 -translate-y-1/2 bg-white text-slate-900 px-4 py-2 rounded-2xl font-black text-xs shadow-xl border border-slate-100 pointer-events-none whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
+               S/ {cartTotal.toFixed(2)}
+            </div>
+         </button>
+      )}
 
       {/* HERO SLIDER */}
       {!loading && slideImages.length > 0 && !searchTerm && (
@@ -444,7 +468,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
               <div className="flex justify-between items-center mb-10">
                  <div>
                     <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900">{currentStep === 'cart' ? 'Mi Carrito' : 'Finalizar Pedido'}</h2>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{cart.length} items seleccionados</p>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{totalItems} items seleccionados</p>
                  </div>
                  <button onClick={() => setIsCartOpen(false)} className="p-3.5 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"><X/></button>
               </div>
