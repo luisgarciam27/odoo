@@ -153,4 +153,37 @@ export class OdooClient {
         { context }
     ]);
   }
+
+  async createSaleOrder(uid: number, apiKey: string, partnerData: any, lines: any[], companyId: number) {
+    // 1. Crear o buscar partner
+    let partnerId;
+    const existing = await this.searchRead(uid, apiKey, 'res.partner', [['phone', '=', partnerData.phone]], ['id']);
+    
+    if (existing && existing.length > 0) {
+      partnerId = existing[0].id;
+    } else {
+      partnerId = await this.create(uid, apiKey, 'res.partner', {
+        name: partnerData.name,
+        phone: partnerData.phone,
+        street: partnerData.address || '',
+        company_type: 'person'
+      });
+    }
+
+    // 2. Crear el Sale Order
+    const orderLines = lines.map(line => [0, 0, {
+      product_id: line.productId,
+      product_uom_qty: line.qty,
+      price_unit: line.price
+    }]);
+
+    const orderId = await this.create(uid, apiKey, 'sale.order', {
+      partner_id: partnerId,
+      company_id: companyId,
+      order_line: orderLines,
+      note: `Pedido WEB LemonBI - Pago via ${partnerData.paymentMethod.toUpperCase()}`
+    });
+
+    return orderId;
+  }
 }
