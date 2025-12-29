@@ -5,9 +5,8 @@ import {
   Sparkles, Wallet, Phone, X, Facebook, Instagram, MessageCircle,
   RefreshCw, Share2, LayoutPanelTop, QrCode, Upload, Smartphone, AlertCircle,
   Eye, Image as ImageIcon, Paintbrush, Footprints, Layout, AlignLeft, Citrus,
-  Video, Layers, User, Dog, Tag, Link as LinkIcon, MonitorPlay, Copy, ExternalLink,
-  /* Added missing Globe icon import */
-  Globe
+  Video, Layers, User, Tag, Link as LinkIcon, MonitorPlay, Copy, ExternalLink,
+  Globe, CreditCard
 } from 'lucide-react';
 import { ClientConfig, SedeStore } from '../types';
 import { saveClient } from '../services/clientManager';
@@ -90,7 +89,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
            </div>
            <div>
               <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none">Personalizar Tienda</h2>
-              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Diseño y Banners Publicitarios</p>
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Diseño y Pagos Online</p>
            </div>
         </div>
         <button 
@@ -99,7 +98,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
           className="px-12 py-6 text-white rounded-[2.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl flex items-center gap-4 transition-all hover:scale-105 active:scale-95 shadow-brand-500/20" 
           style={{backgroundColor: brandColor}}
         >
-          {isSaving ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />} Guardar Diseño
+          {isSaving ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />} Guardar Cambios
         </button>
       </div>
 
@@ -139,6 +138,141 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                </a>
             </div>
          </div>
+      </section>
+
+      {/* CONFIGURACIÓN DE PAGOS (YAPE / PLIN) - AHORA MÁS ARRIBA Y CLARA */}
+      <section className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-100 overflow-hidden relative">
+        <div className="flex items-center gap-5 mb-12">
+           <div className="p-4 bg-purple-50 text-purple-600 rounded-3xl">
+             <Wallet className="w-8 h-8"/>
+           </div>
+           <div>
+             <h3 className="text-3xl font-black text-slate-900 uppercase tracking-tighter leading-none">Configuración de Pagos</h3>
+             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-2">Detalles de la Cuenta (Nombre, Celular y QR)</p>
+           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+           {/* TARJETA YAPE */}
+           <div className="space-y-8 p-10 bg-purple-50/50 rounded-[3.5rem] border border-purple-100 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-8 opacity-5"><QrCode className="w-32 h-32 text-purple-600" /></div>
+              <div className="flex items-center gap-4 mb-4 relative z-10">
+                 <div className="w-14 h-14 bg-purple-600 rounded-[1.5rem] flex items-center justify-center text-white font-black text-xl shadow-xl shadow-purple-600/20">Y</div>
+                 <div>
+                    <h4 className="text-lg font-black text-purple-900 uppercase tracking-tighter">Cuenta Yape</h4>
+                    <p className="text-[9px] font-bold text-purple-400 uppercase tracking-widest">Acepta pagos móviles Yape</p>
+                 </div>
+              </div>
+              
+              <div className="space-y-6 relative z-10">
+                 <div>
+                    <label className="text-[10px] font-black text-purple-900 uppercase tracking-widest block mb-2 ml-4">Nombre del Titular de Cuenta</label>
+                    <div className="relative">
+                       <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-300"/>
+                       <input 
+                          type="text" 
+                          placeholder="NOMBRE COMPLETO" 
+                          className="w-full pl-14 pr-6 py-5 bg-white border border-purple-100 rounded-[1.5rem] text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-purple-200/50 transition-all" 
+                          value={currentConfig.yapeName || ''} 
+                          onChange={e => setCurrentConfig({...currentConfig, yapeName: e.target.value})} 
+                       />
+                    </div>
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-black text-purple-900 uppercase tracking-widest block mb-2 ml-4">Número de Celular Vinculado</label>
+                    <div className="relative">
+                       <Smartphone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-300"/>
+                       <input 
+                          type="tel" 
+                          placeholder="NÚMERO DE 9 DÍGITOS" 
+                          className="w-full pl-14 pr-6 py-5 bg-white border border-purple-100 rounded-[1.5rem] text-[11px] font-bold outline-none focus:ring-4 focus:ring-purple-200/50 transition-all" 
+                          value={currentConfig.yapeNumber || ''} 
+                          onChange={e => setCurrentConfig({...currentConfig, yapeNumber: e.target.value})} 
+                       />
+                    </div>
+                 </div>
+              </div>
+
+              <div className="space-y-4">
+                 <label className="text-[10px] font-black text-purple-900 uppercase tracking-widest block mb-2 ml-4">Código QR Yape</label>
+                 <div className="relative aspect-square bg-white rounded-[2.5rem] border border-dashed border-purple-200 flex items-center justify-center p-8 overflow-hidden group shadow-inner">
+                    {currentConfig.yapeQR ? (
+                       <img src={currentConfig.yapeQR} className="w-full h-full object-contain" />
+                    ) : (
+                       <div className="flex flex-col items-center gap-4 text-purple-200">
+                          <QrCode className="w-16 h-16" />
+                          <span className="text-[9px] font-black uppercase tracking-widest">Subir Imagen del QR</span>
+                       </div>
+                    )}
+                    <label className="absolute inset-0 bg-purple-600/90 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all duration-300">
+                       <Upload className="text-white w-10 h-10 mb-2 animate-bounce"/>
+                       <span className="text-[10px] font-black text-white uppercase tracking-widest">Actualizar Código QR</span>
+                       <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload('yapeQR')} />
+                    </label>
+                 </div>
+              </div>
+           </div>
+
+           {/* TARJETA PLIN */}
+           <div className="space-y-8 p-10 bg-blue-50/50 rounded-[3.5rem] border border-blue-100 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-8 opacity-5"><QrCode className="w-32 h-32 text-blue-600" /></div>
+              <div className="flex items-center gap-4 mb-4 relative z-10">
+                 <div className="w-14 h-14 bg-blue-600 rounded-[1.5rem] flex items-center justify-center text-white font-black text-xl shadow-xl shadow-blue-600/20">P</div>
+                 <div>
+                    <h4 className="text-lg font-black text-blue-900 uppercase tracking-tighter">Cuenta Plin</h4>
+                    <p className="text-[9px] font-bold text-blue-400 uppercase tracking-widest">Acepta pagos móviles Plin</p>
+                 </div>
+              </div>
+              
+              <div className="space-y-6 relative z-10">
+                 <div>
+                    <label className="text-[10px] font-black text-blue-900 uppercase tracking-widest block mb-2 ml-4">Nombre del Titular de Cuenta</label>
+                    <div className="relative">
+                       <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-300"/>
+                       <input 
+                          type="text" 
+                          placeholder="NOMBRE COMPLETO" 
+                          className="w-full pl-14 pr-6 py-5 bg-white border border-blue-100 rounded-[1.5rem] text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-200/50 transition-all" 
+                          value={currentConfig.plinName || ''} 
+                          onChange={e => setCurrentConfig({...currentConfig, plinName: e.target.value})} 
+                       />
+                    </div>
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-black text-blue-900 uppercase tracking-widest block mb-2 ml-4">Número de Celular Vinculado</label>
+                    <div className="relative">
+                       <Smartphone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-300"/>
+                       <input 
+                          type="tel" 
+                          placeholder="NÚMERO DE 9 DÍGITOS" 
+                          className="w-full pl-14 pr-6 py-5 bg-white border border-blue-100 rounded-[1.5rem] text-[11px] font-bold outline-none focus:ring-4 focus:ring-blue-200/50 transition-all" 
+                          value={currentConfig.plinNumber || ''} 
+                          onChange={e => setCurrentConfig({...currentConfig, plinNumber: e.target.value})} 
+                       />
+                    </div>
+                 </div>
+              </div>
+
+              <div className="space-y-4">
+                 <label className="text-[10px] font-black text-blue-900 uppercase tracking-widest block mb-2 ml-4">Código QR Plin</label>
+                 <div className="relative aspect-square bg-white rounded-[2.5rem] border border-dashed border-blue-200 flex items-center justify-center p-8 overflow-hidden group shadow-inner">
+                    {currentConfig.plinQR ? (
+                       <img src={currentConfig.plinQR} className="w-full h-full object-contain" />
+                    ) : (
+                       <div className="flex flex-col items-center gap-4 text-blue-200">
+                          <QrCode className="w-16 h-16" />
+                          <span className="text-[9px] font-black uppercase tracking-widest">Subir Imagen del QR</span>
+                       </div>
+                    )}
+                    <label className="absolute inset-0 bg-blue-600/90 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all duration-300">
+                       <Upload className="text-white w-10 h-10 mb-2 animate-bounce"/>
+                       <span className="text-[10px] font-black text-white uppercase tracking-widest">Actualizar Código QR</span>
+                       <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload('plinQR')} />
+                    </label>
+                 </div>
+              </div>
+           </div>
+        </div>
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
@@ -284,7 +418,7 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate }) => {
                    <input type="text" placeholder="URL de Facebook" className="w-full pl-14 pr-5 py-5 bg-slate-50 rounded-[1.5rem] text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-100" value={currentConfig.facebook_url || ''} onChange={e => setCurrentConfig({...currentConfig, facebook_url: e.target.value})} />
                 </div>
                 <div className="relative">
-                   <span className="absolute left-5 top-1/2 -translate-y-1/2"><Instagram className="w-5 h-5 text-pink-500"/></span>
+                   <span className="absolute left-5 top-1/2 -translate-y-1/2"><span className="absolute left-5 top-1/2 -translate-y-1/2"><Instagram className="w-5 h-5 text-pink-500"/></span></span>
                    <input type="text" placeholder="URL de Instagram" className="w-full pl-14 pr-5 py-5 bg-slate-50 rounded-[1.5rem] text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-pink-100" value={currentConfig.instagram_url || ''} onChange={e => setCurrentConfig({...currentConfig, instagram_url: e.target.value})} />
                 </div>
                 <div className="relative">
