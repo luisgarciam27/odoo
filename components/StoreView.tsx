@@ -234,7 +234,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         estado: 'pendiente'
       }]);
 
-      const message = `*NUEVO PEDIDO WEB*\nRef: ${orderRef}\nCliente: ${clientData.nombre}\nCelular: ${clientData.telefono}\n\n*Pedido:* \n${cart.map(i => `- ${i.cantidad}x ${i.producto.nombre}`).join('\n')}\n\n*Total:* S/ ${cartTotal.toFixed(2)}\n*Metodo:* ${paymentMethod.toUpperCase()}\n*Entrega:* ${deliveryType.toUpperCase()}\n\nYa adjunte el voucher.`;
+      const message = `*NUEVO PEDIDO WEB*\nRef: ${orderRef}\nCliente: ${clientData.nombre}\nCelular: ${clientData.telefono}\n\n*Pedido:* \n${cart.map(i => `- ${i.cantidad}x ${i.producto.nombre}`).join('\n')}\n\n*Total:* S/ ${cartTotal.toFixed(2)}\n*Método:* ${paymentMethod.toUpperCase()}\n*Entrega:* ${deliveryType.toUpperCase()}\n\nYa adjunté el comprobante.`;
       
       window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
       
@@ -247,7 +247,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col relative overflow-x-hidden selection:bg-brand-100">
       
       <style>{`
         @keyframes kenburns {
@@ -320,7 +320,7 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
 
       {/* CATEGORÍAS */}
       {!loading && (
-         <div className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-[72px] z-50 py-3">
+         <div className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-[72px] z-50 py-3 shadow-sm">
             <div className="max-w-7xl mx-auto px-4 overflow-x-auto flex gap-3 no-scrollbar">
                {availableCategories.map(cat => (
                   <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${selectedCategory === cat ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-400 hover:text-slate-600'}`}>{cat}</button>
@@ -334,14 +334,14 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-40 gap-4">
              <Loader2 className="w-10 h-10 animate-spin text-brand-500" />
-             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cargando catálogo...</p>
+             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando productos...</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
             {filteredProducts.map(p => (
               <div key={p.id} onClick={() => setSelectedProduct(p)} className="bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col group hover:shadow-xl hover:-translate-y-2 transition-all duration-500 cursor-pointer">
                 <div className="aspect-square bg-slate-50 rounded-[1.5rem] mb-4 flex items-center justify-center overflow-hidden">
-                  {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-contain p-2" alt={p.nombre} /> : <Package className="w-8 h-8 text-slate-200" />}
+                  {p.imagen ? <img src={`data:image/png;base64,${p.imagen}`} className="w-full h-full object-contain p-2 mix-blend-multiply" alt={p.nombre} /> : <Package className="w-8 h-8 text-slate-200" />}
                 </div>
                 <h3 className="text-[11px] font-black text-slate-800 uppercase line-clamp-2 h-10 tracking-tight">{p.nombre}</h3>
                 <div className="mt-4 flex items-center justify-between">
@@ -354,37 +354,76 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
         )}
       </main>
 
-      {/* FOOTER */}
+      {/* FOOTER DINÁMICO */}
       {!loading && (
-        <footer className="text-white py-12 px-6 border-t border-white/5" style={{ backgroundColor: secondaryColor }}>
-           <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-10">
-              <div className="flex items-center gap-4">
-                 {config.footerLogoUrl ? <img src={config.footerLogoUrl} className="h-8 object-contain" alt="Footer Logo" /> : <Citrus className="w-6 h-6 text-brand-500" />}
-                 <p className="text-[9px] font-black uppercase tracking-widest text-white/50 max-w-[200px]">{config.footer_description || "Calidad y bienestar en cada pedido."}</p>
+        <footer className="text-white py-16 px-6 border-t border-white/5" style={{ backgroundColor: secondaryColor }}>
+           <div className="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-center gap-12">
+              <div className="flex-1 flex items-center gap-6">
+                 {config.footerLogoUrl ? (
+                   <img src={config.footerLogoUrl} className="h-10 object-contain" alt="Footer Logo" />
+                 ) : (
+                   <div className="flex items-center gap-2">
+                      <Citrus className="w-8 h-8 text-brand-500" />
+                      <h2 className="text-xl font-black uppercase tracking-tighter leading-none">{config.nombreComercial || config.code}</h2>
+                   </div>
+                 )}
+                 <div className="h-10 w-px bg-white/10 hidden md:block"></div>
+                 <p className="text-[9px] font-black uppercase tracking-widest text-white/40 max-w-[220px] leading-relaxed">
+                    {config.footer_description || "Calidad y bienestar garantizado en cada uno de tus pedidos digitales."}
+                 </p>
               </div>
-              <div className="flex gap-4">
-                 {config.facebook_url && <a href={config.facebook_url} target="_blank" className="p-3 bg-white/10 rounded-xl hover:bg-blue-600 transition-all"><Facebook className="w-5 h-5"/></a>}
-                 {config.instagram_url && <a href={config.instagram_url} target="_blank" className="p-3 bg-white/10 rounded-xl hover:bg-pink-600 transition-all"><Instagram className="w-5 h-5"/></a>}
-                 <a href={`https://wa.me/${(config.whatsappHelpNumber || '51975615244').replace(/\D/g, '')}`} target="_blank" className="p-3 bg-white/10 rounded-xl hover:bg-emerald-600 transition-all"><MessageCircle className="w-5 h-5"/></a>
+
+              {/* BOTÓN AYUDA GIGANTE */}
+              <div className="flex-1 flex justify-center">
+                 <a 
+                    href={`https://wa.me/${(config.whatsappHelpNumber || config.whatsappNumbers || '51975615244').replace(/\D/g, '')}`} 
+                    target="_blank" 
+                    className="flex items-center gap-6 bg-white/5 border border-white/10 px-10 py-6 rounded-[2.5rem] hover:bg-brand-500 hover:border-brand-600 transition-all group shadow-2xl"
+                 >
+                    <div className="p-4 bg-brand-500/20 rounded-2xl group-hover:bg-white/20 transition-colors">
+                       <MessageCircle className="w-8 h-8 text-white"/>
+                    </div>
+                    <div className="text-left">
+                       <p className="text-[10px] font-black uppercase text-brand-400 group-hover:text-white/80 tracking-[0.2em] leading-none mb-1.5">Atención al Cliente</p>
+                       <p className="text-xl font-black uppercase tracking-tighter group-hover:text-white leading-none">Ayuda WhatsApp</p>
+                    </div>
+                 </a>
               </div>
-              <p className="text-[8px] font-black uppercase tracking-widest opacity-30">Lemon BI Analytics &copy; 2025</p>
+
+              <div className="flex-1 flex flex-col items-center lg:items-end gap-6">
+                 <div className="flex gap-4">
+                    {config.facebook_url && <a href={config.facebook_url} target="_blank" className="p-4 bg-white/5 rounded-2xl hover:bg-blue-600 transition-all border border-white/5 shadow-lg"><Facebook className="w-5 h-5"/></a>}
+                    {config.instagram_url && <a href={config.instagram_url} target="_blank" className="p-4 bg-white/5 rounded-2xl hover:bg-pink-600 transition-all border border-white/5 shadow-lg"><Instagram className="w-5 h-5"/></a>}
+                 </div>
+                 <div className="flex flex-col items-center lg:items-end gap-1">
+                    <p className="text-[8px] font-black uppercase tracking-[0.3em] opacity-30">Lemon BI Analytics &copy; 2025</p>
+                    <p className="text-[7px] font-bold text-brand-400 uppercase tracking-widest">GaorSystem Perú</p>
+                 </div>
+              </div>
            </div>
         </footer>
       )}
 
-      {/* MODAL DETALLE */}
+      {/* MODAL DETALLE PRODUCTO */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setSelectedProduct(null)}></div>
-           <div className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in">
-              <div className="w-full md:w-1/2 bg-slate-50 flex items-center justify-center p-10">
-                 {selectedProduct.imagen ? <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="max-w-full h-auto object-contain" alt={selectedProduct.nombre} /> : <Package className="w-20 h-20 text-slate-200" />}
+           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md animate-in fade-in" onClick={() => setSelectedProduct(null)}></div>
+           <div className="relative bg-white w-full max-w-3xl rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in duration-300">
+              <div className="w-full md:w-1/2 bg-slate-50 flex items-center justify-center p-12">
+                 {selectedProduct.imagen ? (
+                   <img src={`data:image/png;base64,${selectedProduct.imagen}`} className="max-w-full h-auto object-contain mix-blend-multiply drop-shadow-lg" alt={selectedProduct.nombre} />
+                 ) : (
+                   <Package className="w-24 h-24 text-slate-200" />
+                 )}
               </div>
-              <div className="w-full md:w-1/2 p-10 flex flex-col">
-                 <h2 className="text-2xl font-black uppercase text-slate-900 mb-4">{selectedProduct.nombre}</h2>
-                 <p className="text-3xl font-black text-brand-600 mb-8">S/ {selectedProduct.precio.toFixed(2)}</p>
-                 <p className="text-xs text-slate-500 uppercase leading-relaxed mb-10">{selectedProduct.descripcion_venta || "Sin descripción adicional disponible."}</p>
-                 <button onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); }} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-brand-500 transition-all shadow-xl">Agregar al Carrito</button>
+              <div className="w-full md:w-1/2 p-10 flex flex-col justify-center">
+                 <h2 className="text-2xl font-black uppercase text-slate-900 mb-4 tracking-tight leading-tight">{selectedProduct.nombre}</h2>
+                 <p className="text-3xl font-black text-brand-600 mb-8 tracking-tighter">S/ {selectedProduct.precio.toFixed(2)}</p>
+                 <div className="space-y-4 mb-10">
+                    <p className="text-[11px] font-black uppercase text-slate-400 tracking-widest pb-2 border-b">Detalles del Producto</p>
+                    <p className="text-xs text-slate-600 uppercase font-bold leading-relaxed">{selectedProduct.descripcion_venta || "No hay información adicional para este producto."}</p>
+                 </div>
+                 <button onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); }} className="w-full py-6 bg-slate-900 text-white rounded-3xl font-black uppercase text-xs tracking-widest hover:bg-brand-500 transition-all shadow-xl">Agregar al Carrito</button>
               </div>
            </div>
         </div>
@@ -393,95 +432,102 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
       {/* DRAWER CARRITO */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[200] flex justify-end">
-           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsCartOpen(false)}></div>
-           <div className="relative bg-white w-full max-w-md h-full shadow-2xl flex flex-col p-8 animate-in slide-in-from-right">
+           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md animate-in fade-in" onClick={() => setIsCartOpen(false)}></div>
+           <div className="relative bg-white w-full max-w-md h-full shadow-2xl flex flex-col p-8 animate-in slide-in-from-right duration-500">
               <div className="flex justify-between items-center mb-10">
-                 <h2 className="text-2xl font-black uppercase tracking-tighter">Mi Bolsa</h2>
-                 <button onClick={() => setIsCartOpen(false)} className="p-3 bg-slate-50 rounded-xl"><X className="w-6 h-6"/></button>
+                 <h2 className="text-3xl font-black uppercase tracking-tighter">Tu Bolsa</h2>
+                 <button onClick={() => setIsCartOpen(false)} className="p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all text-slate-400"><X className="w-6 h-6"/></button>
               </div>
 
               {currentStep === 'cart' && (
                  <div className="flex-1 flex flex-col overflow-hidden">
                     <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                       {cart.map(i => (
+                       {cart.length === 0 ? (
+                          <div className="py-20 text-center flex flex-col items-center gap-6 opacity-20">
+                             <ShoppingCart className="w-20 h-20"/>
+                             <p className="font-black uppercase tracking-widest text-[10px]">No hay productos</p>
+                          </div>
+                       ) : cart.map(i => (
                           <div key={i.producto.id} className="flex gap-4 items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                             <div className="w-14 h-14 bg-white rounded-xl overflow-hidden flex items-center justify-center shrink-0">
-                                {i.producto.imagen ? <img src={`data:image/png;base64,${i.producto.imagen}`} className="w-full h-full object-contain" /> : <Package className="w-6 h-6 text-slate-100"/>}
+                             <div className="w-14 h-14 bg-white rounded-xl overflow-hidden flex items-center justify-center shrink-0 border border-slate-100">
+                                {i.producto.imagen ? <img src={`data:image/png;base64,${i.producto.imagen}`} className="w-full h-full object-contain mix-blend-multiply" /> : <Package className="w-6 h-6 text-slate-100"/>}
                              </div>
                              <div className="flex-1 min-w-0">
-                                <p className="text-[10px] font-black uppercase truncate">{i.producto.nombre}</p>
+                                <p className="text-[10px] font-black uppercase truncate tracking-tight">{i.producto.nombre}</p>
                                 <p className="font-black text-xs text-brand-600">S/ {i.producto.precio.toFixed(2)}</p>
                              </div>
                              <div className="flex items-center gap-2">
-                                <button onClick={() => updateCartQuantity(i.producto.id, -1)} className="p-1.5 text-slate-400 hover:text-red-500"><Minus className="w-4 h-4"/></button>
+                                <button onClick={() => updateCartQuantity(i.producto.id, -1)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Minus className="w-4 h-4"/></button>
                                 <span className="text-xs font-black">{i.cantidad}</span>
-                                <button onClick={() => updateCartQuantity(i.producto.id, 1)} className="p-1.5 text-slate-400 hover:text-brand-600"><Plus className="w-4 h-4"/></button>
+                                <button onClick={() => updateCartQuantity(i.producto.id, 1)} className="p-2 text-slate-400 hover:text-brand-600 transition-colors"><Plus className="w-4 h-4"/></button>
                              </div>
                           </div>
                        ))}
                     </div>
                     <div className="pt-8 border-t border-slate-100 mt-4">
-                       <div className="flex justify-between mb-6">
-                          <span className="text-[10px] font-black uppercase text-slate-400">Total</span>
-                          <span className="text-3xl font-black">S/ {cartTotal.toFixed(2)}</span>
+                       <div className="flex justify-between items-end mb-8">
+                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Estimado</span>
+                          <span className="text-4xl font-black tracking-tighter">S/ {cartTotal.toFixed(2)}</span>
                        </div>
-                       <button onClick={() => setCurrentStep('details')} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-500 transition-all shadow-xl">Proceder al Pago</button>
+                       <button onClick={() => setCurrentStep('details')} disabled={cart.length === 0} className="w-full py-7 bg-slate-900 text-white rounded-[2rem] font-black uppercase text-[11px] tracking-widest hover:bg-brand-500 transition-all shadow-2xl disabled:opacity-20">Ir a Pagar</button>
                     </div>
                  </div>
               )}
 
               {currentStep === 'details' && (
-                 <div className="space-y-6">
-                    <input type="text" placeholder="NOMBRE COMPLETO" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase" value={clientData.nombre} onChange={e => setClientData({...clientData, nombre: e.target.value})} />
-                    <input type="tel" placeholder="TELÉFONO" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase" value={clientData.telefono} onChange={e => setClientData({...clientData, telefono: e.target.value})} />
+                 <div className="space-y-6 animate-in slide-in-from-right">
+                    <input type="text" placeholder="NOMBRE COMPLETO" className="w-full p-6 bg-slate-50 border border-slate-100 rounded-3xl text-xs font-bold uppercase outline-none focus:ring-4 focus:ring-brand-500/10 transition-all" value={clientData.nombre} onChange={e => setClientData({...clientData, nombre: e.target.value})} />
+                    <input type="tel" placeholder="TELÉFONO WHATSAPP" className="w-full p-6 bg-slate-50 border border-slate-100 rounded-3xl text-xs font-bold uppercase outline-none focus:ring-4 focus:ring-brand-500/10 transition-all" value={clientData.telefono} onChange={e => setClientData({...clientData, telefono: e.target.value})} />
                     <div className="flex gap-4">
-                       <button onClick={() => setDeliveryType('recojo')} className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase border-2 transition-all ${deliveryType === 'recojo' ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-100 text-slate-400'}`}>Recojo</button>
-                       <button onClick={() => setDeliveryType('delivery')} className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase border-2 transition-all ${deliveryType === 'delivery' ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-100 text-slate-400'}`}>Delivery</button>
+                       <button onClick={() => setDeliveryType('recojo')} className={`flex-1 py-5 rounded-3xl text-[10px] font-black uppercase border-2 transition-all ${deliveryType === 'recojo' ? 'bg-slate-900 text-white border-slate-900 shadow-xl' : 'border-slate-100 text-slate-400'}`}>Recojo Local</button>
+                       <button onClick={() => setDeliveryType('delivery')} className={`flex-1 py-5 rounded-3xl text-[10px] font-black uppercase border-2 transition-all ${deliveryType === 'delivery' ? 'bg-slate-900 text-white border-slate-900 shadow-xl' : 'border-slate-100 text-slate-400'}`}>Delivery</button>
                     </div>
                     {deliveryType === 'delivery' && (
-                       <textarea placeholder="DIRECCIÓN..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase h-32" value={clientData.direccion} onChange={e => setClientData({...clientData, direccion: e.target.value})} />
+                       <textarea placeholder="DIRECCIÓN EXACTA..." className="w-full p-6 bg-slate-50 border border-slate-100 rounded-3xl text-xs font-bold uppercase h-32 outline-none focus:ring-4 focus:ring-brand-500/10 transition-all" value={clientData.direccion} onChange={e => setClientData({...clientData, direccion: e.target.value})} />
                     )}
                     <div className="flex gap-3 pt-6">
-                       <button onClick={() => setCurrentStep('cart')} className="flex-1 py-4 bg-slate-100 rounded-xl text-[10px] font-black uppercase text-slate-400">Atrás</button>
-                       <button onClick={() => setCurrentStep('payment')} disabled={!clientData.nombre || !clientData.telefono} className="flex-[2] py-4 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase shadow-xl disabled:opacity-20">Pagar Orden</button>
+                       <button onClick={() => setCurrentStep('cart')} className="flex-1 py-5 bg-slate-100 rounded-2xl text-[10px] font-black uppercase text-slate-400">Atrás</button>
+                       <button onClick={() => setCurrentStep('payment')} disabled={!clientData.nombre || !clientData.telefono} className="flex-[2] py-5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl disabled:opacity-20">Confirmar Datos</button>
                     </div>
                  </div>
               )}
 
               {currentStep === 'payment' && (
-                 <div className="space-y-8 text-center">
-                    <div className="flex gap-4">
-                       <button onClick={() => setPaymentMethod('yape')} className={`flex-1 py-4 rounded-xl font-black uppercase text-[10px] border-2 transition-all ${paymentMethod === 'yape' ? 'bg-purple-600 text-white border-purple-600' : 'border-slate-100 text-slate-400'}`}>Yape</button>
-                       <button onClick={() => setPaymentMethod('plin')} className={`flex-1 py-4 rounded-xl font-black uppercase text-[10px] border-2 transition-all ${paymentMethod === 'plin' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-100 text-slate-400'}`}>Plin</button>
+                 <div className="space-y-8 text-center animate-in slide-in-from-right">
+                    <div className="flex gap-4 p-2 bg-slate-100 rounded-[2rem]">
+                       <button onClick={() => setPaymentMethod('yape')} className={`flex-1 py-4 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest transition-all ${paymentMethod === 'yape' ? 'bg-purple-600 text-white shadow-xl' : 'text-slate-400'}`}>Yape</button>
+                       <button onClick={() => setPaymentMethod('plin')} className={`flex-1 py-4 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest transition-all ${paymentMethod === 'plin' ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400'}`}>Plin</button>
                     </div>
-                    <div className="aspect-square bg-slate-50 rounded-[2.5rem] flex items-center justify-center p-10 shadow-inner">
+                    <div className="aspect-square bg-white rounded-[3rem] border border-slate-100 flex items-center justify-center p-12 shadow-inner group">
                        {paymentMethod === 'yape' ? (
-                          config.yapeQR ? <img src={config.yapeQR} className="max-w-full h-auto rounded-2xl" alt="QR Yape" /> : <QrCode className="w-16 h-16 opacity-10"/>
+                          config.yapeQR ? <img src={config.yapeQR} className="max-w-full h-auto rounded-3xl group-hover:scale-105 transition-transform" alt="QR Yape" /> : <QrCode className="w-16 h-16 opacity-10"/>
                        ) : (
-                          config.plinQR ? <img src={config.plinQR} className="max-w-full h-auto rounded-2xl" alt="QR Plin" /> : <QrCode className="w-16 h-16 opacity-10"/>
+                          config.plinQR ? <img src={config.plinQR} className="max-w-full h-auto rounded-3xl group-hover:scale-105 transition-transform" alt="QR Plin" /> : <QrCode className="w-16 h-16 opacity-10"/>
                        )}
                     </div>
-                    <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                       <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Titular:</p>
-                       <p className="text-sm font-black text-slate-900 uppercase">{paymentMethod === 'yape' ? (config.yapeName || 'No config.') : (config.plinName || 'No config.')}</p>
-                       <p className="text-xl font-black text-slate-900 mt-2">{paymentMethod === 'yape' ? (config.yapeNumber || '000 000 000') : (config.plinNumber || '000 000 000')}</p>
+                    <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100">
+                       <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Pagar a nombre de:</p>
+                       <p className="text-sm font-black text-slate-900 uppercase leading-none">{paymentMethod === 'yape' ? (config.yapeName || 'Titular') : (config.plinName || 'Titular')}</p>
+                       <p className="text-2xl font-black text-slate-900 mt-4 tracking-widest">{paymentMethod === 'yape' ? (config.yapeNumber || '--- --- ---') : (config.plinNumber || '--- --- ---')}</p>
                     </div>
                     <div className="flex gap-3 pt-6">
-                       <button onClick={() => setCurrentStep('details')} className="flex-1 py-4 bg-slate-100 rounded-xl text-[10px] font-black uppercase text-slate-400">Atrás</button>
-                       <button onClick={() => setCurrentStep('voucher')} className="flex-[2] py-4 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase shadow-xl">Subir Comprobante</button>
+                       <button onClick={() => setCurrentStep('details')} className="flex-1 py-5 bg-slate-100 rounded-2xl text-[10px] font-black uppercase text-slate-400">Atrás</button>
+                       <button onClick={() => setCurrentStep('voucher')} className="flex-[2] py-5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Subir Comprobante</button>
                     </div>
                  </div>
               )}
 
               {currentStep === 'voucher' && (
-                 <div className="space-y-8">
-                    <div className="border-4 border-dashed rounded-[3rem] aspect-[3/4] flex flex-col items-center justify-center p-10 bg-slate-50 relative overflow-hidden group">
+                 <div className="space-y-8 animate-in slide-in-from-right">
+                    <div className="border-4 border-dashed rounded-[3.5rem] aspect-[3/4] flex flex-col items-center justify-center p-10 bg-slate-50 relative overflow-hidden group hover:border-brand-500 transition-all">
                        {voucherImage ? (
-                          <img src={voucherImage} className="w-full h-full object-cover rounded-3xl" alt="Voucher" />
+                          <img src={voucherImage} className="w-full h-full object-cover rounded-[2.5rem]" alt="Voucher" />
                        ) : (
                           <label className="cursor-pointer flex flex-col items-center">
-                             <Camera className="w-12 h-12 text-slate-300 mb-4"/>
-                             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Capturar Voucher</span>
+                             <div className="p-6 bg-white rounded-3xl shadow-xl mb-6 text-slate-400 group-hover:text-brand-500 group-hover:scale-110 transition-all">
+                                <Camera className="w-12 h-12"/>
+                             </div>
+                             <span className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400">Capturar Voucher</span>
                              <input type="file" className="hidden" accept="image/*" onChange={handleVoucherUpload} />
                           </label>
                        )}
@@ -489,22 +535,24 @@ const StoreView: React.FC<StoreViewProps> = ({ session, config, onBack }) => {
                     <button 
                        onClick={handleFinishOrder} 
                        disabled={!voucherImage || isOrderLoading} 
-                       className="w-full py-6 bg-brand-500 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-4"
+                       className="w-full py-8 bg-brand-500 text-white rounded-3xl font-black uppercase text-[11px] tracking-widest shadow-2xl flex items-center justify-center gap-4 transition-all hover:bg-brand-600 disabled:opacity-50"
                     >
                        {isOrderLoading ? <Loader2 className="animate-spin w-5 h-5"/> : <CheckCircle2 className="w-5 h-5"/>} 
-                       Confirmar Compra
+                       Confirmar Mi Compra
                     </button>
                  </div>
               )}
 
               {currentStep === 'success' && (
-                 <div className="flex-1 flex flex-col items-center justify-center text-center space-y-10">
-                    <div className="w-32 h-32 bg-brand-500 text-white rounded-full flex items-center justify-center shadow-2xl animate-bounce">
+                 <div className="flex-1 flex flex-col items-center justify-center text-center space-y-10 animate-in zoom-in duration-1000">
+                    <div className="w-32 h-32 bg-brand-500 text-white rounded-full flex items-center justify-center shadow-[0_30px_60px_-10px_rgba(132,204,22,0.6)] animate-bounce">
                        <CheckCircle2 className="w-16 h-16"/>
                     </div>
-                    <h3 className="text-4xl font-black uppercase tracking-tighter">¡PEDIDO RECIBIDO!</h3>
-                    <p className="text-xs text-slate-500 uppercase font-bold">Tu compra ha sido procesada. Atento a tu WhatsApp para coordinar la entrega.</p>
-                    <button onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); setVoucherImage(null); }} className="w-full py-5 bg-slate-900 text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-brand-500 transition-all">Seguir Comprando</button>
+                    <div className="space-y-4">
+                       <h3 className="text-4xl font-black uppercase tracking-tighter">¡PEDIDO ENVIADO!</h3>
+                       <p className="text-[11px] text-slate-500 uppercase font-bold tracking-widest max-w-[250px] mx-auto">Tu comprobante ha sido recibido. Te contactaremos por WhatsApp para la entrega.</p>
+                    </div>
+                    <button onClick={() => { setIsCartOpen(false); setCart([]); setCurrentStep('cart'); setVoucherImage(null); }} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-xl hover:bg-brand-500 transition-all">Regresar a la Tienda</button>
                  </div>
               )}
            </div>
