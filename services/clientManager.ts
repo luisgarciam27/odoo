@@ -51,9 +51,8 @@ const mapRowToConfig = (row: any): ClientConfig => ({
     slide_images: Array.isArray(row.slide_images) ? row.slide_images : [], 
     quality_text: row.quality_text || '',
     support_text: row.support_text || '',
-    businessType: row.business_type || 'pharmacy',
-    evolution_instance: row.evolution_instance || 'lemonbi',
-    evolution_apikey: row.evolution_apikey || 'TOKEN_SAAS_GENERAL'
+    businessType: row.business_type || 'pharmacy'
+    // Se omiten temporalmente los campos de evolution si la tabla no los tiene
 });
 
 export const getClients = async (): Promise<ClientConfig[]> => {
@@ -114,9 +113,7 @@ export const saveClient = async (client: ClientConfig, isNew: boolean): Promise<
         slide_images: client.slide_images || [], 
         quality_text: client.quality_text,
         support_text: client.support_text,
-        business_type: client.businessType,
-        evolution_instance: client.evolution_instance,
-        evolution_apikey: client.evolution_apikey
+        business_type: client.businessType
     };
 
     try {

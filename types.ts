@@ -43,7 +43,6 @@ export interface ClientConfig {
   quality_text?: string;
   support_text?: string;
   businessType?: BusinessType;
-  // Campos SaaS para Evolution API
   evolution_instance?: string;
   evolution_apikey?: string;
 }
@@ -57,19 +56,20 @@ export interface Producto {
   stock?: number;
   imagen?: string; 
   descripcion_venta?: string; 
-  descripcion_raw?: string;   
-  registro_sanitario?: string;
-  laboratorio?: string;
-  marca?: string;
-  principio_activo?: string;
-  principio_activo_id?: number;
-  presentacion?: string;
+  // Added missing optional properties to resolve TypeScript errors in StoreView and ProductManager components
+  categoria_personalizada?: string;
   uso_sugerido?: string;
-  especie?: string; 
-  peso_rango?: string;
-  duracion_sesion?: string; 
-  categoria_personalizada?: string; 
   uom_id?: number;
+}
+
+export interface ExecutiveVenta {
+  id: number;
+  fecha: Date;
+  cliente: string;
+  canal: 'Tienda Online' | 'Venta Directa' | 'Punto de Venta';
+  monto: number;
+  estado: string;
+  referencia: string;
 }
 
 export interface PedidoTienda {
@@ -89,7 +89,6 @@ export interface ProductoExtra {
   descripcion_lemon?: string;
   instrucciones_lemon?: string;
   categoria_personalizada?: string; 
-  ficha_tecnica_json?: any;
 }
 
 export type BusinessType = 'pharmacy' | 'veterinary' | 'podiatry' | 'general';

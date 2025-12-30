@@ -189,7 +189,6 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
                      {img ? <img src={img} className="w-full h-full object-cover" /> : <ImageIcon className="w-10 h-10 text-slate-200" />}
                      <label className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-all">
                         <Upload className="text-white w-8 h-8"/>
-                        {/* Fix: use 'idx' from map function instead of undefined 'index' */}
                         <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload('slide')(e, idx)} />
                      </label>
                   </div>
@@ -228,37 +227,37 @@ const StoreSettings: React.FC<StoreSettingsProps> = ({ config, onUpdate, session
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-8 space-y-10">
           
-          {/* SEDES DE RECOJO */}
+          {/* PUNTOS DE ENTREGA */}
           <section className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-100">
              <div className="flex justify-between items-center mb-10">
                 <h3 className="text-2xl font-black text-slate-800 flex items-center gap-4 uppercase tracking-tighter">
-                   <MapPin className="w-8 h-8 text-red-500"/> Sedes de Recojo
+                   <MapPin className="w-8 h-8 text-red-500"/> Puntos de Entrega / Recojo
                 </h3>
                 <button onClick={addSede} className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-brand-500 transition-all">
-                   <Plus className="w-4 h-4"/> Nueva Sede
+                   <Plus className="w-4 h-4"/> Nuevo Punto
                 </button>
              </div>
              <div className="space-y-6">
                 {(currentConfig.sedes_recojo || []).map((sede, idx) => (
                    <div key={sede.id} className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 group">
                       <div className="flex justify-between items-start mb-6">
-                         <span className="text-[10px] font-black text-brand-600 uppercase tracking-widest">Sede #{idx + 1}</span>
+                         <span className="text-[10px] font-black text-brand-600 uppercase tracking-widest">Punto #{idx + 1}</span>
                          <button onClick={() => removeSede(sede.id)} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 className="w-4 h-4"/></button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <input type="text" placeholder="NOMBRE DEL LOCAL" className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold uppercase" value={sede.nombre} onChange={e => {
+                         <input type="text" placeholder="NOMBRE DEL PUNTO / LOCAL" className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold uppercase" value={sede.nombre} onChange={e => {
                             const sedes = [...(currentConfig.sedes_recojo || [])];
                             sedes[idx].nombre = e.target.value;
                             setCurrentConfig({...currentConfig, sedes_recojo: sedes});
                          }} />
-                         <input type="text" placeholder="DIRECCIÓN FÍSICA" className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold uppercase" value={sede.direccion} onChange={e => {
+                         <input type="text" placeholder="DIRECCIÓN FÍSICA DETALLADA" className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold uppercase" value={sede.direccion} onChange={e => {
                             const sedes = [...(currentConfig.sedes_recojo || [])];
                             sedes[idx].direccion = e.target.value;
                             setCurrentConfig({...currentConfig, sedes_recojo: sedes});
                          }} />
                          <div className="md:col-span-2 relative">
                             <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300"/>
-                            <input type="text" placeholder="LINK DE GOOGLE MAPS" className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold" value={sede.googleMapsUrl || ''} onChange={e => {
+                            <input type="text" placeholder="LINK DE GOOGLE MAPS (OPCIONAL)" className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-2xl text-[11px] font-bold" value={sede.googleMapsUrl || ''} onChange={e => {
                                const sedes = [...(currentConfig.sedes_recojo || [])];
                                sedes[idx].googleMapsUrl = e.target.value;
                                setCurrentConfig({...currentConfig, sedes_recojo: sedes});

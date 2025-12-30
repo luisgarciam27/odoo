@@ -7,7 +7,8 @@ import AdminDashboard from './components/AdminDashboard';
 import StoreView from './components/StoreView';
 import StoreSettings from './components/StoreSettings';
 import ProductManager from './components/ProductManager';
-import { OdooSession, ClientConfig } from './types';
+import ProfitabilityView from './components/ProfitabilityView';
+import { OdooSession, ClientConfig, Venta } from './types';
 import { getClientByCode } from './services/clientManager';
 import { OdooClient } from './services/odoo';
 import { Loader2 } from 'lucide-react';
@@ -20,6 +21,8 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState('general');
   const [isStoreMode, setIsStoreMode] = useState(false);
   const [isStoreLoading, setIsStoreLoading] = useState(false);
+  const [ventasData, setVentasData] = useState<Venta[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -53,7 +56,6 @@ const App: React.FC = () => {
         setIsStoreMode(true);
       } catch (e) {
         console.error("Store Auth Error", e);
-        alert("Error al conectar con la tienda. Intente más tarde.");
       }
     }
     setIsStoreLoading(false);
@@ -79,49 +81,45 @@ const App: React.FC = () => {
     setIsAuthenticated(false);
     setIsStoreMode(false);
     setCurrentView('general');
-    window.history.pushState({}, '', window.location.pathname);
   };
-
-  if (isStoreLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
-        <Loader2 className="w-10 h-10 animate-spin text-brand-500 mb-4" />
-        <p className="font-bold text-slate-600 animate-pulse uppercase tracking-widest text-xs">Cargando Catálogo...</p>
-      </div>
-    );
-  }
-
-  if (isStoreMode && clientConfig && odooSession) {
-    return <StoreView session={odooSession} config={clientConfig} />;
-  }
-
-  if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} onAdminLogin={handleAdminLogin} />;
-  }
-
-  if (isAdmin) {
-      return <AdminDashboard onLogout={handleLogout} />;
-  }
 
   return (
     <div className="antialiased text-slate-800 bg-slate-50 min-h-screen">
-      <Layout 
-        onLogout={handleLogout} 
-        currentView={currentView} 
-        onNavigate={setCurrentView} 
-        showStoreLink={clientConfig?.showStore}
-        clientCode={clientConfig?.code}
-      >
-        {currentView === 'store' && odooSession && clientConfig ? (
-           <StoreView session={odooSession} config={clientConfig} onBack={() => setCurrentView('general')} />
-        ) : currentView === 'product-manager' && odooSession && clientConfig ? (
-           <ProductManager session={odooSession} config={clientConfig} onUpdate={setClientConfig} />
-        ) : currentView === 'store-config' && clientConfig ? (
-           <StoreSettings config={clientConfig} onUpdate={setClientConfig} session={odooSession} />
-        ) : (
-          <Dashboard session={odooSession} view={currentView} />
-        )}
-      </Layout>
+      {!isAuthenticated ? (
+         <Login onLogin={handleLogin} onAdminLogin={handleAdminLogin} />
+      ) : isAdmin ? (
+         <AdminDashboard onLogout={handleLogout} />
+      ) : (
+        <Layout 
+          onLogout={handleLogout} 
+          currentView={currentView} 
+          onNavigate={setCurrentView} 
+          showStoreLink={clientConfig?.showStore}
+          clientCode={clientConfig?.code}
+        >
+          {currentView === 'store' && odooSession && clientConfig ? (
+             <StoreView session={odooSession} config={clientConfig} onBack={() => setCurrentView('general')} />
+          ) : currentView === 'product-manager' && odooSession && clientConfig ? (
+             <ProductManager session={odooSession} config={clientConfig} onUpdate={setClientConfig} />
+          ) : currentView === 'store-config' && clientConfig ? (
+             <StoreSettings config={clientConfig} onUpdate={setClientConfig} session={odooSession} />
+          ) : currentView === 'rentabilidad' ? (
+             <ProfitabilityView 
+                session={odooSession} 
+                ventasData={ventasData} 
+                loading={isDataLoading} 
+                onRefresh={() => {}} 
+             />
+          ) : (
+            <Dashboard 
+              session={odooSession} 
+              view={currentView} 
+              onDataLoaded={setVentasData} 
+              onLoadingStateChange={setIsDataLoading}
+            />
+          )}
+        </Layout>
+      )}
     </div>
   );
 };
