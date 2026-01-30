@@ -1,6 +1,6 @@
 
 /**
- * MOTOR DE CONEXIÓN ODOO XML-RPC (Standalone Corregido)
+ * MOTOR DE CONEXIÓN ODOO XML-RPC (Standalone Corregido v2)
  */
 
 const xmlEscape = (str: string) => 
@@ -79,6 +79,8 @@ export class OdooClient {
     const xmlString = `<?xml version="1.0"?><methodCall><methodName>${method}</methodName><params>${params.map(p => `<param>${serialize(p)}</param>`).join('')}</params></methodCall>`;
     const targetUrl = `${this.url}/xmlrpc/2/${endpoint}`;
     
+    // Usar bytes puros para asegurar que el proxy no corrompa el cuerpo del POST
+    const bodyData = new TextEncoder().encode(xmlString);
     const fetchUrl = this.useProxy ? PROXIES[0](targetUrl) : targetUrl;
     
     const response = await fetch(fetchUrl, {
@@ -87,10 +89,12 @@ export class OdooClient {
             'Content-Type': 'text/xml',
             'Accept': 'text/xml' 
         },
-        body: xmlString
+        body: bodyData
     });
 
     const text = await response.text();
+    if (!text) throw new Error("Servidor devolvió respuesta vacía (posible error de Proxy)");
+
     const doc = new DOMParser().parseFromString(text, 'text/xml');
     
     const fault = doc.querySelector('fault');
