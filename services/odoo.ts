@@ -64,7 +64,7 @@ const parseValue = (node: Element): any => {
   }
 };
 
-// Lista extendida de proxies para máxima disponibilidad
+// Lista de proxies para rotación y redundancia
 const PROXY_LIST = [
   { name: 'Directo', fn: (url: string) => url },
   { name: 'CORS-Proxy-IO', fn: (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}` },
@@ -87,7 +87,7 @@ export class OdooClient {
 
   private async rpcCall(endpoint: string, method: string, params: any[]): Promise<any> {
     if (this.url.startsWith('http://') && window.location.protocol === 'https:') {
-        throw new Error("BLOQUEO_SEGURIDAD: No se puede conectar a un Odoo HTTP desde una app HTTPS. Usa https:// en la URL.");
+        throw new Error("BLOQUEO_SEGURIDAD: No se puede conectar a un servidor HTTP desde una app HTTPS. Usa https://.");
     }
 
     const xmlString = `<?xml version="1.0" encoding="UTF-8"?><methodCall><methodName>${method}</methodName><params>${params.map(p => `<param>${serialize(p)}</param>`).join('')}</params></methodCall>`;
@@ -114,20 +114,20 @@ export class OdooClient {
             clearTimeout(timeoutId);
 
             if (!response.ok) {
-                if (response.status === 403 || response.status === 401) throw new Error("BLOQUEO_SERVIDOR (CORS/WAF)");
+                if (response.status === 403 || response.status === 401) throw new Error("BLOQUEO_SERVIDOR_ODOO");
                 throw new Error(`HTTP_${response.status}`);
             }
 
             const text = await response.text();
             if (!text || text.trim().length === 0) throw new Error(`RESPUESTA_VACIA`);
 
-            // Validar si la respuesta es realmente XML o un error del proxy en HTML
+            // Evitar procesar HTML de error de los proxies
             if (text.trim().startsWith('<!DOCTYPE html') || text.trim().startsWith('<html')) {
-                throw new Error("PROXY_INVALID_RESPONSE");
+                throw new Error("RESPUESTA_INVALIDA_PROXY");
             }
 
             const doc = new DOMParser().parseFromString(text, 'text/xml');
-            if (doc.getElementsByTagName('parsererror').length > 0) throw new Error(`XML_CORRUPTO`);
+            if (doc.getElementsByTagName('parsererror').length > 0) throw new Error(`XML_INVÁLIDO_SERVIDOR`);
 
             const fault = doc.querySelector('fault');
             if (fault) {
@@ -136,7 +136,7 @@ export class OdooClient {
             }
 
             const paramNode = doc.querySelector('params param value');
-            if (!paramNode) throw new Error('XML_SIN_VALOR');
+            if (!paramNode) throw new Error('XML_SIN_RESULTADO');
             
             return parseValue(paramNode);
         } catch (e: any) {
@@ -149,26 +149,23 @@ export class OdooClient {
     let lastError: any;
     const maxAttempts = PROXY_LIST.length;
     
-    // Rotar por todos los proxies hasta encontrar uno que funcione
     for (let i = 0; i < maxAttempts; i++) {
         const attemptIdx = (OdooClient.currentProxyIndex + i) % PROXY_LIST.length;
-        const proxyName = PROXY_LIST[attemptIdx].name;
+        const proxy = PROXY_LIST[attemptIdx];
         
         try {
             const result = await executeRequest(attemptIdx);
-            OdooClient.currentProxyIndex = attemptIdx; // Guardar el proxy exitoso
+            OdooClient.currentProxyIndex = attemptIdx; 
             return result;
         } catch (error: any) {
             lastError = error;
-            console.warn(`[Odoo] Intento fallido con ${proxyName}:`, error.message);
-            
-            // Si el error viene de Odoo (ej. clave mal), no intentamos más proxies
+            console.warn(`[Odoo] Intento fallido con ${proxy.name}:`, error.message);
+            // Si el error es una falla de credenciales de Odoo, detenemos la rotación
             if (error.message.startsWith('Odoo:')) throw error;
         }
     }
     
-    // Si llegamos aquí, nada funcionó
-    throw new Error(`No se pudo establecer conexión con ${this.url}. Motivo: ${lastError.message}. Sugerencia: Si usas una red corporativa, intenta desde otra red o instala la extensión 'CORS Unblock' en tu navegador.`);
+    throw new Error(`Fallo de conexión: ${lastError.message}. Intenta instalando la extensión 'CORS Unblock' en tu navegador para saltar el proxy.`);
   }
 
   async authenticate(username: string, apiKey: string): Promise<number> {
