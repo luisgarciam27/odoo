@@ -64,11 +64,11 @@ const parseValue = (node: Element): any => {
   }
 };
 
-// Proxies con nombres para diagnóstico
+// Proxies optimizados para Facturaclic
 const PROXY_LIST = [
+  { name: 'AllOrigins-Raw', fn: (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
   { name: 'CORS-Proxy-IO', fn: (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}` },
-  { name: 'AllOrigins', fn: (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
-  { name: 'ThingProxy', fn: (url: string) => `https://thingproxy.freeboard.io/fetch/${url}` }
+  { name: 'Codetabs', fn: (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}` }
 ];
 
 export class OdooClient {
@@ -84,36 +84,44 @@ export class OdooClient {
   }
 
   private async rpcCall(endpoint: string, method: string, params: any[]): Promise<any> {
-    // Verificación de protocolo
     if (this.url.startsWith('http://') && window.location.protocol === 'https:') {
-        throw new Error("BLOQUEO_SEGURIDAD: Tu Odoo usa http:// pero esta app usa https://. El navegador bloquea la conexión por seguridad. Debes usar una URL con https:// en Odoo.");
+        throw new Error("BLOQUEO_SEGURIDAD: Tu Odoo usa http:// pero esta app usa https://. Debes usar una URL con https://");
     }
 
-    const xmlString = `<?xml version="1.0"?><methodCall><methodName>${method}</methodName><params>${params.map(p => `<param>${serialize(p)}</param>`).join('')}</params></methodCall>`;
+    const xmlString = `<?xml version="1.0" encoding="UTF-8"?><methodCall><methodName>${method}</methodName><params>${params.map(p => `<param>${serialize(p)}</param>`).join('')}</params></methodCall>`;
     const targetUrl = `${this.url}/xmlrpc/2/${endpoint}`;
-    const bodyData = new TextEncoder().encode(xmlString);
 
     const executeRequest = async (proxyIdx: number) => {
         const proxy = PROXY_LIST[proxyIdx];
         const fetchUrl = this.useProxy ? proxy.fn(targetUrl) : targetUrl;
         
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+
             const response = await fetch(fetchUrl, {
                 method: 'POST',
+                // Importante: No enviar headers complejos que el proxy pueda rechazar
                 headers: {
-                    'Content-Type': 'text/xml',
-                    'Accept': 'text/xml',
+                    'Content-Type': 'text/xml'
                 },
-                body: bodyData
+                body: xmlString, // Enviamos el string directamente para asegurar compatibilidad
+                signal: controller.signal
             });
 
-            if (!response.ok) throw new Error(`HTTP_${response.status} en ${proxy.name}`);
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error(`HTTP_${response.status}`);
 
             const text = await response.text();
-            if (!text || text.trim().length === 0) throw new Error(`RESPUESTA_VACIA de ${proxy.name}`);
+            if (!text || text.trim().length === 0) throw new Error(`RESPUESTA_VACIA`);
 
             const doc = new DOMParser().parseFromString(text, 'text/xml');
-            if (doc.getElementsByTagName('parsererror').length > 0) throw new Error(`XML_INVALIDO de ${proxy.name}`);
+            if (doc.getElementsByTagName('parsererror').length > 0) {
+                // Si falla el XML, puede ser que el proxy devolviera un error en texto plano
+                if (text.toLowerCase().includes('error')) throw new Error(`Proxy Error: ${text.substring(0, 50)}`);
+                throw new Error(`XML_INVALIDO`);
+            }
 
             const fault = doc.querySelector('fault');
             if (fault) {
@@ -122,13 +130,12 @@ export class OdooClient {
             }
 
             const paramNode = doc.querySelector('params param value');
-            if (!paramNode) throw new Error('ESTRUCTURA_XML_INCOMPLETA');
+            if (!paramNode) throw new Error('XML_INCOMPLETO');
             
             return parseValue(paramNode);
         } catch (e: any) {
-            if (e.message === 'Failed to fetch') {
-                throw new Error(`FALLO_RED: El proxy ${proxy.name} no pudo contactar a ${this.url}.`);
-            }
+            if (e.name === 'AbortError') throw new Error(`TIMEOUT en ${proxy.name}`);
+            if (e.message === 'Failed to fetch') throw new Error(`FALLO_RED en ${proxy.name}`);
             throw e;
         }
     };
@@ -144,18 +151,17 @@ export class OdooClient {
             return result;
         } catch (error: any) {
             lastError = error;
-            console.warn(`Intento ${i+1} falló:`, error.message);
+            console.warn(`Intento con ${PROXY_LIST[attemptIdx].name} falló:`, error.message);
             if (error.message.startsWith('Odoo:')) throw error;
-            if (error.message.startsWith('BLOQUEO_SEGURIDAD')) throw error;
         }
     }
     
-    throw new Error(`${lastError.message} Verifica que la URL de Odoo sea HTTPS y esté activa.`);
+    throw new Error(`${lastError.message}. Verifica que Odoo sea accesible y no esté bloqueando peticiones externas.`);
   }
 
   async authenticate(username: string, apiKey: string): Promise<number> {
     const uid = await this.rpcCall('common', 'authenticate', [this.db, username, apiKey, {}]);
-    if (typeof uid !== 'number') throw new Error("Credenciales inválidas.");
+    if (typeof uid !== 'number' || uid === 0) throw new Error("Odoo: Credenciales inválidas o base de datos incorrecta.");
     return uid;
   }
 
