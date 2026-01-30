@@ -65,11 +65,9 @@ const parseValue = (node: Element): any => {
   }
 };
 
-// Proxies reordenados por fiabilidad en peticiones POST con cuerpo
 const PROXIES = [
   (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
   (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
 ];
 
 export class OdooClient {
@@ -85,12 +83,7 @@ export class OdooClient {
   }
 
   private async rpcCall(endpoint: string, method: string, params: any[]): Promise<any> {
-    // Re-incluimos la cabecera XML mínima para motores antiguos de Odoo
     const xmlString = `<?xml version="1.0"?><methodCall><methodName>${method}</methodName><params>${params.map(p => `<param>${serialize(p)}</param>`).join('')}</params></methodCall>`;
-    
-    // Convertimos a Blob para forzar al navegador y al proxy a tratarlo como flujo de datos real
-    const xmlBlob = new Blob([xmlString], { type: 'text/xml' });
-    
     const targetUrl = `${this.url}/xmlrpc/2/${endpoint}`;
     
     const executeRequest = async (proxyFn: (u: string) => string) => {
@@ -98,30 +91,19 @@ export class OdooClient {
         
         const response = await fetch(fetchUrl, {
             method: 'POST',
-            mode: 'cors',
             headers: {
-                'Accept': 'text/xml, application/xml',
-                // No establecemos Content-Type manualmente al enviar Blob, el navegador lo hace mejor
+                'Content-Type': 'text/xml',
+                'Accept': 'text/xml',
             },
-            body: xmlBlob,
-            cache: 'no-cache'
+            body: xmlString // Enviamos como string directamente para mejor compatibilidad con proxies
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP_${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP_${response.status}`);
 
         const text = await response.text();
-        if (!text || text.trim().length === 0) {
-            throw new Error("EMPTY_RESPONSE");
-        }
+        if (!text || text.trim().length === 0) throw new Error("EMPTY_RESPONSE");
 
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(text, 'text/xml');
-        
-        const parseError = doc.querySelector('parsererror');
-        if (parseError) throw new Error("INVALID_XML_RESPONSE");
-
+        const doc = new DOMParser().parseFromString(text, 'text/xml');
         const fault = doc.querySelector('fault');
         if (fault) {
             const faultValue = fault.querySelector('value');
@@ -136,39 +118,21 @@ export class OdooClient {
     };
 
     let lastError: any;
-    const retryAttempts = this.useProxy ? PROXIES.length : 1;
-
-    for (let i = 0; i < retryAttempts; i++) {
+    for (let i = 0; i < (this.useProxy ? PROXIES.length : 1); i++) {
         try {
-            // Pausa incremental entre reintentos
-            if (i > 0) await new Promise(r => setTimeout(r, 1000 * i));
-            
             return await executeRequest(PROXIES[this.currentProxyIndex]);
         } catch (error: any) {
             lastError = error;
-            
-            // Si el error viene de Odoo (lógica interna), no rotamos proxy
             if (error.message.startsWith('Odoo:')) throw error;
-
-            console.warn(`Intento ${i + 1} fallido (${error.message}). Rotando proxy...`);
             this.currentProxyIndex = (this.currentProxyIndex + 1) % PROXIES.length;
         }
     }
-
-    // Traducción de errores para el usuario final
-    if (lastError.message.includes('HTTP_403')) {
-        throw new Error("Bloqueo 403: El servidor Odoo ha rechazado la conexión del proxy. Intenta de nuevo en unos segundos o usa un rango de fechas más corto.");
-    }
-    if (lastError.message.includes('Failed to fetch')) {
-        throw new Error("Error de Red: No se pudo establecer conexión con el proxy. Verifica tu internet o intenta refrescar la página.");
-    }
-    
     throw lastError;
   }
 
   async authenticate(username: string, apiKey: string): Promise<number> {
     const uid = await this.rpcCall('common', 'authenticate', [this.db, username, apiKey, {}]);
-    if (typeof uid !== 'number') throw new Error("Credenciales inválidas. Revise su Usuario y API Key.");
+    if (typeof uid !== 'number') throw new Error("Credenciales inválidas.");
     return uid;
   }
 

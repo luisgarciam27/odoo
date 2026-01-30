@@ -1,6 +1,6 @@
+
 /**
- * MOTOR DE CONEXIÓN ODOO XML-RPC (Standalone)
- * Este archivo puede ser copiado a cualquier proyecto para habilitar la comunicación con Odoo.
+ * MOTOR DE CONEXIÓN ODOO XML-RPC (Standalone Corregido)
  */
 
 const xmlEscape = (str: string) => 
@@ -83,8 +83,11 @@ export class OdooClient {
     
     const response = await fetch(fetchUrl, {
         method: 'POST',
-        headers: { 'Accept': 'text/xml' },
-        body: new Blob([xmlString], { type: 'text/xml' })
+        headers: { 
+            'Content-Type': 'text/xml',
+            'Accept': 'text/xml' 
+        },
+        body: xmlString
     });
 
     const text = await response.text();
