@@ -64,11 +64,11 @@ const parseValue = (node: Element): any => {
   }
 };
 
-// Proxies con diferentes estrategias de reenvío
-const PROXIES = [
-  (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, // Modo indirecto
-  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
+// Proxies con nombres para diagnóstico
+const PROXY_LIST = [
+  { name: 'CORS-Proxy-IO', fn: (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}` },
+  { name: 'AllOrigins', fn: (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
+  { name: 'ThingProxy', fn: (url: string) => `https://thingproxy.freeboard.io/fetch/${url}` }
 ];
 
 export class OdooClient {
@@ -78,89 +78,79 @@ export class OdooClient {
   private static currentProxyIndex: number = 0;
   
   constructor(url: string, db: string, useProxy: boolean = false) {
-    this.url = url.replace(/\/+$/, ''); 
+    this.url = url.trim().replace(/\/+$/, ''); 
     this.db = db;
     this.useProxy = useProxy;
   }
 
   private async rpcCall(endpoint: string, method: string, params: any[]): Promise<any> {
+    // Verificación de protocolo
+    if (this.url.startsWith('http://') && window.location.protocol === 'https:') {
+        throw new Error("BLOQUEO_SEGURIDAD: Tu Odoo usa http:// pero esta app usa https://. El navegador bloquea la conexión por seguridad. Debes usar una URL con https:// en Odoo.");
+    }
+
     const xmlString = `<?xml version="1.0"?><methodCall><methodName>${method}</methodName><params>${params.map(p => `<param>${serialize(p)}</param>`).join('')}</params></methodCall>`;
     const targetUrl = `${this.url}/xmlrpc/2/${endpoint}`;
-    
-    // Convertimos a bytes para evitar que el proxy modifique el texto
     const bodyData = new TextEncoder().encode(xmlString);
 
     const executeRequest = async (proxyIdx: number) => {
-        const fetchUrl = this.useProxy ? PROXIES[proxyIdx](targetUrl) : targetUrl;
+        const proxy = PROXY_LIST[proxyIdx];
+        const fetchUrl = this.useProxy ? proxy.fn(targetUrl) : targetUrl;
         
-        // Si usamos AllOrigins indirecto, la estructura de la respuesta cambia
-        const isAllOrigins = fetchUrl.includes('allorigins.win/get');
+        try {
+            const response = await fetch(fetchUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/xml',
+                    'Accept': 'text/xml',
+                },
+                body: bodyData
+            });
 
-        const response = await fetch(fetchUrl, {
-            method: isAllOrigins ? 'GET' : 'POST', // AllOrigins POST se hace vía GET con parámetros en su API, pero para Odoo necesitamos POST real
-            headers: isAllOrigins ? {} : {
-                'Content-Type': 'text/xml',
-                'Accept': 'text/xml',
-            },
-            body: isAllOrigins ? null : bodyData
-        });
+            if (!response.ok) throw new Error(`HTTP_${response.status} en ${proxy.name}`);
 
-        if (!response.ok) throw new Error(`HTTP_${response.status}`);
+            const text = await response.text();
+            if (!text || text.trim().length === 0) throw new Error(`RESPUESTA_VACIA de ${proxy.name}`);
 
-        let text = '';
-        if (isAllOrigins) {
-            const json = await response.json();
-            text = json.contents;
-        } else {
-            text = await response.text();
+            const doc = new DOMParser().parseFromString(text, 'text/xml');
+            if (doc.getElementsByTagName('parsererror').length > 0) throw new Error(`XML_INVALIDO de ${proxy.name}`);
+
+            const fault = doc.querySelector('fault');
+            if (fault) {
+                const faultStruct = parseValue(fault.querySelector('value')!);
+                throw new Error(`Odoo: ${faultStruct.faultString}`);
+            }
+
+            const paramNode = doc.querySelector('params param value');
+            if (!paramNode) throw new Error('ESTRUCTURA_XML_INCOMPLETA');
+            
+            return parseValue(paramNode);
+        } catch (e: any) {
+            if (e.message === 'Failed to fetch') {
+                throw new Error(`FALLO_RED: El proxy ${proxy.name} no pudo contactar a ${this.url}.`);
+            }
+            throw e;
         }
-
-        if (!text || text.trim().length === 0) throw new Error("EMPTY_RESPONSE");
-
-        const doc = new DOMParser().parseFromString(text, 'text/xml');
-        
-        // Verificar si la respuesta es realmente XML o un error del proxy
-        if (doc.getElementsByTagName('parsererror').length > 0) {
-            throw new Error("INVALID_XML_RESPONSE");
-        }
-
-        const fault = doc.querySelector('fault');
-        if (fault) {
-            const faultValue = fault.querySelector('value');
-            const faultStruct = faultValue ? parseValue(faultValue) : { faultString: 'Odoo Remote Error' };
-            throw new Error(`Odoo: ${faultStruct.faultString}`);
-        }
-
-        const paramNode = doc.querySelector('params param value');
-        if (!paramNode) throw new Error('NO_VALUE_IN_RESPONSE');
-        
-        return parseValue(paramNode);
     };
 
     let lastError: any;
-    const maxAttempts = this.useProxy ? PROXIES.length : 1;
+    const maxAttempts = this.useProxy ? PROXY_LIST.length : 1;
     
     for (let i = 0; i < maxAttempts; i++) {
-        const attemptIdx = (OdooClient.currentProxyIndex + i) % PROXIES.length;
-        
-        // Saltamos AllOrigins para rpcCall directos porque prefiere GET
-        if (attemptIdx === 0 && this.useProxy) {
-            OdooClient.currentProxyIndex = (attemptIdx + 1) % PROXIES.length;
-            continue; 
-        }
-
+        const attemptIdx = (OdooClient.currentProxyIndex + i) % PROXY_LIST.length;
         try {
             const result = await executeRequest(attemptIdx);
             OdooClient.currentProxyIndex = attemptIdx;
             return result;
         } catch (error: any) {
             lastError = error;
-            console.warn(`Proxy ${attemptIdx} falló: ${error.message}`);
+            console.warn(`Intento ${i+1} falló:`, error.message);
             if (error.message.startsWith('Odoo:')) throw error;
+            if (error.message.startsWith('BLOQUEO_SEGURIDAD')) throw error;
         }
     }
     
-    throw new Error(`Error de conexión: ${lastError.message}. Intenta recargar o verifica que la URL de Odoo sea HTTPS.`);
+    throw new Error(`${lastError.message} Verifica que la URL de Odoo sea HTTPS y esté activa.`);
   }
 
   async authenticate(username: string, apiKey: string): Promise<number> {
