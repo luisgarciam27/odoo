@@ -33,7 +33,6 @@ const serialize = (value: any): string => {
   return `<value>${content}</value>`;
 };
 
-// Parser for XML-RPC responses
 const parseValue = (node: Element): any => {
   const child = node.firstElementChild;
   if (!child) return node.textContent?.trim(); 
@@ -65,16 +64,19 @@ const parseValue = (node: Element): any => {
   }
 };
 
+// Lista extendida de proxies para mayor disponibilidad
 const PROXIES = [
   (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
   (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
+  (url: string) => `https://cors-anywhere.herokuapp.com/${url}` // Requiere activación temporal del usuario
 ];
 
 export class OdooClient {
   private url: string;
   private db: string;
   private useProxy: boolean;
-  private currentProxyIndex: number = 0;
+  private static currentProxyIndex: number = 0; // Estático para compartir entre instancias
   
   constructor(url: string, db: string, useProxy: boolean = false) {
     this.url = url.replace(/\/+$/, ''); 
@@ -86,8 +88,8 @@ export class OdooClient {
     const xmlString = `<?xml version="1.0"?><methodCall><methodName>${method}</methodName><params>${params.map(p => `<param>${serialize(p)}</param>`).join('')}</params></methodCall>`;
     const targetUrl = `${this.url}/xmlrpc/2/${endpoint}`;
     
-    const executeRequest = async (proxyFn: (u: string) => string) => {
-        const fetchUrl = this.useProxy ? proxyFn(targetUrl) : targetUrl;
+    const executeRequest = async (proxyIdx: number) => {
+        const fetchUrl = this.useProxy ? PROXIES[proxyIdx](targetUrl) : targetUrl;
         
         const response = await fetch(fetchUrl, {
             method: 'POST',
@@ -95,7 +97,7 @@ export class OdooClient {
                 'Content-Type': 'text/xml',
                 'Accept': 'text/xml',
             },
-            body: xmlString // Enviamos como string directamente para mejor compatibilidad con proxies
+            body: xmlString 
         });
 
         if (!response.ok) throw new Error(`HTTP_${response.status}`);
@@ -118,14 +120,26 @@ export class OdooClient {
     };
 
     let lastError: any;
-    for (let i = 0; i < (this.useProxy ? PROXIES.length : 1); i++) {
+    // Intentar con todos los proxies disponibles si falla la red
+    const maxAttempts = this.useProxy ? PROXIES.length : 1;
+    
+    for (let i = 0; i < maxAttempts; i++) {
+        const attemptIdx = (OdooClient.currentProxyIndex + i) % PROXIES.length;
         try {
-            return await executeRequest(PROXIES[this.currentProxyIndex]);
+            const result = await executeRequest(attemptIdx);
+            OdooClient.currentProxyIndex = attemptIdx; // Guardar el proxy que funcionó
+            return result;
         } catch (error: any) {
             lastError = error;
+            console.error(`Error con proxy ${attemptIdx}:`, error.message);
+            // Si el error es de lógica de Odoo (ej: clave mal), no reintentar
             if (error.message.startsWith('Odoo:')) throw error;
-            this.currentProxyIndex = (this.currentProxyIndex + 1) % PROXIES.length;
         }
+    }
+    
+    // Si llegamos aquí, todos fallaron o no hay red
+    if (lastError.message.includes('Failed to fetch')) {
+        throw new Error("No se pudo conectar al servidor. Verifique si Supabase está pausado o si hay bloqueo de red (CORS).");
     }
     throw lastError;
   }
